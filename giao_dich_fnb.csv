@@ -1,0 +1,17 @@
+[FOOD_AND_BEVERAGES]
+maMatHang,tenMatHang,loai,giaTien,trangThaiKinhDoanh
+FB01,Bap ngot lon,Bap,50000,DangBan
+FB02,Coca-Cola lon,Nuoc,30000,DangBan
+FB03,Combo Solo (1 Bap + 1 Nuoc),Combo,70000,DangBan
+
+[PROMOTIONS]
+maKhuyenMai,tenKhuyenMai,maCode,phanTramGiam,mucGiamToiDa,ngayBatDau,ngayKetThuc,phamViApDung
+KM01,Uu dai khai truong,HELLO2026,10,50000,2026-01-01,2026-12-31,All
+
+[INVOICES]
+maHoaDon,maKhachHang,maNhanVien,thoiGianLap,tongTien,hinhThucThanhToan,maGiaoDich,trangThaiThanhToan
+HD01,U03,U02,2026-06-05 18:30:00,210000,TienMat,,DaTra
+
+[INVOICE_FB]
+maHoaDon,maMatHang,soLuong,thanhTien
+HD01,FB03,1,70000

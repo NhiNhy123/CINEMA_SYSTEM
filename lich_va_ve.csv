@@ -1,0 +1,9 @@
+[SHOWTIMES]
+maSuatChieu,maPhim,maPhong,ngayChieu,gioBatDau,gioKetThuc,giaVeCoBan
+SC01,P01,R01,2026-06-05,19:00,21:00,60000
+SC02,P02,R02,2026-06-05,20:00,22:15,100000
+
+[TICKETS]
+maVe,maHoaDon,maSuatChieu,maGhe,giaVeThucTe,maQRCode,trangThaiSuDung
+VE01,HD01,SC01,A1,60000,QR_CODE_XYZ123,ChuaCheckIn
+VE02,HD01,SC01,A2,60000,QR_CODE_XYZ124,ChuaCheckIn

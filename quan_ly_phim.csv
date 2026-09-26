@@ -1,0 +1,29 @@
+[GENRES]
+maTheLoai,tenTheLoai
+TL01,Hanh Dong
+TL02,Kinh Di
+TL03,Tinh Cam
+TL04,Hoat Hinh
+
+[MOVIE_GENRES]
+maPhim,maTheLoai
+P01,TL01
+P01,TL03
+P02,TL02
+
+[MOVIES]
+maPhim,tenPhim,thoiLuong,nhanDoTuoi,ngayKhoiChieu,ngayKetThuc,moTa,poster
+P01,Lat Mat 7,120,18,2026-04-01,2026-05-01,Phim ve gia dinh va tinh mau tu,latmat7.jpg
+P02,Mai,135,18,2026-02-10,2026-03-30,Cau chuyen tinh yeu cua Mai va Duong,mai.jpg
+
+[ROOMS]
+maPhong,tenPhong,loaiPhong,sucChua,trangThaiPhong
+R01,Phong Chieu 01,2D,100,HoatDong
+R02,Phong Chieu IMAX,IMAX,150,HoatDong
+
+[SEATS]
+maGhe,maPhong,loaiGhe,donGiaGhe,trangThai
+A1,R01,Standard,60000,Trong
+A2,R01,Standard,60000,Trong
+B1,R01,VIP,90000,Trong
+VIP1,R02,IMAX,150000,Trong

@@ -1,0 +1,7 @@
+[SHIFT_MANAGEMENTS]
+maCa,maNhanVien,thoiGianBatDau,thoiGianKetThuc,tongTienDauCa,doanhThuTienMat,doanhThuQR,doanhThuThe,tongDoanhThuCa,tienMatMayTinh,tienMatThucTe,doLechDoiSoat,tienXuatQuy,tienGiuLai,trangThaiCa
+CA01,U02,2026-06-05 08:00:00,22:00:00,1000000,500000,300000,200000,1000000,1500000,1500000,0,1000000,500000,ChoDuyet
+
+[SYSTEM_LOGS]
+maLog,thoiGian,maNguoiThucHien,loaiHanhDong,chiTietThayDoi
+LOG01,2026-06-05 18:30:00,U02,Them,Tao hoa don moi HD01 cho khach hang U03

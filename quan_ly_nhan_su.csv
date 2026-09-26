@@ -1,0 +1,13 @@
+[USERS]
+maNguoiDung,hoTen,soDienThoai,email,ngaySinh,gioiTinh,cccd,taiKhoan,matKhau,vaiTro,trangThaiLamViec,trangThaiTaiKhoan
+U001,Le Tuyet Nhi,905123456,nhi.nv@gmail.com,1/15/2005,Nu,1.23457E+11,admin01,123456,Admin,DangLam,HoatDong
+U002,Pham Nhu Anh Thu,905654321,thu.tt@gmail.com,8/20/2005,Nu,1.23457E+11,staff01,123456,Staff,DangLam,HoatDong
+U03,Le Van Hoang,905111222,hoang.lv@gmail.com,3/10/2006,Nam,1.23457E+11,khach01,123456,Customer,DangLam,HoatDong
+
+[CUSTOMERS]
+maKhachHang,diemTichLuy,hangThanhVien,tongChiTieu
+U03,150,ThanThiet,1500000
+
+[CUSTOMER_POINTS_HISTORY]
+maGiaoDichDiem,maKhachHang,loaiGiaoDich,soDiem,noiDung,thoiGian
+GD01,U03,TichDiem,21,Tich diem tu hoa don HD01,6/5/2026 18:30
