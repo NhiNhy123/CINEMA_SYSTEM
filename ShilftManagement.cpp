@@ -1,5 +1,7 @@
 #include "ShilftManagement.h"
 #include <iostream>
+#include <cstdlib>
+
 // =====================================================
 // HAM CHUYEN NGAY DD/MM/YYYY SANG SO
 // DUNG DE SO SANH NGAY
@@ -24,9 +26,10 @@ static int chuyenNgayThanhSo(string ngay)
 
     try
     {
-        int ngayInt = stoi(ngay.substr(0, 2));
-        int thangInt = stoi(ngay.substr(3, 2));
-        int namInt = stoi(ngay.substr(6, 4));
+        int ngayInt = atoi(ngay.substr(0, 2).c_str());
+int thangInt = atoi(ngay.substr(3, 2).c_str());
+int namInt = atoi(ngay.substr(6, 4).c_str());
+
 
         return namInt * 10000
              + thangInt * 100
@@ -392,15 +395,18 @@ void ShiftManagement::chotCa(
 
 ShiftReport* ShiftManagement::timCa(string maCa)
 {
-    for (ShiftReport& ca : danhSachCa)
+    for (vector<ShiftReport>::iterator it = danhSachCa.begin();
+     it != danhSachCa.end();
+     ++it)
+{
+    if (it->getMaCa() == maCa)
     {
-        if (ca.getMaCa() == maCa)
-        {
-            return &ca;
-        }
+        return &(*it);
     }
+}
 
-    return nullptr;
+return NULL;
+
 }
 
 
@@ -412,7 +418,7 @@ bool ShiftManagement::duyetBaoCao(string maCa)
 {
     ShiftReport* ca = timCa(maCa);
 
-    if (ca == nullptr)
+    if (ca == NULL)
     {
         cout << "Khong tim thay ma ca!"
              << endl;
@@ -453,7 +459,7 @@ bool ShiftManagement::khoaBaoCao(string maCa)
 {
     ShiftReport* ca = timCa(maCa);
 
-    if (ca == nullptr)
+    if (ca == NULL)
     {
         cout << "Khong tim thay ma ca!"
              << endl;
@@ -488,16 +494,19 @@ vector<ShiftReport> ShiftManagement::locTheoThoiGian(
 {
     vector<ShiftReport> ketQua;
 
-    for (const ShiftReport& ca : danhSachCa)
+    for (size_t i = 0; i < danhSachCa.size(); ++i)
+{
+    const ShiftReport& ca = danhSachCa[i];
+
+    if (trongKhoangThoiGian(
+            ca.getNgayLam(),
+            tuNgay,
+            denNgay))
     {
-        if (trongKhoangThoiGian(
-                ca.getNgayLam(),
-                tuNgay,
-                denNgay))
-        {
-            ketQua.push_back(ca);
-        }
+        ketQua.push_back(ca);
     }
+}
+
 
     return ketQua;
 }
@@ -512,13 +521,16 @@ vector<ShiftReport> ShiftManagement::locTheoNhanVien(
 {
     vector<ShiftReport> ketQua;
 
-    for (const ShiftReport& ca : danhSachCa)
+    for (size_t i = 0; i < danhSachCa.size(); ++i)
+{
+    const ShiftReport& ca = danhSachCa[i];
+
+    if (ca.getMaNhanVien() == maNhanVien)
     {
-        if (ca.getMaNhanVien() == maNhanVien)
-        {
-            ketQua.push_back(ca);
-        }
+        ketQua.push_back(ca);
     }
+}
+
 
     return ketQua;
 }
@@ -535,24 +547,27 @@ vector<ShiftReport> ShiftManagement::locBaoCao(
 {
     vector<ShiftReport> ketQua;
 
-    for (const ShiftReport& ca : danhSachCa)
+    for (size_t i = 0; i < danhSachCa.size(); ++i)
+{
+    const ShiftReport& ca = danhSachCa[i];
+
+    bool dungThoiGian =
+        trongKhoangThoiGian(
+            ca.getNgayLam(),
+            tuNgay,
+            denNgay
+        );
+
+    bool dungNhanVien =
+        maNhanVien.empty() ||
+        ca.getMaNhanVien() == maNhanVien;
+
+    if (dungThoiGian && dungNhanVien)
     {
-        bool dungThoiGian =
-            trongKhoangThoiGian(
-                ca.getNgayLam(),
-                tuNgay,
-                denNgay
-            );
-
-        bool dungNhanVien =
-            maNhanVien.empty() ||
-            ca.getMaNhanVien() == maNhanVien;
-
-        if (dungThoiGian && dungNhanVien)
-        {
-            ketQua.push_back(ca);
-        }
+        ketQua.push_back(ca);
     }
+}
+
 
     return ketQua;
 }
@@ -577,16 +592,19 @@ void ShiftManagement::hienThiBaoCaoNhanVien(
     cout << "Ma nhan vien: " << maNhanVien << endl;
     cout << "Ngay: " << ngayLam << endl;
 
-    for (const ShiftReport& ca : danhSachCa)
-    {
-        if (ca.getMaNhanVien() == maNhanVien &&
-            ca.getNgayLam() == ngayLam)
-        {
-            ca.hienThi();
+    for (size_t i = 0; i < danhSachCa.size(); ++i)
+{
+    const ShiftReport& ca = danhSachCa[i];
 
-            timThay = true;
-        }
+    if (ca.getMaNhanVien() == maNhanVien &&
+        ca.getNgayLam() == ngayLam)
+    {
+        ca.hienThi();
+
+        timThay = true;
     }
+}
+
 
     if (!timThay)
     {
@@ -609,15 +627,18 @@ void ShiftManagement::hienThiCaChoDuyet() const
     cout << "                 CA CHO DUYET                      " << endl;
     cout << "==================================================" << endl;
 
-    for (const ShiftReport& ca : danhSachCa)
-    {
-        if (ca.getTrangThai() == "ChoDuyet")
-        {
-            ca.hienThi();
+    for (size_t i = 0; i < danhSachCa.size(); ++i)
+{
+    const ShiftReport& ca = danhSachCa[i];
 
-            timThay = true;
-        }
+    if (ca.getTrangThai() == "ChoDuyet")
+    {
+        ca.hienThi();
+
+        timThay = true;
     }
+}
+
 
     if (!timThay)
     {
@@ -640,15 +661,18 @@ void ShiftManagement::hienThiCaDaXuLy() const
     cout << "                  CA DA XU LY                      " << endl;
     cout << "==================================================" << endl;
 
-    for (const ShiftReport& ca : danhSachCa)
-    {
-        if (ca.getTrangThai() == "DaDuyet")
-        {
-            ca.hienThi();
+    for (size_t i = 0; i < danhSachCa.size(); ++i)
+{
+    const ShiftReport& ca = danhSachCa[i];
 
-            timThay = true;
-        }
+    if (ca.getTrangThai() == "DaDuyet")
+    {
+        ca.hienThi();
+
+        timThay = true;
     }
+}
+
 
     if (!timThay)
     {
@@ -666,10 +690,13 @@ long long ShiftManagement::tinhTongDoanhThu() const
 {
     long long tong = 0;
 
-    for (const ShiftReport& ca : danhSachCa)
-    {
-        tong += ca.getDoanhThuHeThong();
-    }
+    for (size_t i = 0; i < danhSachCa.size(); ++i)
+{
+    const ShiftReport& ca = danhSachCa[i];
+
+    tong += ca.getDoanhThuHeThong();
+}
+
 
     return tong;
 }
@@ -683,10 +710,13 @@ long long ShiftManagement::tinhTongChenhLech() const
 {
     long long tong = 0;
 
-    for (const ShiftReport& ca : danhSachCa)
-    {
-        tong += ca.getChenhLech();
-    }
+    for (size_t i = 0; i < danhSachCa.size(); ++i)
+{
+    const ShiftReport& ca = danhSachCa[i];
+
+    tong += ca.getChenhLech();
+}
+
 
     return tong;
 }
@@ -701,18 +731,21 @@ void ShiftManagement::hienThiTongHop() const
     int soCaChoDuyet = 0;
     int soCaDaXuLy = 0;
 
-    for (const ShiftReport& ca : danhSachCa)
-    {
-        if (ca.getTrangThai() == "ChoDuyet")
-        {
-            soCaChoDuyet++;
-        }
+    for (size_t i = 0; i < danhSachCa.size(); ++i)
+{
+    const ShiftReport& ca = danhSachCa[i];
 
-        if (ca.getTrangThai() == "DaDuyet")
-        {
-            soCaDaXuLy++;
-        }
+    if (ca.getTrangThai() == "ChoDuyet")
+    {
+        soCaChoDuyet++;
     }
+
+    if (ca.getTrangThai() == "DaDuyet")
+    {
+        soCaDaXuLy++;
+    }
+}
+
 
     long long tongChenhLech =
         tinhTongChenhLech();
@@ -773,8 +806,11 @@ void ShiftManagement::hienThiTatCa() const
         return;
     }
 
-    for (const ShiftReport& ca : danhSachCa)
-    {
-        ca.hienThi();
-    }
+    for (size_t i = 0; i < danhSachCa.size(); ++i)
+{
+    const ShiftReport& ca = danhSachCa[i];
+
+    ca.hienThi();
+}
+
 }
