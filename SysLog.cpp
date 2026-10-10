@@ -1,4 +1,6 @@
 #include "SysLog.h"
+#include <fstream>
+
 
 // =====================================================
 // CONSTRUCTOR
@@ -6,7 +8,7 @@
 
 SysLog::SysLog()
 {
-    fileCSV = "users.csv";
+    fileCSV = "quan_ly_nhan_su.csv"; // S?a l?i cho kh?p v?i tên file th?c t? c?a b?n
 }
 
 SysLog::SysLog(string fileCSV)
@@ -145,7 +147,7 @@ User* SysLog::timTaiKhoan(
     string taiKhoan,
     string matKhau)
 {
-    ifstream file(fileCSV);
+    ifstream file(fileCSV.c_str());
 
     if (!file.is_open())
     {
@@ -157,7 +159,7 @@ User* SysLog::timTaiKhoan(
 
         setColor(7);
 
-        return nullptr;
+        return NULL;
     }
 
     string line;
@@ -271,7 +273,7 @@ User* SysLog::timTaiKhoan(
 
                 setColor(7);
 
-                return nullptr;
+                return NULL;
             }
 
 
@@ -291,7 +293,7 @@ User* SysLog::timTaiKhoan(
 
                 setColor(7);
 
-                return nullptr;
+                return NULL;
             }
 
 
@@ -311,7 +313,7 @@ User* SysLog::timTaiKhoan(
 
                 setColor(7);
 
-                return nullptr;
+                return NULL;
             }
 
 
@@ -353,7 +355,7 @@ User* SysLog::timTaiKhoan(
 
     file.close();
 
-    return nullptr;
+    return NULL;
 }
 
 
@@ -381,7 +383,7 @@ User* SysLog::dangNhap()
     // DANG NHAP THAT BAI
     // =================================================
 
-    if (user == nullptr)
+    if (user == NULL)
     {
         gotoxy(35, 22);
 
@@ -395,7 +397,7 @@ User* SysLog::dangNhap()
 
         system("pause");
 
-        return nullptr;
+        return NULL;
     }
 
 
