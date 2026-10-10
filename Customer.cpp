@@ -1,4 +1,5 @@
 #include "Customer.h"
+#include <sstream>
 
 // =====================================================
 // GIAO DICH DIEM
@@ -240,8 +241,9 @@ void Customer::tichDiem(
 
     diemTichLuy += soDiem;
 
-    string maGiaoDich =
-        "GD" + to_string(lichSuDiem.size() + 1);
+    stringstream ss;
+ss << "GD" << (lichSuDiem.size() + 1);
+string maGiaoDich = ss.str();
 
     GiaoDichDiem giaoDich(
         maGiaoDich,
@@ -283,8 +285,10 @@ bool Customer::doiDiem(
 
     diemTichLuy -= soDiem;
 
-    string maGiaoDich =
-        "GD" + to_string(lichSuDiem.size() + 1);
+    stringstream ss;
+ss << "GD" << (lichSuDiem.size() + 1);
+string maGiaoDich = ss.str();
+
 
     GiaoDichDiem giaoDich(
         maGiaoDich,
@@ -383,15 +387,20 @@ void Customer::hienThiLichSuDiem() const
         return;
     }
 
-    for (const GiaoDichDiem& giaoDich : lichSuDiem)
-    {
-        cout << endl;
+    for (vector<GiaoDichDiem>::const_iterator it = lichSuDiem.begin();
+     it != lichSuDiem.end();
+     ++it)
+{
+    const GiaoDichDiem& giaoDich = *it;
 
-        giaoDich.hienThi();
+    cout << endl;
 
-        cout << "---------------------------------------------"
-             << endl;
-    }
+    giaoDich.hienThi();
+
+    cout << "---------------------------------------------"
+         << endl;
+}
+
 }
 
 
