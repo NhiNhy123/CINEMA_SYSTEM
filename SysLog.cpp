@@ -152,13 +152,9 @@ User* SysLog::timTaiKhoan(
     if (!file.is_open())
     {
         gotoxy(35, 20);
-
         setColor(12);
-
         cout << "Khong the mo file CSV!";
-
         setColor(7);
-
         return NULL;
     }
 
@@ -166,8 +162,8 @@ User* SysLog::timTaiKhoan(
 
     while (getline(file, line))
     {
-        // Bo qua dong rong
-        if (line.empty())
+        // Bo qua dong rong hoac dong tieu de [USERS] / header
+        if (line.empty() || line.find("[USERS]") != string::npos || line.find("maNguoiDung") != string::npos)
         {
             continue;
         }
@@ -177,9 +173,9 @@ User* SysLog::timTaiKhoan(
         string maNguoiDung;
         string hoTen;
         string soDienThoai;
+        string email;
         string ngaySinh;
         string gioiTinh;
-        string email;
         string cccd;
 
         string tk;
@@ -188,19 +184,17 @@ User* SysLog::timTaiKhoan(
 
         string trangThaiLamViec;
         string trangThaiTaiKhoan;
-        string coTaiKhoan;
-
 
         // =========================
-        // DOC CSV
+        // DOC DU LICH CHINH XAC 12 COT
         // =========================
 
         getline(ss, maNguoiDung, ',');
         getline(ss, hoTen, ',');
         getline(ss, soDienThoai, ',');
+        getline(ss, email, ',');
         getline(ss, ngaySinh, ',');
         getline(ss, gioiTinh, ',');
-        getline(ss, email, ',');
         getline(ss, cccd, ',');
 
         getline(ss, tk, ',');
@@ -209,8 +203,6 @@ User* SysLog::timTaiKhoan(
 
         getline(ss, trangThaiLamViec, ',');
         getline(ss, trangThaiTaiKhoan, ',');
-        getline(ss, coTaiKhoan, ',');
-
 
         // =========================
         // KIEM TRA TAI KHOAN
@@ -226,7 +218,6 @@ User* SysLog::timTaiKhoan(
         {
             continue;
         }
-
 
         // =================================================
         // ADMIN
@@ -250,7 +241,6 @@ User* SysLog::timTaiKhoan(
             return admin;
         }
 
-
         // =================================================
         // STAFF
         // =================================================
@@ -258,44 +248,18 @@ User* SysLog::timTaiKhoan(
         if (vaiTro == "Staff")
         {
             // -------------------------
-            // Chua co tai khoan
-            // -------------------------
-
-            if (coTaiKhoan != "1")
-            {
-                file.close();
-
-                gotoxy(35, 20);
-
-                setColor(12);
-
-                cout << "Nhan vien chua duoc cap tai khoan!";
-
-                setColor(7);
-
-                return NULL;
-            }
-
-
-            // -------------------------
             // Tai khoan bi khoa
             // -------------------------
 
             if (trangThaiTaiKhoan == "BiKhoa")
             {
                 file.close();
-
                 gotoxy(35, 20);
-
                 setColor(12);
-
                 cout << "Tai khoan da bi khoa!";
-
                 setColor(7);
-
                 return NULL;
             }
-
 
             // -------------------------
             // Nhan vien da nghi viec
@@ -304,33 +268,15 @@ User* SysLog::timTaiKhoan(
             if (trangThaiLamViec == "DaNghiViec")
             {
                 file.close();
-
                 gotoxy(35, 20);
-
                 setColor(12);
-
                 cout << "Nhan vien da nghi viec!";
-
                 setColor(7);
-
                 return NULL;
             }
 
-
             // -------------------------
-            // Chuyen string -> bool
-            // -------------------------
-
-            bool coTK = false;
-
-            if (coTaiKhoan == "1")
-            {
-                coTK = true;
-            }
-
-
-            // -------------------------
-            // Tao Staff
+            // Tao Staff (mac dinh co tai khoan la true vi da co trong file)
             // -------------------------
 
             Staff* staff = new Staff(
@@ -345,7 +291,7 @@ User* SysLog::timTaiKhoan(
                 mk,
                 trangThaiLamViec,
                 trangThaiTaiKhoan,
-                coTK);
+                true);
 
             file.close();
 
