@@ -144,7 +144,11 @@ void menuAdmin(Database& db) {
                     string maCaDuyet;
                     cout << "Nhap ma ca can duyet: ";
                     cin >> maCaDuyet;
-                    shiftMgr.duyetBaoCao(maCaDuyet);
+                    if (shiftMgr.duyetBaoCao(maCaDuyet, db)) {
+            			cout << "Duyet bao cao ca thanh cong!\n";
+        			} else {
+            			cout << "Khong the duyet bao cao ca!\n";
+        			}
                 } else if (subShift == 3) {
                     shiftMgr.hienThiTongHop();
                     shiftMgr.hienThiTatCa();
@@ -219,7 +223,7 @@ void menuStaff(Database& db, const string& maNV) {
                 cout << "Nhap doanh thu he thong (VND): "; cin >> doanhThuHT;
                 cout << "Nhap tien thuc te kiem ke trong ngan (VND): "; cin >> tienTT;
 
-                shiftMgr.chotCa(maCa, maNV, "Nhan Vien Thuc Te", ngayLam, gioBD, gioKT, doanhThuHT, tienTT);
+                shiftMgr.chotCa(maCa, maNV, "Nhan Vien Thuc Te", ngayLam, gioBD, gioKT, doanhThuHT, tienTT, db);
                 break;
             }
             case 0:
