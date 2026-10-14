@@ -7,6 +7,9 @@
 
 using namespace std;
 
+// Khai báo tru?c l?p Database d? tránh l?i vòng l?p include (circular dependency)
+class Database;
+
 
 // =====================================================
 // LOP BAO CAO CA LAM VIEC
@@ -19,10 +22,10 @@ private:
     string maNhanVien;
     string tenNhanVien;
 
-    // Dinh dang ngay: dd/mm/yyyy
+    // Dinh dang ngay: dd/mm/yyyy hoac yyyy-mm-dd
     string ngayLam;
 
-    // Dinh dang gio: HH:mm
+    // Dinh dang gio: HH:mm hoac HH:mm:ss
     string gioBatDau;
     string gioKetThuc;
 
@@ -99,6 +102,10 @@ private:
 public:
     ShiftManagement();
 
+    // --- HÀM TÍCH H?P Ð?C/GHI DATABASE ---
+    void taiDuLieu(Database& db);
+    void luuDuLieu(Database& db) const;
+
     // Them bao cao ca
     void themBaoCaoCa(ShiftReport ca);
 
@@ -111,17 +118,18 @@ public:
         string gioBatDau,
         string gioKetThuc,
         long long doanhThuHeThong,
-        long long tienThucTe
+        long long tienThucTe,
+        Database& db
     );
 
     // Tim ca theo ma ca
     ShiftReport* timCa(string maCa);
 
     // Duyet bao cao
-    bool duyetBaoCao(string maCa);
+    bool duyetBaoCao(string maCa, Database& db);
 
     // Khoa bao cao
-    bool khoaBaoCao(string maCa);
+    bool khoaBaoCao(string maCa, Database& db);
 
     // Loc theo khoang thoi gian
     vector<ShiftReport> locTheoThoiGian(
