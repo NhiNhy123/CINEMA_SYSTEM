@@ -31,6 +31,7 @@ void menuAdmin(Database& db) {
     fandbMgr.taiDuLieu(db);
     promoMgr.taiDuLieu(db);
     invoiceMgr.taiDuLieu(db);
+    shiftMgr.taiDuLieu(db);
 
     int choice = 0;
     do {
@@ -135,26 +136,38 @@ void menuAdmin(Database& db) {
                 invoiceMgr.thongKeTongQuanDoanhThu();
                 break;
             case 9: {
-                int subShift;
-                cout << "\n--- QUAN LY BAO CAO CA ---\n1. Xem ca cho duyet\n2. Duyet bao cao ca\n3. Xem tong hop tat ca ca\nChon: ";
-                cin >> subShift;
-                if (subShift == 1) {
-                    shiftMgr.hienThiCaChoDuyet();
-                } else if (subShift == 2) {
-                    string maCaDuyet;
-                    cout << "Nhap ma ca can duyet: ";
-                    cin >> maCaDuyet;
-                    if (shiftMgr.duyetBaoCao(maCaDuyet, db)) {
-            			cout << "Duyet bao cao ca thanh cong!\n";
-        			} else {
-            			cout << "Khong the duyet bao cao ca!\n";
-        			}
-                } else if (subShift == 3) {
-                    shiftMgr.hienThiTongHop();
-                    shiftMgr.hienThiTatCa();
-                }
-                break;
-            }
+    			int subShift;
+    			cout << "\n--- QUAN LY BAO CAO CA ---\n"
+         		 << "1. Xem ca cho duyet\n"
+        		 << "2. Duyet bao cao ca\n"
+        		 << "3. Khoa bao cao ca\n"
+        		 << "4. Xem tong hop tat ca ca\n"
+        		 << "Chon: ";
+    			cin >> subShift;
+
+    			if (subShift == 1) {
+        			shiftMgr.hienThiCaChoDuyet();
+    			} 
+    			else if (subShift == 2) {
+        			string maCaDuyet;
+        			cout << "Nhap ma ca can duyet: ";
+        			cin >> maCaDuyet;
+        // G?i tr?c ti?p vì hàm duyetBaoCao dã t? in thông báo k?t qu? và t? d?ng luu file
+        			shiftMgr.duyetBaoCao(maCaDuyet, db);
+    			}		 
+    			else if (subShift == 3) {
+        			string maCaKhoa;
+        			cout << "Nhap ma ca can khoa bao cao: ";
+        			cin >> maCaKhoa;
+        // G?i tr?c ti?p hàm khóa báo cáo dã du?c tích h?p t? d?ng luu file
+        			shiftMgr.khoaBaoCao(maCaKhoa, db);
+    			} 
+    			else if (subShift == 4) {
+        			shiftMgr.hienThiTongHop();
+        			shiftMgr.hienThiTatCa();
+    			}
+    			break;
+			}
             case 0:
                 cout << "Dang xuat khoi tai khoan Admin...\n";
                 break;
