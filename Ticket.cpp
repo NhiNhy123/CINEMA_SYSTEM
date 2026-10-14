@@ -2,6 +2,7 @@
 #include "Database.h"
 #include "Showtime.h"
 #include "Seat.h"
+#include "Movie.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -81,7 +82,8 @@ void Ticket::hienThi() const {
 // --- IMPLEMENTATION OF TICKET MANAGER (QUY TRÌNH BÁN VÉ 6 BU?C) ---
 
 void TicketManager::quyTrinhBanVe(Database& db) {
-    // BUOC 1: DOC DANH SACH SUAT CHIUE TU DATABASE
+    // BU?C 1.1: Ð?C VÀ HI?N TH? DANH SÁCH PHIM ÐANG CHI?U
+    // (Gi? s? Database có hàm docDanhSachPhim ho?c b?n l?y t? danh sách su?t chi?u)
     vector<Showtime> dsShowtime;
     db.docDanhSachSuatChieu(dsShowtime);
     if (dsShowtime.empty()) {
@@ -89,37 +91,69 @@ void TicketManager::quyTrinhBanVe(Database& db) {
         return;
     }
 
+    // L?c ra danh sách các mã phim duy nh?t t? các su?t chi?u hi?n có
+    vector<string> dsMaPhim;
+for (size_t i = 0; i < dsShowtime.size(); ++i) {
+    bool exist = false;
+
+    for (size_t j = 0; j < dsMaPhim.size(); ++j) {
+        if (dsMaPhim[j] == dsShowtime[i].getMaPhim()) {
+            exist = true;
+            break;
+        }
+    }
+
+    if (!exist) {
+        dsMaPhim.push_back(dsShowtime[i].getMaPhim());
+    }
+}
+
+    Movie movie;
+	movie.hienThiDanhSach(db);
+    int chonPhimSTT;
+    cout << "Nhap STT phim can xem (Nhap 0 de huy): ";
+    cin >> chonPhimSTT;
+    if (chonPhimSTT <= 0 || chonPhimSTT > (int)dsMaPhim.size()) {
+        return;
+    }
+    string selectedMovie = dsMaPhim[chonPhimSTT - 1];
+
+    // BU?C 1.2: L?C VÀ HI?N TH? CÁC SU?T CHI?U THU?C V? PHIM ÐÃ CH?N
+    vector<Showtime> dsSuatChieuCuaPhim;
+for (size_t i = 0; i < dsShowtime.size(); ++i) {
+    if (dsShowtime[i].getMaPhim() == selectedMovie) {
+        dsSuatChieuCuaPhim.push_back(dsShowtime[i]);
+    }
+}
+
     cout << "\n===================================================================\n";
-    cout << "                    CHON SUAT CHIEU CHO HOA DON\n";
+    cout << "           SUAT CHIEU CHO PHIM: " << selectedMovie << "\n";
     cout << "===================================================================\n";
     cout << left << setw(6) << "STT" 
          << setw(10) << "Ma SC" 
-         << setw(15) << "Ma Phim" 
          << setw(15) << "Ngay chieu" 
          << setw(13) << "Gio chieu" 
          << setw(10) << "Ma Phong" << endl;
     cout << "-------------------------------------------------------------------\n";
     
-    for (size_t i = 0; i < dsShowtime.size(); ++i) {
+    for (size_t i = 0; i < dsSuatChieuCuaPhim.size(); ++i) {
         cout << left << setw(6) << (i + 1)
-             << setw(10) << dsShowtime[i].getMaSuatChieu()
-             << setw(15) << dsShowtime[i].getMaPhim()
-             << setw(15) << dsShowtime[i].getNgayChieu()
-             << setw(13) << dsShowtime[i].getGioBatDau()
-             << setw(10) << dsShowtime[i].getMaPhong() << endl;
+             << setw(10) << dsSuatChieuCuaPhim[i].getMaSuatChieu()
+             << setw(15) << dsSuatChieuCuaPhim[i].getNgayChieu()
+             << setw(13) << dsSuatChieuCuaPhim[i].getGioBatDau()
+             << setw(10) << dsSuatChieuCuaPhim[i].getMaPhong() << endl;
     }
     cout << "-------------------------------------------------------------------\n";
     
     int chonSTT;
-    cout << "Nhap STT suat chieu can ban ve (Nhap 0 de huy): ";
+    cout << "Nhap STT suat chieu (Nhap 0 de huy): ";
     cin >> chonSTT;
-    if (chonSTT <= 0 || chonSTT > (int)dsShowtime.size()) {
+    if (chonSTT <= 0 || chonSTT > (int)dsSuatChieuCuaPhim.size()) {
         return;
     }
 
-    Showtime selectedShowtime = dsShowtime[chonSTT - 1];
+    Showtime selectedShowtime = dsSuatChieuCuaPhim[chonSTT - 1];
     string selectedSC = selectedShowtime.getMaSuatChieu();
-    string selectedMovie = selectedShowtime.getMaPhim();
     string maPhongChieu = selectedShowtime.getMaPhong();
 
     // BUOC 2: DOC DANH SACH GHE THUOC PHONG CHIEU TU DATABASE (Dung lop Seat)
@@ -133,35 +167,12 @@ void TicketManager::quyTrinhBanVe(Database& db) {
     double tongTienGhe = 0.0;
     char tiepTucChon = 'y';
 
-while (tiepTucChon == 'y' || tiepTucChon == 'Y') {
-        cout << "\n===================================================================\n";
-        cout << "            SO DO GHE PHONG CHIEU: " << maPhongChieu << " \n";
-        cout << "===================================================================\n";
-        cout << "                      Man hinh chieu phim (SCREEN)\n";
-        cout << "-------------------------------------------------------------------\n";
-        
-        // Hi?n th? tr?c quan các gh? thu?c phòng chi?u này t? dsGhePhong
-        for (size_t k = 0; k < dsGhePhong.size(); ++k) {
-            if (dsGhePhong[k].getMaPhong() == maPhongChieu) {
-                string maGheHienTai = dsGhePhong[k].getMaGhe();
-                string trangThaiGhe = dsGhePhong[k].getTrangThai();
-                
-                // Ki?m tra xem gh? này có dang du?c ch?n t?m trong phiên giao d?ch hi?n t?i không
-                for (size_t idx = 0; idx < dsGheChon.size(); ++idx) {
-                    if (dsGheChon[idx] == maGheHienTai) {
-                        trangThaiGhe = "DaDat"; // Ho?c hi?n th? là dang ch?n
-                        break;
-                    }
-                }
+    // Kh?i t?o và n?p d? li?u gh? m?t l?n tru?c khi vào vòng l?p ch?n gh?
+    seatMgr.taiDuLieu(db);
 
-                if (trangThaiGhe == "DaDat" || trangThaiGhe == "DangChon") {
-                    cout << "[X] " << maGheHienTai << " ";
-                } else {
-                    cout << "[O] " << maGheHienTai << " ";
-                }
-            }
-        }
-        cout << "\n-------------------------------------------------------------------\n";
+    while (tiepTucChon == 'y' || tiepTucChon == 'Y') {
+        // G?I TR?C TI?P HÀM HI?N TH? CHU?N ÐÃ PHÂN HÀNG C?A SEATMANAGER
+        seatMgr.hienThiSoDoPhong(maPhongChieu);
         
         string ghe;
         cout << "Nhap ma ghe muon chon (VD: A1, B1, VIP1...): ";
@@ -197,7 +208,7 @@ while (tiepTucChon == 'y' || tiepTucChon == 'Y') {
         dsGheChon.push_back(ghe);
         tongTienGhe += giaGheHienTai;
 
-        cout << "Da chon ghe [" << ghe << "] thanh công. Tam tinh tien ghe: " << (int)tongTienGhe << " VND\n";
+        cout << "Da chon ghe [" << ghe << "] thanh cong. Tam tinh tien ghe: " << (int)tongTienGhe << " VND\n";
         cout << "Ban co muon chon them ghe nua khong? (y/n): ";
         cin >> tiepTucChon;
     }
@@ -382,7 +393,7 @@ void TicketManager::checkInVe(Database& db) {
     cin >> maCheckIn;
 
     vector<Ticket> danhSach;
-	db.docDanhSachVe(danhSach);
+    db.docDanhSachVe(danhSach); // Ð?c danh sách vé lên RAM
     bool found = false;
 
     for (size_t i = 0; i < danhSach.size(); ++i) {
