@@ -1,5 +1,6 @@
 #include "Seat.h"
 #include "Database.h"
+#include "Room.h"
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -78,43 +79,56 @@ void SeatManager::taiDuLieu(Database& db) {
 }
 
 // 1. Phân h? Admin: T?o gh? hàng lo?t theo hàng và c?t
-void SeatManager::taoGheHangLoat(const string& maPhong, Database& db) {
-    char batDauHang, ketThucHang;
-    int soGheMoiHang;
-    string loaiGhe;
-    double donGia;
+void SeatManager::taoGheTuDongChoPhong(const string& maPhongCanTao, Database& db) {
+    // 1. Ð?c danh sách phòng d? l?y dúng "sucChua" c?a phòng này
+    vector<Room> danhSachPhong;
+    db.docDanhSachPhong(danhSachPhong);
 
-    cout << "\n--- TAO SO DO GHE HANG LOAT CHO PHONG: " << maPhong << " ---\n";
-    cout << "Nhap hang bat dau (VD: A): ";
-    cin >> batDauHang;
-    cout << "Nhap hang ket thuc (VD: D): ";
-    cin >> ketThucHang;
-    cout << "Nhap so luong ghe moi hang (VD: 10): ";
-    cin >> soGheMoiHang;
-    cout << "Nhap loai ghe chung (Standard / VIP / Couple): ";
-    cin >> loaiGhe;
-    
-    do {
-        cout << "Nhap don gia co ban (Phai > 0): ";
-        cin >> donGia;
-        if (donGia <= 0) cout << "Loi: Don gia khong duoc am hoac bang 0!\n";
-    } while (donGia <= 0);
-
-    // Sinh danh sach ghe moi vao bo nho
-    for (char row = batDauHang; row <= ketThucHang; ++row) {
-        for (int col = 1; col <= soGheMoiHang; ++col) {
-            stringstream ss;
-            ss << row << col;
-            string maGhe = ss.str();
-        
-            Seat newSeat(maGhe, maPhong, loaiGhe, donGia, "Trong");
-            danhSachGhe.push_back(newSeat);
+    int sucChuaPhong = 0;
+    bool timThay = false;
+    for (size_t i = 0; i < danhSachPhong.size(); ++i) {
+        if (danhSachPhong[i].getMaPhong() == maPhongCanTao) {
+            sucChuaPhong = danhSachPhong[i].getSucChua();
+            timThay = true;
+            break;
         }
     }
 
-    // Uy quyen cho Database ghi toan bo xuong file he thong
+    if (!timThay) {
+        cout << "Khong tim thay phong co ma: " << maPhongCanTao << "!\n";
+        return;
+    }
+
+    // 2. T?i danh sách gh? hi?n t?i lên b? nh?
+    taiDuLieu(db);
+
+    // 3. T? d?ng thu?t toán sinh gh? v?a v?n v?i s?c ch?a (M?i hàng 10 gh?)
+    char hang = 'A';
+    int soThuTu = 1;
+    int soGheMoiHang = 10;
+
+    for (int i = 1; i <= sucChuaPhong; ++i) {
+        stringstream ss;
+        ss << hang << soThuTu; // T?o mã A1, A2... A10, B1...
+        string maGhe = ss.str();
+
+        // Phân lo?i gh? t? d?ng: Hàng A, B là Standard (giá 60k), t? hàng C là VIP (giá 90k)
+        string loaiGhe = (hang <= 'B') ? "Standard" : "VIP";
+        double donGia = (loaiGhe == "VIP") ? 90000 : 60000;
+
+        Seat newSeat(maGhe, maPhongCanTao, loaiGhe, donGia, "Trong");
+        danhSachGhe.push_back(newSeat);
+
+        soThuTu++;
+        if (soThuTu > soGheMoiHang) {
+            soThuTu = 1;
+            hang++; // Ð? 10 gh? thì t? d?ng xu?ng hàng ti?p theo
+        }
+    }
+
+    // 4. Ghi l?i toàn b? database an toàn qua Database
     db.ghiDanhSachGhe(danhSachGhe);
-    cout << "Da khoi tao va luu thanh cong so do ghe cho phong " << maPhong << "!\n";
+    cout << "-> Da tu dong sinh thanh cong " << sucChuaPhong << " ghe cho phong " << maPhongCanTao << "!\n";
 }
 
 // 2. Tính nang thông minh: Sao chép b? c?c gh? t? phòng cu sang phòng m?i
@@ -143,24 +157,60 @@ void SeatManager::saoChepBucLuc(const string& phongDich, const string& phongNguo
 // Hi?n th? so d? phòng d?ng tr?c quan
 void SeatManager::hienThiSoDoPhong(const string& maPhong) const {
     cout << "\n==================== SO DO GHE PHONG CHIEU: " << maPhong << " ====================\n";
-    cout << " [MAN HINH CHIEU PHIM]\n";
-    cout << "-----------------------------------------------------------------------\n";
-    
-    bool found = false;
-    // Dung vong lap for truyen thong thay cho range-based for
+    cout << "                         [MAN HINH CHIEU PHIM]\n";
+    cout << "---------------------------------------------------------------------------------\n";
+
+    // 1. L?c ra danh sách các gh? thu?c riêng phòng này
+    vector<Seat> gheCuaPhong;
     for (size_t i = 0; i < danhSachGhe.size(); ++i) {
         if (danhSachGhe[i].getMaPhong() == maPhong) {
-            danhSachGhe[i].hienThi();
-            found = true;
+            gheCuaPhong.push_back(danhSachGhe[i]);
         }
     }
-    
-    if (!found) {
+
+    if (gheCuaPhong.empty()) {
         cout << "Phong nay chua duoc thiet lap so do ghe!\n";
+        cout << "---------------------------------------------------------------------------------\n";
+        cout << "=================================================================================\n";
+        return;
     }
-    cout << "\n-----------------------------------------------------------------------\n";
-    cout << "Chu thich: [ ] Trong | [?] Dang chon (Khoa tam 15p) | [X] Da dat\n";
-    cout << "=======================================================================\n";
+
+    // 2. Duy?t qua các hàng t? 'A' d?n 'Z' d? phân lo?i và in t?ng hàng xu?ng dòng riêng
+    for (char hang = 'A'; hang <= 'Z'; ++hang) {
+        bool coHangNay = false;
+        
+        // Ki?m tra xem hàng ch? cái này có t?n t?i trong phòng không
+        for (size_t i = 0; i < gheCuaPhong.size(); ++i) {
+            string maGhe = gheCuaPhong[i].getMaGhe();
+            if (!maGhe.empty() && toupper(maGhe[0]) == hang) {
+                coHangNay = true;
+                break;
+            }
+        }
+
+        // N?u hàng có t?n t?i, in nhãn tên hàng và các gh? thu?c hàng dó trên m?t dòng
+        if (coHangNay) {
+            cout << " Hang " << hang << " : ";
+            for (size_t i = 0; i < gheCuaPhong.size(); ++i) {
+                string maGhe = gheCuaPhong[i].getMaGhe();
+                if (!maGhe.empty() && toupper(maGhe[0]) == hang) {
+                    string trangThai = gheCuaPhong[i].getTrangThai();
+                    
+                    // Hi?n th? tr?c quan theo tr?ng thái gh?
+                    if (trangThai == "Trong" || trangThai == "Available" || trangThai == "0") {
+                        cout << "[" << maGhe << "] ";
+                    } else {
+                        cout << "[ X ] "; // Gh? dã d?t ho?c tr?ng thái khác
+                    }
+                }
+            }
+            cout << "\n"; // Xu?ng dòng sau khi in xong h?t các gh? c?a hàng hi?n t?i
+        }
+    }
+
+    cout << "---------------------------------------------------------------------------------\n";
+    cout << "Chu thich: [MaGhe] Ghe trong  |  [ X ] Ghe da dat\n";
+    cout << "=================================================================================\n";
 }
 
 // 3. Phân h? Staff: Ch?n gh? tuong tác (Khóa t?m)
