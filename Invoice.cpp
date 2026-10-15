@@ -82,7 +82,7 @@ void Invoice::hienThi() const {
     cout << left << setw(10) << maHoaDon 
          << setw(12) << (maKhachHang.empty() ? "KhachLe" : maKhachHang)
          << setw(10) << maNhanVien 
-         << setw(16) << thoiGianLap 
+         << setw(23) << thoiGianLap 
          << setw(15) << fixed << setprecision(0) << tongTien 
          << setw(15) << hinhThucThanhToan 
          << setw(12) << trangThaiThanhToan << endl;
@@ -214,11 +214,11 @@ void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
 
 // --- PHAN HE 1: QUAN TRI VIEN - QUAN LY DOANH THU & THONG KE ---
 void InvoiceManager::hienThiLichSuGiaoDich() const {
-    cout << "\n================================= LICH SU GIAO DICH HOA DON =================================\n";
+    cout << "\n================================= LICH SU GIAO DICH HOA DON ==================================\n";
     cout << left << setw(10) << "Ma HD" 
          << setw(12) << "Ma KH" 
          << setw(10) << "Thu Ngan" 
-         << setw(16) << "Thoi Gian" 
+         << setw(23) << "Thoi Gian" 
          << setw(15) << "Tong Tien" 
          << setw(15) << "Hinh Thuc" 
          << setw(12) << "Trang Thai" << endl;
@@ -230,7 +230,7 @@ void InvoiceManager::hienThiLichSuGiaoDich() const {
             danhSachHoaDon[i].hienThi();
         }
     }
-    cout << "============================================================================================-\n";
+    cout << "=============================================================================================\n";
 }
 
 void InvoiceManager::thongKeTongQuanDoanhThu() const {
