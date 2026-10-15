@@ -6,18 +6,18 @@
 
 using namespace std;
 
-class Database; // Khai b·o tru?c l?p Database
+class Database; // Khai b√°o tru?c l?p Database
 
 class Movie {
 private:
     string maPhim;
     string tenPhim;
-    int thoiLuong;          // TÌnh b?ng ph˙t
-    int nhanDoTuoi;         // VÌ d?: 13, 16, 18
-    string ngayKhoiChieu;   // –?nh d?ng: YYYY-MM-DD
+    int thoiLuong;          // T√≠nh b?ng ph√∫t
+    int nhanDoTuoi;         // V√≠ d?: 13, 16, 18
+    string ngayKhoiChieu;   // √ê?nh d?ng: YYYY-MM-DD
     string ngayKetThuc;
     string moTa;
-    string poster;          // Link ho?c tÍn file poster/trailer
+    string poster;          // Link ho?c t√™n file poster/trailer
 
 public:
     // Constructor
@@ -43,14 +43,14 @@ public:
     void setMoTa(const string& desc);
     void setPoster(const string& p);
 
-    // –?c/Ghi d? li?u CSV tuong thÌch v?i Database
+    // √ê?c/Ghi d? li?u CSV tuong th√≠ch v?i Database
     string toCSV() const;
     static Movie fromCSV(const string& line);
 
-    // Hi?n th? thÙng tin
-    void hienThi() const;
+    // Hi?n th? th√¥ng tin
+    void hienThi(Database& db) const;
 
-    // --- C¡C TÕNH NANG QU?N L› (THAY TH? CHO MOVIEMANAGER) ---
+    // --- C√ÅC T√çNH NANG QU?N L√ù (THAY TH? CHO MOVIEMANAGER) ---
     static void hienThiDanhSach(Database& db);
     static void themPhim(Database& db);
     static void suaPhim(Database& db);
