@@ -34,7 +34,7 @@ void FoodAndBeverage::setTenMatHang(const string& ten) { tenMatHang = ten; }
 void FoodAndBeverage::setLoai(const string& l) { loai = l; }
 void FoodAndBeverage::setGiaTien(double gia) { if (gia > 0) giaTien = gia; }
 void FoodAndBeverage::setTrangThaiKinhDoanh(const string& trangThai) { trangThaiKinhDoanh = trangThai; }
-// --- CHUY?N –?I D? LI?U CSV CHO F&B ---
+// --- CHUY?N √ê?I D? LI?U CSV CHO F&B ---
 
 string FoodAndBeverage::toCSV() const {
     stringstream ss;
@@ -63,7 +63,7 @@ FoodAndBeverage FoodAndBeverage::fromCSV(const string& line) {
 
 void FoodAndBeverage::hienThi() const {
     cout << left << setw(10) << maMatHang 
-         << setw(25) << tenMatHang 
+         << setw(30) << tenMatHang 
          << setw(12) << loai 
          << setw(15) << fixed << setprecision(0) << giaTien 
          << setw(15) << trangThaiKinhDoanh << endl;
@@ -82,7 +82,7 @@ void FAndBManager::taiDuLieu(Database& db) {
 void FAndBManager::hienThiDanhSach() const {
     cout << "\n============================== DANH MUC DO AN & THUC UONG (F&B) ==============================\n";
     cout << left << setw(10) << "Ma SP" 
-         << setw(25) << "Ten San Pham" 
+         << setw(30) << "Ten San Pham" 
          << setw(12) << "Loai" 
          << setw(15) << "Gia Ban (VND)" 
          << setw(15) << "Trang Thai" << endl;
