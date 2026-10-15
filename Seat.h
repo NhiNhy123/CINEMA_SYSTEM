@@ -50,7 +50,7 @@ public:
     void taiDuLieu(Database& db);
 
     // Phân h? Admin: T?o gh? hàng lo?t & Sao chép b? c?c
-    void taoGheHangLoat(const string& maPhong, Database& db);
+    void taoGheTuDongChoPhong(const string& maPhong, Database& db);
     void saoChepBucLuc(const string& phongDich, const string& phongNguon, Database& db);
     void hienThiSoDoPhong(const string& maPhong) const;
 
