@@ -43,7 +43,7 @@ void Movie::setNgayKetThuc(const string& ngay) { ngayKetThuc = ngay; }
 void Movie::setMoTa(const string& desc) { moTa = desc; }
 void Movie::setPoster(const string& p) { poster = p; }
 
-// Chuy?n d?i d?i tu?ng Movie th‡nh dÚng CSV
+// Chuy?n d?i d?i tu?ng Movie th√†nh d√≤ng CSV
 string Movie::toCSV() const {
     stringstream ssTL, ssTuoi;
     ssTL << thoiLuong;
@@ -51,7 +51,7 @@ string Movie::toCSV() const {
     return maPhim + "," + tenPhim + "," + ssTL.str() + "," + ssTuoi.str() + "," + ngayKhoiChieu + "," + ngayKetThuc + "," + moTa + "," + poster;
 }
 
-// –?c m?t dÚng t? file Database
+// √ê?c m?t d√≤ng t? file Database
 Movie Movie::fromCSV(const string& line) {
     stringstream ss(line);
     string ma, ten, strThoiLuong, strNhanTuoi, ngayKC, ngayKT, moTa, poster;
@@ -80,23 +80,24 @@ Movie Movie::fromCSV(const string& line) {
     return Movie(ma, ten, thoiLuong, nhanDoTuoi, ngayKC, ngayKT, moTa, poster);
 }
 
-// Hi?n th? m?t dÚng thÙng tin phim
-void Movie::hienThi() const {
-    stringstream ssTL, ssTuoi;
-    ssTL << thoiLuong << "p";
-    ssTuoi << nhanDoTuoi << "+";
+// Hi?n th? m?t d√≤ng th√¥ng tin phim
+void Movie::hienThi(Database& db) const {
+stringstream temp1, temp2;
+temp1 << thoiLuong << "p";
+temp2 << nhanDoTuoi << "+";
+
+string ssTL = temp1.str();
+string ssTuoi = temp2.str();
+    string tenTheLoai = db.layTheLoaiCuaPhim(maPhim); // L?y th? lo?i t? Database
 
     cout << left << setw(10) << maPhim 
-         << setw(30) << tenPhim 
-         << setw(15) << ssTL.str()
-         << setw(10) << ssTuoi.str()
+         << setw(25) << tenPhim 
+         << setw(23) << tenTheLoai
+         << setw(12) << ssTL
+         << setw(10) << ssTuoi
          << setw(15) << ngayKhoiChieu 
          << setw(15) << ngayKetThuc << endl;
 }
-
-// ==========================================
-// C¡C CH?C NANG QU?N L› PHIM (–√ TÕCH H?P)
-// ==========================================
 
 void Movie::hienThiDanhSach(Database& db) {
     vector<Movie> danhSach;
@@ -105,18 +106,22 @@ void Movie::hienThiDanhSach(Database& db) {
         cout << "Danh sach phim hien dang trong!\n";
         return;
     }
-    cout << "\n==================================== DANH SACH PHIM CHIEU RAP ====================================\n";
+    
+    // M? r?ng khung nh√¨n b?ng d? ch?a th√™m c?t Th? lo?i
+    cout << "\n=================================================================================================================\n";
     cout << left << setw(10) << "Ma Phim"  
-         << setw(30) << "Ten Phim"   // Tang t? 25 lÍn 30 d? cÛ kho?ng c·ch tho·ng hon
-         << setw(15) << "Thoi luong" // Tang t? 10 lÍn 15 d? t·ch bi?t h?n v?i –? tu?i
+         << setw(25) << "Ten Phim"   
+         << setw(23) << "The Loai"   
+         << setw(12) << "Thoi luong" 
          << setw(10) << "Do tuoi"  
          << setw(15) << "Khoi chieu"  
          << setw(15) << "Ket thuc" << endl;
-    cout << "---------------------------------------------------------------------------------------------------\n";
+    cout << "-----------------------------------------------------------------------------------------------------------------\n";
+    
     for (size_t i = 0; i < danhSach.size(); ++i) {
-        danhSach[i].hienThi();
+        danhSach[i].hienThi(db); // Truy?n db v√†o h√†m hienThi d? l?y t√™n th? lo?i
     }
-    cout << "===================================================================================================\n";
+    cout << "=================================================================================================================\n";
 }
 
 void Movie::themPhim(Database& db) {
@@ -147,7 +152,7 @@ void Movie::themPhim(Database& db) {
     cout << "Nhap ngay khoi chieu (YYYY-MM-DD): ";
     cin >> ngayKC;
     
-    // R‡ng bu?c logic: Ki?m tra d?nh d?ng/th?i gian ph·t h‡nh so b?
+    // R√†ng bu?c logic: Ki?m tra d?nh d?ng/th?i gian ph√°t h√†nh so b?
     if (ngayKC.empty()) {
         cout << "Loi: Ngay phat hanh khong hop le!\n";
         return;
@@ -170,49 +175,171 @@ void Movie::themPhim(Database& db) {
 }
 
 void Movie::suaPhim(Database& db) {
-    string ma;
     cout << "\n--- SUA THONG TIN PHIM ---\n";
-    cout << "Nhap ma phim can sua: ";
+    
+    // 1. Hi?n th? danh s√°ch phim d? ngu?i d√πng xem m√£ phim
+    hienThiDanhSach(db);
+
+    string ma;
+    cout << "\nNhap ma phim can sua (nhap 0 de quay lai): ";
     cin >> ma;
+    if (ma == "0") return;
 
     vector<Movie> danhSach;
-	db.docDanhSachPhim(danhSach);
+    db.docDanhSachPhim(danhSach);
     bool found = false;
 
     for (size_t i = 0; i < danhSach.size(); ++i) {
         if (danhSach[i].getMaPhim() == ma) {
             found = true;
-            string ten, ngayKC, ngayKT, moTa, poster;
-            int thoiLuong, nhanDoTuoi;
+            int choice;
+            do {
+                // 2. In ra chi ti?t to√†n b? th√¥ng tin hi?n t?i c?a phim d? ngu?i d√πng d? theo d√µi
+                cout << "\n==================================================\n";
+                cout << "         THONG TIN CHI TIET PHIM DANG SUA         \n";
+                cout << "==================================================\n";
+                cout << "Ma phim     : " << danhSach[i].getMaPhim() << "\n";
+                cout << "Ten phim    : " << danhSach[i].getTenPhim() << "\n";
+                cout << "The loai    : " << db.layTheLoaiCuaPhim(danhSach[i].getMaPhim()) << "\n";
+                cout << "Thoi luong  : " << danhSach[i].getThoiLuong() << " phut\n";
+                cout << "Do tuoi     : " << danhSach[i].getNhanDoTuoi() << "+\n";
+                cout << "Khoi chieu  : " << danhSach[i].getNgayKhoiChieu() << "\n";
+                cout << "Ket thuc    : " << danhSach[i].getNgayKetThuc() << "\n";
+                cout << "Mo ta       : " << danhSach[i].getMoTa() << "\n";
+                cout << "Poster      : " << danhSach[i].getPoster() << "\n";
+                cout << "==================================================\n";
+                
+                // Menu t√πy ch?n s?a
+                cout << "1. Sua ten phim\n";
+                cout << "2. Sua the loai phim\n";
+                cout << "3. Sua thoi luong\n";
+                cout << "4. Sua nhan do tuoi\n";
+                cout << "5. Sua ngay khoi chieu\n";
+                cout << "6. Sua ngay ket thuc\n";
+                cout << "7. Sua mo ta\n";
+                cout << "8. Sua poster\n";
+                cout << "0. Hoan tat va luu thay doi\n";
+                cout << "Chon thuoc tinh can sua (0-8): ";
+                cin >> choice;
 
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            cout << "Nhap ten phim moi (" << danhSach[i].getTenPhim() << "): ";
-            getline(cin, ten);
-            cout << "Nhap thoi luong moi (phut): ";
-            cin >> thoiLuong;
-            cout << "Nhap nhan do tuoi moi: ";
-            cin >> nhanDoTuoi;
-            cout << "Nhap ngay khoi chieu moi (YYYY-MM-DD): ";
-            cin >> ngayKC;
-            cout << "Nhap ngay ket thuc moi (YYYY-MM-DD): ";
-            cin >> ngayKT;
+                cin.ignore(numeric_limits<streamsize>::max(), '\n'); // X√≥a b? d?m sau khi nh?p s?
 
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            cout << "Nhap mo ta moi: ";
-            getline(cin, moTa);
-            cout << "Nhap poster moi: ";
-            getline(cin, poster);
+                switch (choice) {
+                    case 1: {
+                        string tenMoi;
+                        cout << "Nhap ten phim moi (" << danhSach[i].getTenPhim() << "): ";
+                        getline(cin, tenMoi);
+                        if (!tenMoi.empty()) danhSach[i].setTenPhim(tenMoi);
+                        cout << "-> Da cap nhat ten phim!\n";
+                        break;
+                    }
+case 2: {
+                        int subChoice;
+                        do {
+                            // In ra danh s√°ch th? lo?i hi?n t?i c?a phim v√† menu con
+                            vector<pair<string, string> > dsTheLoai;
+                            db.docDanhSachTheLoai(dsTheLoai);
 
-            danhSach[i].setTenPhim(ten);
-            danhSach[i].setThoiLuong(thoiLuong);
-            danhSach[i].setNhanDoTuoi(nhanDoTuoi);
-            danhSach[i].setNgayKhoiChieu(ngayKC);
-            danhSach[i].setNgayKetThuc(ngayKT);
-            danhSach[i].setMoTa(moTa);
-            danhSach[i].setPoster(poster);
+                            cout << "\n--------------------------------------------------\n";
+                            cout << "QUAN LY THE LOAI CHO PHIM: " << danhSach[i].getTenPhim() << "\n";
+                            cout << "The loai hien tai: " << db.layTheLoaiCuaPhim(danhSach[i].getMaPhim()) << "\n";
+                            cout << "--------------------------------------------------\n";
+                            cout << "Danh sach tat ca the loai trong he thong:\n";
+                            for (size_t k = 0; k < dsTheLoai.size(); ++k) {
+                                cout << "  - " << dsTheLoai[k].second << " (Ma: " << dsTheLoai[k].first << ")\n";
+                            }
+                            cout << "--------------------------------------------------\n";
+                            cout << "1. Them the loai moi (Giung nguyen the loai cu, gan them)\n";
+                            cout << "2. Thay the toan bo (Xoa the loai cu, gan the loai moi)\n";
+                            cout << "0. Quay lai menu truoc\n";
+                            cout << "Chon thao tac (0-2): ";
+                            cin >> subChoice;
 
-            db.ghiDanhSachPhim(danhSach);
-            cout << "Cap nhat thong tin phim thanh cong!\n";
+                            cin.ignore(numeric_limits<streamsize>::max(), '\n'); // X√≥a b? d?m
+
+                            if (subChoice == 1) {
+                                string theLoaiThem;
+                                cout << "Nhap ten the loai muon them: ";
+                                getline(cin, theLoaiThem);
+                                if (!theLoaiThem.empty()) {
+                                    db.themTheLoaiChoPhim(danhSach[i].getMaPhim(), theLoaiThem);
+                                    cout << "-> Da them the loai thanh cong!\n";
+                                }
+                            } 
+                            else if (subChoice == 2) {
+                                string theLoaiMoi;
+                                cout << "Nhap ten the loai thay the moi: ";
+                                getline(cin, theLoaiMoi);
+                                if (!theLoaiMoi.empty()) {
+                                    db.capNhatTheLoaiChoPhim(danhSach[i].getMaPhim(), theLoaiMoi);
+                                    cout << "-> Da thay the toan bo the loai thanh cong!\n";
+                                }
+                            } 
+                            else if (subChoice != 0) {
+                                cout << "Lua chon khong hop le!\n";
+                            }
+                        } while (subChoice != 0);
+                        
+                        break;
+                    }
+                    case 3: {
+                        int thoiLuongMoi;
+                        cout << "Nhap thoi luong moi (phut) (" << danhSach[i].getThoiLuong() << "): ";
+                        cin >> thoiLuongMoi;
+                        danhSach[i].setThoiLuong(thoiLuongMoi);
+                        cout << "-> Da cap nhat thoi luong!\n";
+                        break;
+                    }
+                    case 4: {
+                        int doTuoiMoi;
+                        cout << "Nhap nhan do tuoi moi (" << danhSach[i].getNhanDoTuoi() << "): ";
+                        cin >> doTuoiMoi;
+                        danhSach[i].setNhanDoTuoi(doTuoiMoi);
+                        cout << "-> Da cap nhat nhan do tuoi!\n";
+                        break;
+                    }
+                    case 5: {
+                        string ngayKCMoi;
+                        cout << "Nhap ngay khoi chieu moi (YYYY-MM-DD) (" << danhSach[i].getNgayKhoiChieu() << "): ";
+                        getline(cin, ngayKCMoi);
+                        if (!ngayKCMoi.empty()) danhSach[i].setNgayKhoiChieu(ngayKCMoi);
+                        cout << "-> Da cap nhat ngay khoi chieu!\n";
+                        break;
+                    }
+                    case 6: {
+                        string ngayKTMoi;
+                        cout << "Nhap ngay ket thuc moi (YYYY-MM-DD) (" << danhSach[i].getNgayKetThuc() << "): ";
+                        getline(cin, ngayKTMoi);
+                        if (!ngayKTMoi.empty()) danhSach[i].setNgayKetThuc(ngayKTMoi);
+                        cout << "-> Da cap nhat ngay ket thuc!\n";
+                        break;
+                    }
+                    case 7: {
+                        string moTaMoi;
+                        cout << "Nhap mo ta moi: ";
+                        getline(cin, moTaMoi);
+                        if (!moTaMoi.empty()) danhSach[i].setMoTa(moTaMoi);
+                        cout << "-> Da cap nhat mo ta!\n";
+                        break;
+                    }
+                    case 8: {
+                        string posterMoi;
+                        cout << "Nhap poster moi: ";
+                        getline(cin, posterMoi);
+                        if (!posterMoi.empty()) danhSach[i].setPoster(posterMoi);
+                        cout << "-> Da cap nhat poster!\n";
+                        break;
+                    }
+                    case 0:
+                        // Luu to√†n b? danh s√°ch phim sau khi ch?nh s?a
+                        db.ghiDanhSachPhim(danhSach);
+                        cout << "\nLuu thay doi thong tin phim thanh cong!\n";
+                        break;
+                    default:
+                        cout << "Lua chon khong hop le! Vui long chon lai.\n";
+                }
+            } while (choice != 0);
+
             break;
         }
     }
@@ -223,12 +350,12 @@ void Movie::suaPhim(Database& db) {
 }
 
 bool Movie::kiemTraPhimDangChieu(const string& maPhim, Database& db) {
-    // Ki?m tra thÙng qua danh s·ch su?t chi?u trong h? th?ng
+    // Ki?m tra th√¥ng qua danh s√°ch su?t chi?u trong h? th?ng
     vector<Showtime> dsShowtime;
 	db.docDanhSachSuatChieu(dsShowtime);
     for (size_t i = 0; i < dsShowtime.size(); ++i) {
         if (dsShowtime[i].getMaPhim() == maPhim) {
-            return true; // Phim dang cÛ su?t chi?u, khÙng du?c xÛa
+            return true; // Phim dang c√≥ su?t chi?u, kh√¥ng du?c x√≥a
         }
     }
     return false;
