@@ -8,7 +8,7 @@
 
 SysLog::SysLog()
 {
-    fileCSV = "quan_ly_nhan_su.csv"; // S?a l?i cho kh?p v?i tên file th?c t? c?a b?n
+    fileCSV = "DATA/quan_ly_nhan_su.csv"; // S?a l?i cho kh?p v?i tên file th?c t? c?a b?n
 }
 
 SysLog::SysLog(string fileCSV)
