@@ -150,47 +150,101 @@ void FAndBManager::themMatHang(Database& db) {
 
 // Sua thong tin mat hang
 void FAndBManager::suaMatHang(Database& db) {
-    string ma;
     cout << "\n--- SUA THONG TIN MAT HANG F&B ---\n";
-    cout << "Nhap ma mat hang can sua: ";
-    cin >> ma;
+    
+    // 1. Hi?n th? danh sách m?t hàng d? ngu?i dùng xem mã
+    hienThiDanhSach();
 
+    string ma;
+    cout << "\nNhap ma mat hang can sua (nhap 0 de quay lai): ";
+    cin >> ma;
+    if (ma == "0") return;
+
+    // T?i l?i d? li?u m?i nh?t t? database
+    taiDuLieu(db);
     bool found = false;
+
     for (size_t i = 0; i < danhSachFAndB.size(); ++i) {
         if (danhSachFAndB[i].getMaMatHang() == ma) {
             found = true;
-            string ten, loai;
-            double gia;
+            int choice;
+            do {
+                // 2. In ra chi ti?t toàn b? thông tin hi?n t?i c?a m?t hàng
+                cout << "\n==================================================\n";
+                cout << "       THONG TIN CHI TIET MAT HANG DANG SUA       \n";
+                cout << "==================================================\n";
+                cout << "Ma mat hang : " << danhSachFAndB[i].getMaMatHang() << "\n";
+                cout << "Ten mat hang: " << danhSachFAndB[i].getTenMatHang() << "\n";
+                cout << "Loai hang   : " << danhSachFAndB[i].getLoai() << "\n";
+                cout << "Gia ban     : " << fixed << setprecision(0) << danhSachFAndB[i].getGiaTien() << " VND\n";
+                cout << "==================================================\n";
 
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            cout << "Nhap ten moi (" << danhSachFAndB[i].getTenMatHang() << "): ";
-            getline(cin, ten);
-            if (!ten.empty()) danhSachFAndB[i].setTenMatHang(ten);
+                // Menu tùy ch?n s?a t?ng thu?c tính
+                cout << "1. Sua ten mat hang\n";
+                cout << "2. Sua loai mat hang (Nuoc, DoAn...)\n";
+                cout << "3. Sua gia ban\n";
+                cout << "0. Hoan tat va luu thay doi\n";
+                cout << "Chon thuoc tinh can sua (0-3): ";
+                cin >> choice;
 
-            cout << "Nhap loai moi (" << danhSachFAndB[i].getLoai() << "): ";
-            cin >> loai;
-            if (!loai.empty()) danhSachFAndB[i].setLoai(loai);
+                cin.ignore(numeric_limits<streamsize>::max(), '\n'); // Xóa b? d?m sau khi nh?p s?
 
-            while (true) {
-                cout << "Nhap gia ban moi (Hien tai: " << danhSachFAndB[i].getGiaTien() << "): ";
-                cin >> gia;
-                if (cin.fail()) {
-                    cin.clear();
-                    cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                    cout << "Loi: Gia ban khong hop le (vui long nhap so)!\n";
-                } else if (gia <= 0) {
-                    cout << "Loi: Gia ban phai lon hon 0!\n";
-                } else {
-                    danhSachFAndB[i].setGiaTien(gia);
-                    break;
+                switch (choice) {
+                    case 1: {
+                        string tenMoi;
+                        cout << "Nhap ten moi (" << danhSachFAndB[i].getTenMatHang() << "): ";
+                        getline(cin, tenMoi);
+                        if (!tenMoi.empty()) {
+                            danhSachFAndB[i].setTenMatHang(tenMoi);
+                            cout << "-> Da cap nhat ten mat hang!\n";
+                        }
+                        break;
+                    }
+                    case 2: {
+                        string loaiMoi;
+                        cout << "Nhap loai moi (" << danhSachFAndB[i].getLoai() << "): ";
+                        getline(cin, loaiMoi);
+                        if (!loaiMoi.empty()) {
+                            danhSachFAndB[i].setLoai(loaiMoi);
+                            cout << "-> Da cap nhat loai mat hang!\n";
+                        }
+                        break;
+                    }
+                    case 3: {
+                        double giaMoi;
+                        while (true) {
+                            cout << "Nhap gia ban moi (Hien tai: " << danhSachFAndB[i].getGiaTien() << "): ";
+                            cin >> giaMoi;
+                            if (cin.fail()) {
+                                cin.clear();
+                                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                                cout << "Loi: Gia ban khong hop le (vui long nhap so)!\n";
+                            } else if (giaMoi <= 0) {
+                                cout << "Loi: Gia ban phai lon hon 0!\n";
+                            } else {
+                                danhSachFAndB[i].setGiaTien(giaMoi);
+                                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                                cout << "-> Da cap nhat gia ban moi!\n";
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                    case 0: {
+                        // Luu toàn b? danh sách m?t hàng xu?ng Database khi b?m hoàn t?t
+                        db.ghiDanhSachFAndB(danhSachFAndB);
+                        cout << "\nLuu thay doi thong tin mat hang F&B thanh cong!\n";
+                        break;
+                    }
+                    default:
+                        cout << "Lua chon khong hop le! Vui long chon lai.\n";
                 }
-            }
+            } while (choice != 0);
 
-            db.ghiDanhSachFAndB(danhSachFAndB);
-            cout << "Cap nhat thong tin mat hang thanh cong!\n";
             break;
         }
     }
+
     if (!found) {
         cout << "Khong tim thay ma mat hang can sua!\n";
     }
