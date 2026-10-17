@@ -120,10 +120,9 @@ void Database::docDanhSachUsers(vector<Customer>& danhSachKH) {
 // --- Ghi d?ng b? danh sách Khách hàng & Users ---
 // --- Ghi d?ng b? danh sách Khách hàng & Users (B?o toàn d? li?u cu c?a b?ng USERS) ---
 void Database::ghiDanhSachUsers(const vector<Customer>& danhSachKH) {
-    // 1. Ð?c toàn b? các dòng hi?n có t? file cu d? không làm m?t d? li?u h? th?ng (Admin, Staff,...)
+    // 1. Ð?c toàn b? file cu d? b?o toàn nguyên v?n m?i b?ng (Users h? th?ng, Customers, History)
     ifstream inFile("DATA/quan_ly_nhan_su.csv");
-    vector<string> usersLines;
-    vector<string> customersLines;
+    vector<string> rawUsersLines;
     vector<string> historyLines;
     
     string currentSection = "";
@@ -141,9 +140,7 @@ void Database::ghiDanhSachUsers(const vector<Customer>& danhSachKH) {
             }
             
             if (currentSection == "USERS") {
-                if (line.find("maNguoiDung") == string::npos) usersLines.push_back(line);
-            } else if (currentSection == "CUSTOMERS") {
-                if (line.find("maKhachHang") == string::npos) customersLines.push_back(line);
+                if (line.find("maNguoiDung") == string::npos) rawUsersLines.push_back(line);
             } else if (currentSection == "HISTORY") {
                 if (line.find("maGiaoDichDiem") == string::npos) historyLines.push_back(line);
             }
@@ -151,67 +148,53 @@ void Database::ghiDanhSachUsers(const vector<Customer>& danhSachKH) {
         inFile.close();
     }
 
-    // 2. C?p nh?t ho?c thêm m?i thông tin khách hàng vào danh sách Users và Customers
+    // 2. C?p nh?t di?m/chi tiêu m?i cho b?ng [CUSTOMERS], d?ng th?i d?m b?o thông tin Customer trong [USERS] du?c c?p nh?t
+    vector<string> finalCustomersLines;
     for (size_t i = 0; i < danhSachKH.size(); ++i) {
         string maKH = danhSachKH[i].getMaKH();
-        string newUserRow = maKH + "," + danhSachKH[i].getHoTen() + "," + danhSachKH[i].getSoDienThoai() + "," +
-                            danhSachKH[i].getEmail() + ",1/1/2000,Nam,123456789012,khach_" + 
-                            danhSachKH[i].getSoDienThoai() + ",123456,Customer,DangLam,HoatDong";
-                            
+        
+        // T?o dòng d? li?u m?i cho b?ng [CUSTOMERS]
         stringstream ssDiem, ssChiTieu;
+        ssDiem << danhSachKH[i].getDiemTichLuy();
+        ssChiTieu << danhSachKH[i].getTongChiTieu();
+        string newCustomerRow = maKH + "," + ssDiem.str() + "," + danhSachKH[i].getHangThanhVien() + "," + ssChiTieu.str();
+        finalCustomersLines.push_back(newCustomerRow);
 
-ssDiem << danhSachKH[i].getDiemTichLuy();
-ssChiTieu << danhSachKH[i].getTongChiTieu();
-
-string newCustomerRow = maKH + "," + ssDiem.str() + "," +
-                        danhSachKH[i].getHangThanhVien() + "," + ssChiTieu.str();
-
-        // Ki?m tra xem maKH dã t?n t?i trong danh sách USERS cu chua d? c?p nh?t, n?u chua thì thêm m?i
-        bool foundUser = false;
-        for (size_t j = 0; j < usersLines.size(); ++j) {
-            if (usersLines[j].find(maKH + ",") == 0) {
-                usersLines[j] = newUserRow; // C?p nh?t thông tin m?i nh?t
-                foundUser = true;
+        // Ki?m tra n?u là khách hàng m?i hoàn toàn chua có trong [USERS] thì b? sung vào
+        bool foundInUsers = false;
+        for (size_t j = 0; j < rawUsersLines.size(); ++j) {
+            if (rawUsersLines[j].find(maKH + ",") == 0) {
+                foundInUsers = true;
                 break;
             }
         }
-        if (!foundUser) {
-            usersLines.push_back(newUserRow); // Thêm m?i n?u là khách hàng dang ký m?i
-        }
-
-        // Tuong t? cho b?ng CUSTOMERS
-        bool foundCustomer = false;
-        for (size_t j = 0; j < customersLines.size(); ++j) {
-            if (customersLines[j].find(maKH + ",") == 0) {
-                customersLines[j] = newCustomerRow;
-                foundCustomer = true;
-                break;
-            }
-        }
-        if (!foundCustomer) {
-            customersLines.push_back(newCustomerRow);
+        if (!foundInUsers) {
+            string newUserRow = maKH + "," + danhSachKH[i].getHoTen() + "," + danhSachKH[i].getSoDienThoai() + "," +
+                                danhSachKH[i].getEmail() + ",1/1/2000,Nam,123456789012,khach_" + 
+                                danhSachKH[i].getSoDienThoai() + ",123456,Customer,DangLam,HoatDong";
+            rawUsersLines.push_back(newUserRow);
         }
     }
 
-    // 3. Ti?n hành ghi dè toàn b? t?p v?i d?y d? d? li?u du?c b?o toàn
+    // 3. Ghi dè l?i toàn b? t?p v?i co ch? b?o toàn 100% Admin, Staff và d? li?u cu
     ofstream outFile("DATA/quan_ly_nhan_su.csv", ios::trunc);
     if (!outFile.is_open()) return;
 
-    // Ghi b?ng [USERS]
+    // Ghi b?ng [USERS] (Gi? nguyên Admin, Staff và các user cu)
     outFile << "[USERS]\n";
     outFile << "maNguoiDung,hoTen,soDienThoai,email,ngaySinh,gioiTinh,cccd,taiKhoan,matKhau,vaiTro,trangThaiLamViec,trangThaiTaiKhoan\n";
-    for (size_t i = 0; i < usersLines.size(); ++i) {
-        outFile << usersLines[i] << "\n";
+    for (size_t i = 0; i < rawUsersLines.size(); ++i) {
+        outFile << rawUsersLines[i] << "\n";
     }
 
-    // Ghi b?ng [CUSTOMERS]
+    // Ghi b?ng [CUSTOMERS] (Ch? ch?a d? li?u CRM c?a khách hàng)
     outFile << "\n[CUSTOMERS]\n";
     outFile << "maKhachHang,diemTichLuy,hangThanhVien,tongChiTieu\n";
-    for (size_t i = 0; i < customersLines.size(); ++i) {
-        outFile << customersLines[i] << "\n";
+    for (size_t i = 0; i < finalCustomersLines.size(); ++i) {
+        outFile << finalCustomersLines[i] << "\n";
     }
 
-    // Ghi b?ng [CUSTOMER_POINTS_HISTORY]
+    // Ghi b?ng [CUSTOMER_POINTS_HISTORY] (Gi? nguyên l?ch s? giao d?ch)
     outFile << "\n[CUSTOMER_POINTS_HISTORY]\n";
     outFile << "maGiaoDichDiem,maKhachHang,loaiGiaoDich,soDiem,noiDung,thoiGian\n";
     for (size_t i = 0; i < historyLines.size(); ++i) {
@@ -222,6 +205,7 @@ string newCustomerRow = maKH + "," + ssDiem.str() + "," +
 }
 
 // --- Ð?c l?ch s? giao d?ch di?m ---
+// --- Ð?c l?ch s? giao d?ch di?m chu?n xác theo 6 c?t c?a [CUSTOMER_POINTS_HISTORY] ---
 void Database::docLichSuGiaoDichDiem(vector<GiaoDichDiem>& danhSachGD) {
     danhSachGD.clear();
     ifstream inFile("DATA/quan_ly_nhan_su.csv");
@@ -243,9 +227,16 @@ void Database::docLichSuGiaoDichDiem(vector<GiaoDichDiem>& danhSachGD) {
         if (reading) {
             if (line.find("maGiaoDichDiem") != string::npos) continue;
             vector<string> parts = tachChuoiCSV(line);
-            // C?u trúc: maGiaoDichDiem,maKhachHang,loaiGiaoDich,soDiem,noiDung,thoiGian
+            // C?u trúc chu?n 6 ph?n t?: maGiaoDichDiem, maKhachHang, loaiGiaoDich, soDiem, noiDung, thoiGian
             if (parts.size() >= 6) {
-                GiaoDichDiem gd(parts[0], "", parts[1], parts[2], atoi(parts[3].c_str()), parts[4], parts[5]);
+                GiaoDichDiem gd(
+                    parts[0],                     // maGiaoDich
+                    parts[1],                     // maKhachHang (VD: U03)
+                    parts[2],                     // loaiGiaoDich (VD: TichDiem)
+                    atoi(parts[3].c_str()),       // soDiem
+                    parts[4],                     // noiDung
+                    parts[5]                      // thoiGian
+                );
                 danhSachGD.push_back(gd);
             }
         }
@@ -253,43 +244,59 @@ void Database::docLichSuGiaoDichDiem(vector<GiaoDichDiem>& danhSachGD) {
     inFile.close();
 }
 
-// --- Ghi l?ch s? giao d?ch di?m ---
+// --- Ghi l?ch s? giao d?ch di?m d?ng b?, b?o toàn d? li?u Users ---
 void Database::ghiLichSuGiaoDichDiem(const vector<GiaoDichDiem>& danhSachGD) {
-    vector<Customer> danhSachKH;
-    docDanhSachUsers(danhSachKH);
+    // 1. Ð?c l?i nguyên v?n file cu d? gi? Admin, Staff và Customers
+    ifstream inFile("DATA/quan_ly_nhan_su.csv");
+    vector<string> rawUsersLines;
+    vector<string> customersLines;
+    
+    string currentSection = "";
+    string line;
+    
+    if (inFile.is_open()) {
+        while (getline(inFile, line)) {
+            if (line.empty()) continue;
+            if (line[0] == '[') {
+                if (line.find("[USERS]") != string::npos) currentSection = "USERS";
+                else if (line.find("[CUSTOMERS]") != string::npos) currentSection = "CUSTOMERS";
+                else currentSection = "";
+                continue;
+            }
+            
+            if (currentSection == "USERS") {
+                if (line.find("maNguoiDung") == string::npos) rawUsersLines.push_back(line);
+            } else if (currentSection == "CUSTOMERS") {
+                if (line.find("maKhachHang") == string::npos) customersLines.push_back(line);
+            }
+        }
+        inFile.close();
+    }
 
+    // 2. Ghi dè toàn b? file v?i danh sách l?ch s? di?m m?i nh?t
     ofstream outFile("DATA/quan_ly_nhan_su.csv", ios::trunc);
     if (!outFile.is_open()) return;
 
-    // Ghi l?i b?ng [USERS]
+    // Ghi l?i b?ng [USERS] nguyên b?n (b?o toàn Admin, Staff)
     outFile << "[USERS]\n";
     outFile << "maNguoiDung,hoTen,soDienThoai,email,ngaySinh,gioiTinh,cccd,taiKhoan,matKhau,vaiTro,trangThaiLamViec,trangThaiTaiKhoan\n";
-    for (size_t i = 0; i < danhSachKH.size(); ++i) {
-        outFile << danhSachKH[i].getMaKH() << ","
-                << danhSachKH[i].getHoTen() << ","
-                << danhSachKH[i].getSoDienThoai() << ","
-                << danhSachKH[i].getEmail() << ","
-                << "1/1/2000,Nam,123456789012,"
-                << "khach_" << danhSachKH[i].getSoDienThoai() << ","
-                << "123456,Customer,DangLam,HoatDong\n";
+    for (size_t i = 0; i < rawUsersLines.size(); ++i) {
+        outFile << rawUsersLines[i] << "\n";
     }
 
-    // Ghi l?i b?ng [CUSTOMERS]
+    // Ghi l?i b?ng [CUSTOMERS] nguyên b?n
     outFile << "\n[CUSTOMERS]\n";
     outFile << "maKhachHang,diemTichLuy,hangThanhVien,tongChiTieu\n";
-    for (size_t i = 0; i < danhSachKH.size(); ++i) {
-        outFile << danhSachKH[i].getMaKH() << ","
-                << danhSachKH[i].getDiemTichLuy() << ","
-                << danhSachKH[i].getHangThanhVien() << ","
-                << danhSachKH[i].getTongChiTieu() << "\n";
+    for (size_t i = 0; i < customersLines.size(); ++i) {
+        outFile << customersLines[i] << "\n";
     }
 
-    // Ghi l?i b?ng [CUSTOMER_POINTS_HISTORY] v?i danh sách m?i nh?t
+    // Ghi l?i b?ng [CUSTOMER_POINTS_HISTORY] v?i danh sách giao d?ch m?i nh?t
     outFile << "\n[CUSTOMER_POINTS_HISTORY]\n";
     outFile << "maGiaoDichDiem,maKhachHang,loaiGiaoDich,soDiem,noiDung,thoiGian\n";
     for (size_t i = 0; i < danhSachGD.size(); ++i) {
         outFile << danhSachGD[i].getMaGiaoDich() << ","
-                << danhSachGD[i].getSoDienThoai() << ","
+                << danhSachGD[i].getMaKhachHang() << ","
                 << danhSachGD[i].getLoaiGiaoDich() << ","
                 << danhSachGD[i].getSoDiem() << ","
                 << danhSachGD[i].getNoiDung() << ","
