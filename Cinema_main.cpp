@@ -91,7 +91,7 @@ void menuAdmin(Database& db) {
                     seatMgr.hienThiSoDoPhong(maP);
                 } else if (subChoice == 2) {
                     cout << "Nhap ma phong: "; cin >> maP;
-                    seatMgr.taoGheHangLoat(maP, db);
+                   seatMgr.taoGheTuDongChoPhong(maP, db);
                 } else if (subChoice == 3) {
                     string pDich, pNguon;
                     cout << "Nhap phong dich (nhan): "; cin >> pDich;
