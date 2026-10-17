@@ -4,14 +4,18 @@ TL01,Hanh Dong
 TL02,Kinh Di
 TL03,Tinh Cam
 TL04,Hoat Hinh
+TL05,Tam Ly
+TL06,Gia Dinh
 
 [MOVIE_GENRES]
 maPhim,maTheLoai
-P01,TL01
-P01,TL03
 P02,TL02
 P03,TL03
 P04,TL01
+P01,TL05
+P01,TL01
+P05,TL04
+P05,TL06
 
 [ROOMS]
 maPhong,tenPhong,loaiPhong,sucChua,trangThaiPhong
@@ -20,18 +24,19 @@ R02,Phong Chieu 02,2D,120,HoatDong
 R03,Phong Chieu 03,3D,110,HoatDong
 R04,Phong Chieu 04,3D,130,HoatDong
 R05,Phong Chieu IMAX,IMAX,150,HoatDong
+R06,Phong Chieu 05,2D,20,HoatDong
 
 [SEATS]
 maGhe,maPhong,loaiGhe,donGiaGhe,trangThai
-A1,R01,Standard,60000,Trong
-A2,R01,Standard,60000,Trong
-A3,R01,Standard,60000,Trong
+A1,R01,Standard,60000,DaDat
+A2,R01,Standard,60000,DaDat
+A3,R01,Standard,60000,DaDat
 A4,R01,Standard,60000,Trong
 B1,R01,VIP,90000,Trong
-B2,R01,VIP,90000,Trong
+B2,R01,VIP,90000,DaDat
 B3,R01,VIP,90000,Trong
 B4,R01,VIP,90000,Trong
-A1,R02,Standard,65000,Trong
+A1,R02,Standard,65000,DaDat
 A2,R02,Standard,65000,Trong
 A3,R02,Standard,65000,Trong
 B1,R02,VIP,95000,Trong
@@ -53,6 +58,26 @@ VIP1,R05,IMAX,150000,Trong
 VIP2,R05,IMAX,150000,Trong
 VIP3,R05,IMAX,150000,Trong
 VIP4,R05,IMAX,150000,Trong
+A1,R06,Standard,60000,Trong
+A2,R06,Standard,60000,Trong
+A3,R06,Standard,60000,Trong
+A4,R06,Standard,60000,Trong
+A5,R06,Standard,60000,Trong
+A6,R06,Standard,60000,Trong
+A7,R06,Standard,60000,Trong
+A8,R06,Standard,60000,Trong
+A9,R06,Standard,60000,Trong
+A10,R06,Standard,60000,Trong
+B1,R06,Standard,60000,Trong
+B2,R06,Standard,60000,Trong
+B3,R06,Standard,60000,Trong
+B4,R06,Standard,60000,Trong
+B5,R06,Standard,60000,Trong
+B6,R06,Standard,60000,Trong
+B7,R06,Standard,60000,Trong
+B8,R06,Standard,60000,Trong
+B9,R06,Standard,60000,Trong
+B10,R06,Standard,60000,Trong
 
 [MOVIES]
 maPhim,tenPhim,thoiLuong,nhanDoTuoi,ngayKhoiChieu,ngayKetThuc,moTa,poster
@@ -60,3 +85,4 @@ P01,Lat Mat 7,120,18,2026-04-01,2026-05-01,Phim ve gia dinh va tinh mau tu,latma
 P02,Mai,135,18,2026-02-10,2026-03-30,Cau chuyen tinh yeu cua Mai va Duong,mai.jpg
 P03,Tho Oi!,127,18,2026-10-15,2026-11-28,Cau chuyen thuc te ve tinh yeu va xa hoi,ThoOi.jpg
 P04,Avatar: Lua va Tro,190,13,2026-12-18,2027-02-15,Hanh trinh tiep theo tai Pandora,avatar3.jpg
+P05,Doraemon Movie 25,160,10,2026-10-17,2026-12-25,Khong,Doraemon25.jgp
