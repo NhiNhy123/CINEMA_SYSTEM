@@ -125,15 +125,15 @@ void Movie::hienThiDanhSach(Database& db) {
 }
 
 void Movie::themPhim(Database& db) {
-    string ma, ten, ngayKC, ngayKT, moTa, poster;
+    string ma, ten, ngayKC, ngayKT, moTa, poster, tenTheLoai;
     int thoiLuong, nhanDoTuoi;
 
     cout << "\n--- THEM PHIM MOI ---\n";
-    cout << "Nhap ma phim (VD: M01): ";
+    cout << "Nhap ma phim (VD: P01): ";
     cin >> ma;
 
     vector<Movie> danhSach;
-	db.docDanhSachPhim(danhSach);
+    db.docDanhSachPhim(danhSach);
     for (size_t i = 0; i < danhSach.size(); ++i) {
         if (danhSach[i].getMaPhim() == ma) {
             cout << "Loi: Ma phim nay da ton tai!\n";
@@ -144,6 +144,11 @@ void Movie::themPhim(Database& db) {
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
     cout << "Nhap ten phim: ";
     getline(cin, ten);
+
+    // B? SUNG: Nh?p th? lo?i cho phim m?i
+    cout << "Nhap the loai phim (VD: Hanh Dong, Kinh Di, Hoat Hinh...): ";
+    getline(cin, tenTheLoai);
+
     cout << "Nhap thoi luong (phut): ";
     cin >> thoiLuong;
     cout << "Nhap nhan do tuoi (13, 16, 18...): ";
@@ -152,7 +157,6 @@ void Movie::themPhim(Database& db) {
     cout << "Nhap ngay khoi chieu (YYYY-MM-DD): ";
     cin >> ngayKC;
     
-    // Ràng bu?c logic: Ki?m tra d?nh d?ng/th?i gian phát hành so b?
     if (ngayKC.empty()) {
         cout << "Loi: Ngay phat hanh khong hop le!\n";
         return;
@@ -167,11 +171,17 @@ void Movie::themPhim(Database& db) {
     cout << "Nhap duong dan poster/trailer: ";
     getline(cin, poster);
 
+    // 1. Thêm phim vào danh sách và ghi xu?ng database [MOVIES]
     Movie moi(ma, ten, thoiLuong, nhanDoTuoi, ngayKC, ngayKT, moTa, poster);
     danhSach.push_back(moi);
     db.ghiDanhSachPhim(danhSach);
 
-    cout << "Them phim moi thanh cong va da luu vao he thong!\n";
+    // 2. T? d?ng g?n th? lo?i cho phim v?a t?o thông qua Database
+    if (!tenTheLoai.empty()) {
+        db.themTheLoaiChoPhim(ma, tenTheLoai);
+    }
+
+    cout << "Them phim moi va gan the loai thanh cong va da luu vao he thong!\n";
 }
 
 void Movie::suaPhim(Database& db) {
