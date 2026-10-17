@@ -8,32 +8,27 @@
 using namespace std;
 
 // =====================================================
-// LICH SU GIAO DICH DIEM
+// LOP GIAO DICH DIEM (B?ng [CUSTOMER_POINTS_HISTORY])
 // =====================================================
 
 class GiaoDichDiem
 {
 private:
     string maGiaoDich;
-    string tenKhachHang;
-    string soDienThoai;
-
-    // TichDiem / DoiDiem
-    string loaiGiaoDich;
-
+    string maKhachHang; // Liên k?t khóa ngo?i t?i b?ng [CUSTOMERS] và [USERS]
+    string loaiGiaoDich; // TichDiem / DoiDiem
     int soDiem;
-
     string noiDung;
     string thoiGian;
 
 public:
-    // Constructor
+    // Constructor m?c d?nh
     GiaoDichDiem();
 
+    // Constructor chu?n kh?p 6 c?t c?a [CUSTOMER_POINTS_HISTORY]
     GiaoDichDiem(
         string maGiaoDich,
-        string tenKhachHang,
-        string soDienThoai,
+        string maKhachHang,
         string loaiGiaoDich,
         int soDiem,
         string noiDung,
@@ -41,42 +36,37 @@ public:
 
     // Getter
     string getMaGiaoDich() const;
-    string getTenKhachHang() const;
-    string getSoDienThoai() const;
+    string getMaKhachHang() const;
     string getLoaiGiaoDich() const;
     int getSoDiem() const;
     string getNoiDung() const;
     string getThoiGian() const;
     
     string toCSV() const;
-	static GiaoDichDiem fromCSV(const string& line);
+    static GiaoDichDiem fromCSV(const string& line);
+
     // Hien thi
     void hienThi() const;
 };
 
 
 // =====================================================
-// LOP CUSTOMER
-// KHACH HANG CRM
+// LOP CUSTOMER (B?ng [CUSTOMERS] & thông tin liên k?t [USERS])
 // =====================================================
 
 class Customer
 {
 private:
-    // Thong tin khach hang
+    // Thông tin d?nh danh (Th?c ch?t du?c ánh x? t? b?ng [USERS] khi d?c Database)
     string maKH;
     string hoTen;
     string soDienThoai;
     string email;
 
-    // CRM
+    // D? li?u CRM chính th?c luu trong b?ng [CUSTOMERS]
     int diemTichLuy;
-
-    // Thuong / ThanThiet / VIP
-    string hangThanhVien;
-
-    // Don vi: VND
-    long long tongChiTieu;
+    string hangThanhVien; // Thuong / ThanThiet / VIP
+    long long tongChiTieu; // Ðon v?: VND
 
     // Lich su tich/doi diem
     vector<GiaoDichDiem> lichSuDiem;
@@ -88,12 +78,14 @@ public:
 
     Customer();
 
+    // Dùng khi t?o khách hàng m?i
     Customer(
         string maKH,
         string hoTen,
         string soDienThoai,
         string email);
 
+    // Dùng khi d?c d?y d? t? Database (ghép t? [USERS] và [CUSTOMERS])
     Customer(
         string maKH,
         string hoTen,
@@ -125,10 +117,13 @@ public:
     void setEmail(string email);
 
     // =================================================
-    // QUAN LY DIEM
+    // QUAN LY DIEM & CSV
     // =================================================
+    
+    // Xu?t ra CSV ch? ghi dúng 4 tru?ng c?a b?ng [CUSTOMERS]: maKhachHang,diemTichLuy,hangThanhVien,tongChiTieu
     string toCSV() const;
-	static Customer fromCSV(const string& line);
+    static Customer fromCSV(const string& line);
+
     // Tich diem
     void tichDiem(
         int soDiem,
@@ -142,30 +137,18 @@ public:
         string thoiGian);
 
     // =================================================
-    // CHI TIEU
+    // CHI TIEU & H?NG THÀNH VIÊN
     // =================================================
 
     void themChiTieu(long long soTien);
-
-    // =================================================
-    // HANG THANH VIEN
-    // =================================================
-
     void capNhatHangThanhVien();
 
     // =================================================
-    // LICH SU
+    // LICH SU & HI?N TH?
     // =================================================
 
-    void themGiaoDich(
-        GiaoDichDiem giaoDich);
-
+    void themGiaoDich(GiaoDichDiem giaoDich);
     void hienThiLichSuDiem() const;
-
-    // =================================================
-    // HIEN THI
-    // =================================================
-
     void hienThiThongTin() const;
 };
 
