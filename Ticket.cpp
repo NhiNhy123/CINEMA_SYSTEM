@@ -3,6 +3,7 @@
 #include "Showtime.h"
 #include "Seat.h"
 #include "Movie.h"
+#include "Customer.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -81,9 +82,122 @@ void Ticket::hienThi() const {
 
 // --- IMPLEMENTATION OF TICKET MANAGER (QUY TRÌNH BÁN VÉ 6 BU?C) ---
 
+Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon) {
+    cout << "\n==================================================================-\n";
+    cout << "                    XU LY THONG TIN KHACH HANG (CRM)                 \n";
+    cout << "===================================================================\n";
+    
+    string sdt;
+    cout << "Nhap so dien thoai khach hang: ";
+    cin >> sdt;
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+
+    // 1. Ð?c danh sách khách hàng t? Database ([USERS] và [CUSTOMERS])
+    vector<Customer> danhSachKH;
+    db.docDanhSachUsers(danhSachKH);
+
+    Customer* khachHangTimThay = NULL;
+    for (size_t i = 0; i < danhSachKH.size(); ++i) {
+        if (danhSachKH[i].getSoDienThoai() == sdt) {
+            khachHangTimThay = &danhSachKH[i];
+            break;
+        }
+    }
+
+    // 2. N?u tìm th?y thành viên cu
+    if (khachHangTimThay != NULL) {
+        cout << "-> He thong tim thay thanh vien: " << khachHangTimThay->getHoTen() 
+             << " (Hang " << khachHangTimThay->getHangThanhVien() 
+             << " - Diem tich luy: " << khachHangTimThay->getDiemTichLuy() << ")\n";
+        
+        // Ti?n hành tích di?m t? hóa don hi?n t?i
+        int soDiemThuong = static_cast<int>(tongTienHoaDon / 10000); // Quy u?c: 10.000d = 1 di?m
+        string thoiGian = "6/5/2026 18:30"; // Ho?c l?y th?i gian h? th?ng th?c t?
+        string noiDung = "Tich diem tu hoa don ban ve";
+
+        khachHangTimThay->tichDiem(soDiemThuong, noiDung, thoiGian);
+        khachHangTimThay->themChiTieu(static_cast<long long>(tongTienHoaDon));
+
+        // Ghi l?i l?ch s? giao d?ch di?m vào b?ng [CUSTOMER_POINTS_HISTORY]
+        vector<GiaoDichDiem> danhSachGD;
+        db.docLichSuGiaoDichDiem(danhSachGD);
+
+        stringstream ss;
+        ss << "GD0" << (danhSachGD.size() + 1);
+        string maGD = ss.str();
+
+        GiaoDichDiem gdMoi(maGD, khachHangTimThay->getHoTen(), khachHangTimThay->getSoDienThoai(), "TichDiem", soDiemThuong, noiDung, thoiGian);
+        danhSachGD.push_back(gdMoi);
+
+        // Luu toàn b? thay d?i xu?ng Database
+        db.ghiDanhSachUsers(danhSachKH);
+        db.ghiLichSuGiaoDichDiem(danhSachGD);
+
+        cout << "-> Da tich them " << soDiemThuong << " diem cho khach hang!\n";
+        return *khachHangTimThay;
+    } 
+    // 3. N?u chua có -> Yêu c?u nhân viên nh?p thông tin d? dang ký m?i
+    else {
+        cout << "-> Khong tim thay khach hang voi SÐT: " << sdt << ". Vui long dang ky thong tin moi!\n";
+        
+        string hoTen, email, ngaySinh, gioiTinh;
+        cout << "Nhap ho ten khach hang: ";
+        getline(cin, hoTen);
+        cout << "Nhap email: ";
+        getline(cin, email);
+        cout << "Nhap ngay sinh (M/D/YYYY): ";
+        getline(cin, ngaySinh);
+        cout << "Nhap gioi tinh (Nam/Nu): ";
+        getline(cin, gioiTinh);
+
+        // T? d?ng sinh mã khách hàng m?i tang d?n
+        stringstream ssMa;
+        ssMa << "U0" << (danhSachKH.size() + 1);
+        string maKHMoi = ssMa.str();
+
+        // Kh?i t?o d?i tu?ng khách hàng m?i (di?m = 0, chi tiêu = 0)
+        Customer khachMoi(maKHMoi, hoTen, sdt, email, 0, "Thuong", 0);
+        
+        // Tích di?m cho hóa don d?u tiên luôn
+        int soDiemThuong = static_cast<int>(tongTienHoaDon / 10000);
+        string thoiGian = "6/5/2026 18:30";
+        string noiDung = "Tich diem hoa don dau tien";
+        
+        khachMoi.tichDiem(soDiemThuong, noiDung, thoiGian);
+        khachMoi.themChiTieu(static_cast<long long>(tongTienHoaDon));
+
+        danhSachKH.push_back(khachMoi);
+
+        // Ghi nh?n l?ch s? giao d?ch di?m
+        vector<GiaoDichDiem> danhSachGD;
+        db.docLichSuGiaoDichDiem(danhSachGD);
+        
+        stringstream ssGD;
+        ssGD << "GD0" << (danhSachGD.size() + 1);
+        string maGD = ssGD.str();
+
+        GiaoDichDiem gdMoi(
+    maGD,
+    khachMoi.getHoTen(),
+    khachMoi.getSoDienThoai(),
+    "TichDiem",
+    soDiemThuong,
+    noiDung,
+    thoiGian
+);
+	danhSachGD.push_back(gdMoi);
+
+        // Luu xu?ng file h? th?ng (`[USERS]`, `[CUSTOMERS]`, `[CUSTOMER_POINTS_HISTORY]`)
+        db.ghiDanhSachUsers(danhSachKH);
+        db.ghiLichSuGiaoDichDiem(danhSachGD);
+
+        cout << "-> Dang ky thanh vien moi va tich " << soDiemThuong << " diem thanh cong! Ma KH: " << maKHMoi << "\n";
+        return khachMoi;
+    }
+}
+
 void TicketManager::quyTrinhBanVe(Database& db) {
     // BU?C 1.1: Ð?C VÀ HI?N TH? DANH SÁCH PHIM ÐANG CHI?U
-    // (Gi? s? Database có hàm docDanhSachPhim ho?c b?n l?y t? danh sách su?t chi?u)
     vector<Showtime> dsShowtime;
     db.docDanhSachSuatChieu(dsShowtime);
     if (dsShowtime.empty()) {
@@ -93,23 +207,21 @@ void TicketManager::quyTrinhBanVe(Database& db) {
 
     // L?c ra danh sách các mã phim duy nh?t t? các su?t chi?u hi?n có
     vector<string> dsMaPhim;
-for (size_t i = 0; i < dsShowtime.size(); ++i) {
-    bool exist = false;
-
-    for (size_t j = 0; j < dsMaPhim.size(); ++j) {
-        if (dsMaPhim[j] == dsShowtime[i].getMaPhim()) {
-            exist = true;
-            break;
+    for (size_t i = 0; i < dsShowtime.size(); ++i) {
+        bool exist = false;
+        for (size_t j = 0; j < dsMaPhim.size(); ++j) {
+            if (dsMaPhim[j] == dsShowtime[i].getMaPhim()) {
+                exist = true;
+                break;
+            }
+        }
+        if (!exist) {
+            dsMaPhim.push_back(dsShowtime[i].getMaPhim());
         }
     }
 
-    if (!exist) {
-        dsMaPhim.push_back(dsShowtime[i].getMaPhim());
-    }
-}
-
     Movie movie;
-	movie.hienThiDanhSach(db);
+    movie.hienThiDanhSach(db);
     int chonPhimSTT;
     cout << "Nhap STT phim can xem (Nhap 0 de huy): ";
     cin >> chonPhimSTT;
@@ -120,14 +232,14 @@ for (size_t i = 0; i < dsShowtime.size(); ++i) {
 
     // BU?C 1.2: L?C VÀ HI?N TH? CÁC SU?T CHI?U THU?C V? PHIM ÐÃ CH?N
     vector<Showtime> dsSuatChieuCuaPhim;
-for (size_t i = 0; i < dsShowtime.size(); ++i) {
-    if (dsShowtime[i].getMaPhim() == selectedMovie) {
-        dsSuatChieuCuaPhim.push_back(dsShowtime[i]);
+    for (size_t i = 0; i < dsShowtime.size(); ++i) {
+        if (dsShowtime[i].getMaPhim() == selectedMovie) {
+            dsSuatChieuCuaPhim.push_back(dsShowtime[i]);
+        }
     }
-}
 
     cout << "\n===================================================================\n";
-    cout << "           SUAT CHIEU CHO PHIM: " << selectedMovie << "\n";
+    cout << "            SUAT CHIEU CHO PHIM: " << selectedMovie << "\n";
     cout << "===================================================================\n";
     cout << left << setw(6) << "STT" 
          << setw(10) << "Ma SC" 
@@ -156,43 +268,36 @@ for (size_t i = 0; i < dsShowtime.size(); ++i) {
     string selectedSC = selectedShowtime.getMaSuatChieu();
     string maPhongChieu = selectedShowtime.getMaPhong();
 
-    // BUOC 2: DOC DANH SACH GHE THUOC PHONG CHIEU TU DATABASE (Dung lop Seat)
+    // BU?C 2: Ð?C DANH SÁCH GH? THU?C PHÒNG CHI?U T? DATABASE
     vector<Seat> dsGhePhong;
     SeatManager seatMgr;
     seatMgr.taiDuLieu(db); 
-    // Hoac neu Database ho tro doc truc tiep:
-    db.docDanhSachGhe(dsGhePhong); // Dieu chinh ten ham nay neu trong Database.h cua ban khac
+    db.docDanhSachGhe(dsGhePhong);
 
     vector<string> dsGheChon;
     double tongTienGhe = 0.0;
     char tiepTucChon = 'y';
 
-    // Kh?i t?o và n?p d? li?u gh? m?t l?n tru?c khi vào vòng l?p ch?n gh?
-    seatMgr.taiDuLieu(db);
-
     while (tiepTucChon == 'y' || tiepTucChon == 'Y') {
-        // G?I TR?C TI?P HÀM HI?N TH? CHU?N ÐÃ PHÂN HÀNG C?A SEATMANAGER
         seatMgr.hienThiSoDoPhong(maPhongChieu);
         
         string ghe;
         cout << "Nhap ma ghe muon chon (VD: A1, B1, VIP1...): ";
         cin >> ghe;
 
-        // Ki?m tra xem gh? có t?n t?i và h?p l? không
         bool hopLe = false;
-        double giaGheHienTai = 70000.0; // M?c d?nh
+        double giaGheHienTai = 70000.0;
         
         for (size_t k = 0; k < dsGhePhong.size(); ++k) {
             if (dsGhePhong[k].getMaPhong() == maPhongChieu && dsGhePhong[k].getMaGhe() == ghe) {
                 if (dsGhePhong[k].getTrangThai() == "Trong") {
                     hopLe = true;
-                    giaGheHienTai = dsGhePhong[k].getDonGiaGhe(); // L?y tr?c ti?p don giá t? file d? li?u c?a gh?!
+                    giaGheHienTai = dsGhePhong[k].getDonGiaGhe();
                 }
                 break;
             }
         }
 
-        // Ki?m tra xem gh? dã b? ch?n trong danh sách t?m chua
         for (size_t k = 0; k < dsGheChon.size(); ++k) {
             if (dsGheChon[k] == ghe) {
                 hopLe = false;
@@ -218,9 +323,9 @@ for (size_t i = 0; i < dsShowtime.size(); ++i) {
         return;
     }
 
-    // BUOC 3: THEM F&B (TUY CHON)
-    cout << "\n==================================================================-\n";
-    cout << "                        CHON DO AN / THUC UONG\n";
+    // BU?C 3: THÊM F&B (TUY CH?N)
+    cout << "\n===================================================================\n";
+    cout << "                      CHON DO AN / THUC UONG                      \n";
     cout << "===================================================================\n";
     cout << "1. Combo Bap + 2 Nuoc ngot (60,000d)\n";
     cout << "2. Bap rang bo lon (40,000d)\n";
@@ -251,40 +356,39 @@ for (size_t i = 0; i < dsShowtime.size(); ++i) {
         tenFB = ssFB.str();
     }
 
-    // BUOC 4: XU LY THONG TIN KHACH HANG (CRM)
-    cout << "\n==================================================================-\n";
-    cout << "                    XU LY THONG TIN KHACH HANG (CRM)\n";
-    cout << "===================================================================\n";
-    string sdt;
-    cout << "Nhap so dien thoai khach hang: ";
-    cin >> sdt;
-    string tenKH = "Nguyen Van A";
-    cout << "-> He thong tim thay thanh vien: " << tenKH << " (Hang Bac - Diem tich luy: 120)\n";
+    // Tính t?m tính tru?c khi vào bu?c CRM (d? bi?t t?ng ti?n hóa don truy?n vào hàm)
+    double tongTienTamTinhTruocKM = tongTienGhe + tienFB;
 
-    // BUOC 5: AP DUNG MA KHUYEN MAI (VOUCHER)
-    cout << "\n==================================================================-\n";
-    cout << "                        AP DUNG MA KHUYEN MAI\n";
+    // =========================================================================
+    // BU?C 4: G?I HÀM X? LÝ THÔNG TIN KHÁCH HÀNG (CRM) ÐÃ VI?T RIÊNG
+    // =========================================================================
+    Customer khachHangThanhToan = xuLyThongTinKhachHangCRM(db, tongTienTamTinhTruocKM);
+    string tenKH = khachHangThanhToan.getHoTen();
+    string sdt = khachHangThanhToan.getSoDienThoai();
+
+    // BU?C 5: ÁP D?NG MÃ KHUY?N MÃI (VOUCHER)
+    cout << "\n===================================================================\n";
+    cout << "                        AP DUNG MA KHUYEN MAI                      \n";
     cout << "===================================================================\n";
     cin.ignore(numeric_limits<int>::max(), '\n');
     string voucher;
     cout << "Nhap ma Voucher (Bam Enter de bo qua): ";
     getline(cin, voucher);
     
-    double tongTienTamTinh = tongTienGhe + tienFB;
     double giamGia = 0.0;
     if (!voucher.empty()) {
         if (voucher == "MAVIP2026") {
-            giamGia = tongTienTamTinh * 0.1;
+            giamGia = tongTienTamTinhTruocKM * 0.1;
             cout << "-> [Thong bao]: Ma hop le! Giam 10% tong hoa don.\n";
         } else {
             cout << "-> [Canh bao]: Ma khong hop le! Bo qua giam gia.\n";
         }
     }
-    double tongThanhToan = tongTienTamTinh - giamGia;
+    double tongThanhToan = tongTienTamTinhTruocKM - giamGia;
 
-    // BUOC 6: THANH TOAN & CAP NHAT TRANG THAI GHE XUONG DATABASE
-    cout << "\n==================================================================-\n";
-    cout << "                         THANH TOAN HOA DON\n";
+    // BU?C 6: THANH TOÁN & C?P NH?T TR?NG THÁI GH? XU?NG DATABASE
+    cout << "\n===================================================================\n";
+    cout << "                          THANH TOAN HOA DON                       \n";
     cout << "===================================================================\n";
     cout << "Tong tien thanh toan: " << (int)tongThanhToan << " VND\n";
     cout << "Chon phuong thuc thanh toan:\n1. Tien mat\n2. The ngan hang\n3. Quet ma QR Code\nLua chon (1-3): ";
@@ -301,35 +405,32 @@ for (size_t i = 0; i < dsShowtime.size(); ++i) {
         cout << "Thanh toan truc tiep thanh cong!\n";
     }
 
-    // CAP NHAT TRANG THAI GHE THÀNH "DaDat" TRONG DANH SACH GHE VA GHI LAI VAO DATABASE
+    // C?p nh?t tr?ng thái gh? thành "DaDat" trong danh sách gh? và ghi l?i vào Database
     for (size_t i = 0; i < dsGheChon.size(); ++i) {
         for (size_t k = 0; k < dsGhePhong.size(); ++k) {
             if (dsGhePhong[k].getMaPhong() == maPhongChieu && dsGhePhong[k].getMaGhe() == dsGheChon[i]) {
-                dsGhePhong[k].setTrangThai("DaDat"); // Goi phuong th?c setter trong Seat.h
+                dsGhePhong[k].setTrangThai("DaDat");
                 break;
             }
         }
     }
-    
-    // Goi ham ghi danh sach ghe xuong Database (su dung ham ghi ghe co san cua ban)
     db.ghiDanhSachGhe(dsGhePhong);
 
-    // Tao ma hoa don
+    // T?o mã hóa don
     int randomNum = rand() % 900 + 100;
     stringstream ssHD;
     ssHD << "HD_" << selectedSC << "_" << randomNum;
     string maHD = ssHD.str();
-// >>> B? SUNG: T?o và luu vé vào Database sau khi thanh toán thành công <<<
+
+    // T?o và luu vé vào Database sau khi thanh toán thành công
     vector<Ticket> dsVeHienTai;
     db.docDanhSachVe(dsVeHienTai);
 
     for (size_t i = 0; i < dsGheChon.size(); ++i) {
-        int rNum = rand() % 9000 + 1000;
         stringstream ssMaVe, ssQR;
         ssMaVe << "V_" << selectedSC << "_" << dsGheChon[i];
         ssQR << "QR_" << maHD << "_" << dsGheChon[i];
         
-        // Tính giá vé th?c t? cho t?ng gh?
         double giaVeGhe = 70000.0;
         if (dsGheChon[i][0] == 'B' || dsGheChon[i][0] == 'b' || dsGheChon[i][0] == 'C' || dsGheChon[i][0] == 'c') {
             giaVeGhe += 20000.0;
@@ -339,12 +440,13 @@ for (size_t i = 0; i < dsShowtime.size(); ++i) {
         dsVeHienTai.push_back(veMoi);
     }
     db.ghiDanhSachVe(dsVeHienTai);
-    // IN HOA DON HOAN TAT
+
+    // IN HÓA ÐON HOÀN T?T
     cout << "\n==================================================================-\n";
-    cout << "                        XUAT HOA DON & VE XEM PHIM\n";
+    cout << "                    XUAT HOA DON & VE XEM PHIM                     \n";
     cout << "===================================================================\n";
     cout << "Ma Hoa Don: " << maHD << "\n";
-    cout << "Khach hang: " << tenKH << " (SDT: " << sdt << ")\n";
+    cout << "Khach hang: " << tenKH << " (SDT: " << sdt << " - Hang: " << khachHangThanhToan.getHangThanhVien() << ")\n";
     cout << "Suat chieu: Phim [" << selectedMovie << "] luc " << selectedShowtime.getGioBatDau()
          << " ngay " << selectedShowtime.getNgayChieu() << " tai " << maPhongChieu << "\n\n";
     cout << "--- CHI TIET GHE DA DAT ---\n";
@@ -358,9 +460,9 @@ for (size_t i = 0; i < dsShowtime.size(); ++i) {
         cout << "Giam gia Voucher: -" << (int)giamGia << "d\n";
     }
     cout << "\nTONG TIEN THUC THU: " << (int)tongThanhToan << " VND\n";
-    cout << "Diem tich luy moi nhan: +" << (int)(tongThanhToan / 10000) << " diem.\n";
+    cout << "Diem tich luy moi nhan: +" << (int)(tongTienTamTinhTruocKM / 10000) << " diem.\n";
     cout << "===================================================================\n";
-    cout << "In ve thanh cong! Trang thai ghe da duoc cap nhat vao Database.\n";
+    cout << "In ve thanh cong! Trang thai ghe va thong tin CRM da duoc cap nhat.\n";
 }
 
 void TicketManager::hienThiDanhSachVe(Database& db) {
