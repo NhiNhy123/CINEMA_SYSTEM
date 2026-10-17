@@ -1,6 +1,6 @@
 #include "Customer.h"
 #include <sstream>
-
+#include <cstdlib>
 // =====================================================
 // GIAO DICH DIEM
 // =====================================================
@@ -75,6 +75,40 @@ string GiaoDichDiem::getNoiDung() const
 string GiaoDichDiem::getThoiGian() const
 {
     return thoiGian;
+}
+
+// Chuy?n giao d?ch thành chu?i CSV d? ghi vào b?ng [CUSTOMER_POINTS_HISTORY]
+string GiaoDichDiem::toCSV() const
+{
+    stringstream ss;
+    ss << maGiaoDich << "," 
+       << soDienThoai << "," // Ho?c dùng maKhachHang tùy theo thi?t k? b?ng c?a b?n
+       << loaiGiaoDich << "," 
+       << soDiem << "," 
+       << noiDung << "," 
+       << thoiGian;
+    return ss.str();
+}
+
+// Ð?c m?t dòng CSV d? tái t?o d?i tu?ng GiaoDichDiem
+GiaoDichDiem GiaoDichDiem::fromCSV(const string& line)
+{
+    stringstream ss(line);
+    string maGD, sdt, loaiGD, strSoDiem, nd, tg;
+
+    getline(ss, maGD, ',');
+    getline(ss, sdt, ',');
+    getline(ss, loaiGD, ',');
+    getline(ss, strSoDiem, ',');
+    getline(ss, nd, ',');
+    getline(ss, tg, ',');
+
+    int soDiem = 0;
+    if (!strSoDiem.empty()) {
+        soDiem = atoi(strSoDiem.c_str());
+    }
+
+    return GiaoDichDiem(maGD, "", sdt, loaiGD, soDiem, nd, tg);
 }
 
 
@@ -228,6 +262,38 @@ void Customer::setEmail(string email)
 // Vi du:
 // Chi 100.000 VND -> 100 diem
 // =====================================================
+
+// Chuy?n thông tin khách hàng thành chu?i CSV cho b?ng [CUSTOMERS]
+string Customer::toCSV() const
+{
+    stringstream ss;
+    ss << maKH << "," 
+       << diemTichLuy << "," 
+       << hangThanhVien << "," 
+       << tongChiTieu;
+    return ss.str();
+}
+
+// Ð?c thông tin t? dòng CSV c?a b?ng [CUSTOMERS]
+Customer Customer::fromCSV(const string& line)
+{
+    stringstream ss(line);
+    string ma, hang, strDiem, strChiTieu;
+
+    getline(ss, ma, ',');
+    getline(ss, strDiem, ',');
+    getline(ss, hang, ',');
+    getline(ss, strChiTieu, ',');
+
+    int diem = 0;
+    long long chiTieu = 0;
+
+    if (!strDiem.empty()) diem = atoi(strDiem.c_str());
+   if (!strChiTieu.empty()) chiTieu = atoll(strChiTieu.c_str());
+
+    // Tr? v? d?i tu?ng (H? tên, SÐT, Email s? du?c ghép n?i t? b?ng [USERS] khi Database x? lý)
+    return Customer(ma, "", "", "", diem, hang, chiTieu);
+}
 
 void Customer::tichDiem(
     int soDiem,
