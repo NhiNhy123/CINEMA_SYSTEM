@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include "Customer.h"
 
 // Khai báo forward các l?p mô hình tuong ?ng
 class Seat;
@@ -24,7 +25,11 @@ public:
     // --- NHÓM 1: QU?N LÝ NHÂN S? & KHÁCH HÀNG (quan_ly_nhan_su.txt) ---
     // (Bao g?m Users, Customers, CustomerPointsHistory n?u c?n)
     // Thêm các dòng này vào bên trong khai báo class Database (trong Database.h)
-
+    // --- Qu?n lý Khách hàng & Tích di?m (CRM) ---
+	void docDanhSachUsers(vector<Customer>& danhSachKH); // Ð?c t? b?ng [USERS] và [CUSTOMERS]
+	void ghiDanhSachUsers(const vector<Customer>& danhSachKH); // Ghi d?ng b?
+	void docLichSuGiaoDichDiem(vector<GiaoDichDiem>& danhSachGD);
+	void ghiLichSuGiaoDichDiem(const vector<GiaoDichDiem>& danhSachGD);
 // --- Qu?n lý Th? lo?i & Phim ---
 	// --- Qu?n lý Th? lo?i & Liên k?t Phim - Th? lo?i ---
 	void docDanhSachTheLoai(vector<pair<string, string> >& danhSachTheLoai);
