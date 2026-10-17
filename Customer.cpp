@@ -1,6 +1,7 @@
 #include "Customer.h"
 #include <sstream>
 #include <cstdlib>
+
 // =====================================================
 // GIAO DICH DIEM
 // =====================================================
@@ -9,28 +10,24 @@
 GiaoDichDiem::GiaoDichDiem()
 {
     maGiaoDich = "";
-    tenKhachHang = "";
-    soDienThoai = "";
+    maKhachHang = "";
     loaiGiaoDich = "";
     soDiem = 0;
     noiDung = "";
     thoiGian = "";
 }
 
-
-// Constructor
+// Constructor d?y d? kh?p 6 c?t c?a b?ng [CUSTOMER_POINTS_HISTORY]
 GiaoDichDiem::GiaoDichDiem(
     string maGiaoDich,
-    string tenKhachHang,
-    string soDienThoai,
+    string maKhachHang,
     string loaiGiaoDich,
     int soDiem,
     string noiDung,
     string thoiGian)
 {
     this->maGiaoDich = maGiaoDich;
-    this->tenKhachHang = tenKhachHang;
-    this->soDienThoai = soDienThoai;
+    this->maKhachHang = maKhachHang;
     this->loaiGiaoDich = loaiGiaoDich;
     this->soDiem = soDiem;
     this->noiDung = noiDung;
@@ -47,14 +44,9 @@ string GiaoDichDiem::getMaGiaoDich() const
     return maGiaoDich;
 }
 
-string GiaoDichDiem::getTenKhachHang() const
+string GiaoDichDiem::getMaKhachHang() const
 {
-    return tenKhachHang;
-}
-
-string GiaoDichDiem::getSoDienThoai() const
-{
-    return soDienThoai;
+    return maKhachHang;
 }
 
 string GiaoDichDiem::getLoaiGiaoDich() const
@@ -77,12 +69,12 @@ string GiaoDichDiem::getThoiGian() const
     return thoiGian;
 }
 
-// Chuy?n giao d?ch thành chu?i CSV d? ghi vào b?ng [CUSTOMER_POINTS_HISTORY]
+// Chuy?n giao d?ch thành chu?i CSV d? ghi dúng vào b?ng [CUSTOMER_POINTS_HISTORY]
 string GiaoDichDiem::toCSV() const
 {
     stringstream ss;
     ss << maGiaoDich << "," 
-       << soDienThoai << "," // Ho?c dùng maKhachHang tùy theo thi?t k? b?ng c?a b?n
+       << maKhachHang << "," 
        << loaiGiaoDich << "," 
        << soDiem << "," 
        << noiDung << "," 
@@ -94,10 +86,10 @@ string GiaoDichDiem::toCSV() const
 GiaoDichDiem GiaoDichDiem::fromCSV(const string& line)
 {
     stringstream ss(line);
-    string maGD, sdt, loaiGD, strSoDiem, nd, tg;
+    string maGD, maKH, loaiGD, strSoDiem, nd, tg;
 
     getline(ss, maGD, ',');
-    getline(ss, sdt, ',');
+    getline(ss, maKH, ',');      // Ð?c maKhachHang chính xác
     getline(ss, loaiGD, ',');
     getline(ss, strSoDiem, ',');
     getline(ss, nd, ',');
@@ -108,7 +100,7 @@ GiaoDichDiem GiaoDichDiem::fromCSV(const string& line)
         soDiem = atoi(strSoDiem.c_str());
     }
 
-    return GiaoDichDiem(maGD, "", sdt, loaiGD, soDiem, nd, tg);
+    return GiaoDichDiem(maGD, maKH, loaiGD, soDiem, nd, tg);
 }
 
 
@@ -119,8 +111,7 @@ GiaoDichDiem GiaoDichDiem::fromCSV(const string& line)
 void GiaoDichDiem::hienThi() const
 {
     cout << "Ma giao dich: " << maGiaoDich << endl;
-    cout << "Ten khach hang: " << tenKhachHang << endl;
-    cout << "So dien thoai: " << soDienThoai << endl;
+    cout << "Ma khach hang: " << maKhachHang << endl;
     cout << "Loai giao dich: " << loaiGiaoDich << endl;
     cout << "So diem: " << soDiem << endl;
     cout << "Noi dung: " << noiDung << endl;
@@ -169,7 +160,6 @@ Customer::Customer(
 
 // =====================================================
 // CUSTOMER CONSTRUCTOR DAY DU
-// DUNG KHI DOC DU LIEU TU CSV
 // =====================================================
 
 Customer::Customer(
@@ -253,17 +243,9 @@ void Customer::setEmail(string email)
 
 
 // =====================================================
-// TICH DIEM
-// =====================================================
-//
-// Quy uoc:
-// 1.000 VND = 1 diem
-//
-// Vi du:
-// Chi 100.000 VND -> 100 diem
+// XU LY CSV CHO CUSTOMERS (Chi luu 4 c?t chính)
 // =====================================================
 
-// Chuy?n thông tin khách hàng thành chu?i CSV cho b?ng [CUSTOMERS]
 string Customer::toCSV() const
 {
     stringstream ss;
@@ -274,7 +256,6 @@ string Customer::toCSV() const
     return ss.str();
 }
 
-// Ð?c thông tin t? dòng CSV c?a b?ng [CUSTOMERS]
 Customer Customer::fromCSV(const string& line)
 {
     stringstream ss(line);
@@ -289,11 +270,16 @@ Customer Customer::fromCSV(const string& line)
     long long chiTieu = 0;
 
     if (!strDiem.empty()) diem = atoi(strDiem.c_str());
-   if (!strChiTieu.empty()) chiTieu = atoll(strChiTieu.c_str());
+    if (!strChiTieu.empty()) chiTieu = atoll(strChiTieu.c_str());
 
-    // Tr? v? d?i tu?ng (H? tên, SÐT, Email s? du?c ghép n?i t? b?ng [USERS] khi Database x? lý)
+    // Tr? v? d?i tu?ng (H? tên, SÐT, Email s? du?c ghép n?i t? b?ng [USERS] qua Database)
     return Customer(ma, "", "", "", diem, hang, chiTieu);
 }
+
+
+// =====================================================
+// TICH DIEM
+// =====================================================
 
 void Customer::tichDiem(
     int soDiem,
@@ -308,13 +294,13 @@ void Customer::tichDiem(
     diemTichLuy += soDiem;
 
     stringstream ss;
-ss << "GD" << (lichSuDiem.size() + 1);
-string maGiaoDich = ss.str();
+    ss << "GD" << (lichSuDiem.size() + 1);
+    string maGiaoDich = ss.str();
 
+    // S?a l?i dùng Constructor 6 tham s? dúng chu?n [CUSTOMER_POINTS_HISTORY]
     GiaoDichDiem giaoDich(
         maGiaoDich,
-        hoTen,
-        soDienThoai,
+        maKH,
         "TichDiem",
         soDiem,
         noiDung,
@@ -329,9 +315,6 @@ string maGiaoDich = ss.str();
 // =====================================================
 // DOI DIEM
 // =====================================================
-//
-// 1.000 diem = 1.000 VND
-// =====================================================
 
 bool Customer::doiDiem(
     int soDiem,
@@ -343,7 +326,6 @@ bool Customer::doiDiem(
         return false;
     }
 
-    // Khong du diem
     if (soDiem > diemTichLuy)
     {
         return false;
@@ -352,14 +334,13 @@ bool Customer::doiDiem(
     diemTichLuy -= soDiem;
 
     stringstream ss;
-ss << "GD" << (lichSuDiem.size() + 1);
-string maGiaoDich = ss.str();
+    ss << "GD" << (lichSuDiem.size() + 1);
+    string maGiaoDich = ss.str();
 
-
+    // S?a l?i dùng Constructor 6 tham s? chu?n
     GiaoDichDiem giaoDich(
         maGiaoDich,
-        hoTen,
-        soDienThoai,
+        maKH,
         "DoiDiem",
         soDiem,
         noiDung,
@@ -393,19 +374,6 @@ void Customer::themChiTieu(long long soTien)
 // =====================================================
 // CAP NHAT HANG THANH VIEN
 // =====================================================
-//
-// Quy tac nay co the thay doi theo yeu cau PBL.
-// Tam thoi:
-//
-// Thuong:
-// < 1.000.000 VND
-//
-// ThanThiet:
-// >= 1.000.000 VND
-//
-// VIP:
-// >= 5.000.000 VND
-// =====================================================
 
 void Customer::capNhatHangThanhVien()
 {
@@ -425,48 +393,34 @@ void Customer::capNhatHangThanhVien()
 
 
 // =====================================================
-// THEM GIAO DICH
+// THEM GIAO DICH & LICH SU
 // =====================================================
 
-void Customer::themGiaoDich(
-    GiaoDichDiem giaoDich)
+void Customer::themGiaoDich(GiaoDichDiem giaoDich)
 {
     lichSuDiem.push_back(giaoDich);
 }
 
-
-// =====================================================
-// HIEN THI LICH SU DIEM
-// =====================================================
-
 void Customer::hienThiLichSuDiem() const
 {
     cout << endl;
-    cout << "========== LICH SU TICH / DOI DIEM =========="
-         << endl;
+    cout << "========== LICH SU TICH / DOI DIEM ==========" << endl;
 
     if (lichSuDiem.empty())
     {
-        cout << "Khach hang chua co giao dich diem."
-             << endl;
-
+        cout << "Khach hang chua co giao dich diem." << endl;
         return;
     }
 
     for (vector<GiaoDichDiem>::const_iterator it = lichSuDiem.begin();
      it != lichSuDiem.end();
      ++it)
-{
-    const GiaoDichDiem& giaoDich = *it;
-
-    cout << endl;
-
-    giaoDich.hienThi();
-
-    cout << "---------------------------------------------"
-         << endl;
-}
-
+    {
+        const GiaoDichDiem& giaoDich = *it;
+        cout << endl;
+        giaoDich.hienThi();
+        cout << "---------------------------------------------" << endl;
+    }
 }
 
 
@@ -477,35 +431,12 @@ void Customer::hienThiLichSuDiem() const
 void Customer::hienThiThongTin() const
 {
     cout << endl;
-    cout << "========== THONG TIN KHACH HANG =========="
-         << endl;
-
-    cout << "Ma KH: "
-         << maKH
-         << endl;
-
-    cout << "Ho ten: "
-         << hoTen
-         << endl;
-
-    cout << "So dien thoai: "
-         << soDienThoai
-         << endl;
-
-    cout << "Email: "
-         << email
-         << endl;
-
-    cout << "Diem tich luy: "
-         << diemTichLuy
-         << endl;
-
-    cout << "Hang thanh vien: "
-         << hangThanhVien
-         << endl;
-
-    cout << "Tong chi tieu: "
-         << tongChiTieu
-         << " VND"
-         << endl;
+    cout << "========== THONG TIN KHACH HANG ==========" << endl;
+    cout << "Ma KH: " << maKH << endl;
+    cout << "Ho ten: " << hoTen << endl;
+    cout << "So dien thoai: " << soDienThoai << endl;
+    cout << "Email: " << email << endl;
+    cout << "Diem tich luy: " << diemTichLuy << endl;
+    cout << "Hang thanh vien: " << hangThanhVien << endl;
+    cout << "Tong chi tieu: " << tongChiTieu << " VND" << endl;
 }
