@@ -43,7 +43,7 @@ public:
 
     void docDanhSachGhe(vector<Seat>& danhSachGhe);
     void ghiDanhSachGhe(const vector<Seat>& danhSachGhe);
-    
+    void docTrangThaiGheSuatChieu(const string& maSuatChieuCanTim, vector<pair<string, string> >& trangThaiGheList);
     // Hàm t? d?ng sinh gh? d?a theo s?c ch?a phòng (dã bàn ? bu?c trên)
     void taoGheTuDongChoPhong(const string& maPhongCanTao, int sucChuaPhong);
     
@@ -53,6 +53,8 @@ public:
     // --- NHÓM 3: L?CH CHI?U & VÉ (lich_va_ve.txt) ---
     void docDanhSachSuatChieu(vector<Showtime>& danhSachSuatChieu);
     void ghiDanhSachSuatChieu(const vector<Showtime>& danhSachSuatChieu);
+    // C?p nh?t ho?c thêm m?i tr?ng thái gh? theo su?t chi?u vào lich_va_ve.csv
+	void capNhatTrangThaiGheSuatChieu(const string& maSuatChieu, const string& maGhe, const string& trangThaiMoi);
 
     void docDanhSachVe(vector<Ticket>& danhSachVe);
     void ghiDanhSachVe(const vector<Ticket>& danhSachVe);
