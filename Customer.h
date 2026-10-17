@@ -47,7 +47,9 @@ public:
     int getSoDiem() const;
     string getNoiDung() const;
     string getThoiGian() const;
-
+    
+    string toCSV() const;
+	static GiaoDichDiem fromCSV(const string& line);
     // Hien thi
     void hienThi() const;
 };
@@ -125,7 +127,8 @@ public:
     // =================================================
     // QUAN LY DIEM
     // =================================================
-
+    string toCSV() const;
+	static Customer fromCSV(const string& line);
     // Tich diem
     void tichDiem(
         int soDiem,
