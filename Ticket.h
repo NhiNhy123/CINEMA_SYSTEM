@@ -47,7 +47,7 @@ public:
 class TicketManager {
 public:
     // Quy trình 6 bu?c bán vé t?i qu?y (Ð?c/ghi d? li?u qua Database)
-    static void quyTrinhBanVe(Database& db);
+    static void quyTrinhBanVe(Database& db, const string& maNV);
     
     // Qu?n lý vé & Check-in
     static void hienThiDanhSachVe(Database& db);
