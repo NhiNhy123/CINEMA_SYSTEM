@@ -118,11 +118,11 @@ void Database::docDanhSachUsers(vector<Customer>& danhSachKH) {
 }
 
 // --- Ghi d?ng b? danh sách Khách hàng & Users ---
-// --- Ghi d?ng b? danh sách Khách hàng & Users (B?o toàn d? li?u cu c?a b?ng USERS) ---
 void Database::ghiDanhSachUsers(const vector<Customer>& danhSachKH) {
-    // 1. Ð?c toàn b? file cu d? b?o toàn nguyên v?n m?i b?ng (Users h? th?ng, Customers, History)
+    // 1. Ð?c toàn b? file cu d? b?o toàn nguyên v?n m?i b?ng
     ifstream inFile("DATA/quan_ly_nhan_su.csv");
     vector<string> rawUsersLines;
+    vector<string> rawCustomersLines; // Thêm bi?n h?ng dòng customers cu n?u c?n
     vector<string> historyLines;
     
     string currentSection = "";
@@ -141,6 +141,8 @@ void Database::ghiDanhSachUsers(const vector<Customer>& danhSachKH) {
             
             if (currentSection == "USERS") {
                 if (line.find("maNguoiDung") == string::npos) rawUsersLines.push_back(line);
+            } else if (currentSection == "CUSTOMERS") {
+                if (line.find("maKhachHang") == string::npos) rawCustomersLines.push_back(line);
             } else if (currentSection == "HISTORY") {
                 if (line.find("maGiaoDichDiem") == string::npos) historyLines.push_back(line);
             }
