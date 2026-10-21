@@ -213,7 +213,7 @@ void menuStaff(Database& db, const string& maNV) {
         system("cls"); // Xóa màn hình tru?c khi vào tác v? con c?a Staff
         switch (choice) {
             case 1: {
-                ticketMgr.quyTrinhBanVe(db);
+                ticketMgr.quyTrinhBanVe(db, maNV);
                 break;
             }
             case 2:
@@ -254,7 +254,7 @@ void menuStaff(Database& db, const string& maNV) {
 
 int main() {
     Database db;
-    SysLog sysLog("quan_ly_nhan_su.csv");
+    SysLog sysLog("DATA/quan_ly_nhan_su.csv");
 
     while (true) {
         system("cls"); // Xóa màn hình tru?c khi hi?n th? giao di?n dang nh?p
