@@ -223,6 +223,7 @@ void menuStaff(Database& db, const string& maNV) {
                 ticketMgr.checkInVe(db);
                 break;
             case 4:
+            	invoiceMgr.taiDuLieu(db);
                 invoiceMgr.hienThiLichSuGiaoDich();
                 break;
             case 5: {
