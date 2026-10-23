@@ -279,32 +279,14 @@ void menuAdmin(Database& db) {
                 } while (subChoice != 0);
                 break;
             }
-            case 7: {
-                int subChoice;
-                do {
-                    system("cls");
-                    cout << "\n--- LICH SU GIAO DICH HOA DON ---\n";
-                    invoiceMgr.hienThiLichSuGiaoDich();
-                    cout << "\n0. Quay lai menu chinh\nChon: ";
-                    cin >> subChoice;
-
-                    if (subChoice == 0) break;
-                } while (true);
+            case 7:
+                system("cls"); // Ðã thêm clear màn hình
+                invoiceMgr.hienThiLichSuGiaoDich();
                 break;
-            }
-            case 8: {
-                int subChoice;
-                do {
-                    system("cls");
-                    cout << "\n--- THONG KE TONG QUAN DOANH THU ---\n";
-                    invoiceMgr.thongKeTongQuanDoanhThu();
-                    cout << "\n0. Quay lai menu chinh\nChon: ";
-                    cin >> subChoice;
-
-                    if (subChoice == 0) break;
-                } while (true);
+            case 8:
+                system("cls"); // Ðã thêm clear màn hình
+                invoiceMgr.thongKeTongQuanDoanhThu();
                 break;
-            }
             case 9: {
                 int subShift;
                 do {
@@ -342,6 +324,7 @@ void menuAdmin(Database& db) {
                         shiftMgr.khoaBaoCao(maCaKhoa, db);
                     } 
                     else if (subShift == 4) {
+                    	shiftMgr.taiDuLieu(db);
                         shiftMgr.hienThiTongHop();
                         shiftMgr.hienThiTatCa();
                     }
@@ -436,97 +419,32 @@ void menuStaff(Database& db, const string& maNV) {
                 } while (subChoice != 0);
                 break;
             }
-            case 2: {
-                int subChoice;
-                do {
-                    system("cls");
-                    cout << "\n--- DANH SACH VE DA BAN ---\n";
-                    ticketMgr.hienThiDanhSachVe(db);
-                    cout << "\n0. Quay lai menu chinh\nChon: ";
-                    cin >> subChoice;
-
-                    if (cin.fail()) {
-                        cin.clear();
-                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                        cout << "Loi: Vui long nhap so hop le!\n";
-                        system("pause");
-                        continue;
-                    }
-
-                    if (subChoice == 0) break;
-                } while (true);
+            case 2:
+                system("cls"); // Ðã thêm clear màn hình
+                ticketMgr.hienThiDanhSachVe(db);
                 break;
-            }
-            case 3: {
-                int subChoice;
-                do {
-                    system("cls");
-                    cout << "\n--- SOAT VE / CHECK-IN ---\n";
-                    ticketMgr.checkInVe(db);
-                    cout << "\n0. Quay lai menu chinh\nChon: ";
-                    cin >> subChoice;
-
-                    if (cin.fail()) {
-                        cin.clear();
-                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                        cout << "Loi: Vui long nhap so hop le!\n";
-                        system("pause");
-                        continue;
-                    }
-
-                    if (subChoice == 0) break;
-                } while (true);
+            case 3:
+                system("cls"); // Ðã thêm clear màn hình
+                ticketMgr.checkInVe(db);
                 break;
-            }
-            case 4: {
-                int subChoice;
-                do {
-                    system("cls");
-                    cout << "\n--- LICH SU GIAO DICH HOA DON ---\n";
-                    invoiceMgr.taiDuLieu(db);
-                    invoiceMgr.hienThiLichSuGiaoDich();
-                    cout << "\n0. Quay lai menu chinh\nChon: ";
-                    cin >> subChoice;
-
-                    if (cin.fail()) {
-                        cin.clear();
-                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                        cout << "Loi: Vui long nhap so hop le!\n";
-                        system("pause");
-                        continue;
-                    }
-
-                    if (subChoice == 0) break;
-                } while (true);
+            case 4:
+                system("cls"); // Ðã thêm clear màn hình
+                invoiceMgr.taiDuLieu(db);
+                invoiceMgr.hienThiLichSuGiaoDich();
                 break;
-            }
             case 5: {
-                int subChoice;
-                do {
-                    system("cls");
-                    string maCa, ngayLam, gioBD, gioKT;
-                    long long doanhThuHT, tienTT;
-                    cout << "\n--- CHOT CA LAM VIEC ---\n";
-                    cout << "Nhap ma ca (VD: CA_01): "; cin >> maCa;
-                    cout << "Nhap ngay lam (DD/MM/YYYY): "; cin >> ngayLam;
-                    cout << "Nhap gio bat dau (HH:MM): "; cin >> gioBD;
-                    cout << "Nhap gio ket thuc (HH:MM): "; cin >> gioKT;
-                    cout << "Nhap doanh thu he thong (VND): "; cin >> doanhThuHT;
-                    cout << "Nhap tien thuc te kiem ke trong ngan (VND): "; cin >> tienTT;
+                system("cls"); // Ðã thêm clear màn hình
+                string maCa, ngayLam, gioBD, gioKT;
+                long long doanhThuHT, tienTT;
+                cout << "\n--- CHOT CA LAM VIEC ---\n";
+                cout << "Nhap ma ca (VD: CA_01): "; cin >> maCa;
+                cout << "Nhap ngay lam (DD/MM/YYYY): "; cin >> ngayLam;
+                cout << "Nhap gio bat dau (HH:MM): "; cin >> gioBD;
+                cout << "Nhap gio ket thuc (HH:MM): "; cin >> gioKT;
+                cout << "Nhap doanh thu he thong (VND): "; cin >> doanhThuHT;
+                cout << "Nhap tien thuc te kiem ke trong ngan (VND): "; cin >> tienTT;
 
-                    shiftMgr.chotCa(maCa, maNV, "Nhan Vien Thuc Te", ngayLam, gioBD, gioKT, doanhThuHT, tienTT, db);
-
-                    cout << "\nBan co muon thuc hien lai hoac tiep tuc khong? (1. Tiep tuc chot ca / 0. Quay lai menu chinh): ";
-                    cin >> subChoice;
-
-                    if (cin.fail()) {
-                        cin.clear();
-                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                        subChoice = 0;
-                    }
-
-                    if (subChoice == 0) break;
-                } while (true);
+                shiftMgr.chotCa(maCa, maNV, "Nhan Vien Thuc Te", ngayLam, gioBD, gioKT, doanhThuHT, tienTT, db);
                 break;
             }
             case 0:
