@@ -72,7 +72,7 @@ void Ticket::hienThi() const {
     stringstream ssGia;
     ssGia << (int)giaVeThucTe << "d";
 
-    cout << left << setw(10) << maVe 
+    cout << left << setw(13) << maVe 
          << setw(15) << maHoaDon 
          << setw(12) << maSuatChieu 
          << setw(8)  << maGhe 
@@ -449,7 +449,7 @@ void TicketManager::hienThiDanhSachVe(Database& db) {
     }
 
     cout << "\n============================== DANH SACH VE XEM PHIM THUC TE ==============================\n";
-    cout << left << setw(10) << "Ma Ve" 
+    cout << left << setw(13) << "Ma Ve" 
          << setw(15) << "Ma Hoa Don" 
          << setw(12) << "Ma Suat" 
          << setw(8)  << "Ghe" 
