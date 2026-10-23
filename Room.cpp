@@ -193,43 +193,67 @@ void RoomManager::suaPhong(Database& db) {
                         break;
                     }
                     case 3: {
-                        int sucChuaCu = danhSachPhong[i].getSucChua();
-                        int sucChuaMoi;
-                        cout << "Nhap suc chua moi (" << sucChuaCu << "): ";
-                        cin >> sucChuaMoi;
-                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        int sucChuaCu = danhSachPhong[i].getSucChua();
+        int sucChuaMoi;
+        cout << "Nhap suc chua moi (" << sucChuaCu << "): ";
+        cin >> sucChuaMoi;
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
-                        if (sucChuaMoi > 0) {
-                            danhSachPhong[i].setSucChua(sucChuaMoi);
-                            cout << "-> Da cap nhat suc chua thanh " << sucChuaMoi << "!\n";
+        if (sucChuaMoi > 0) {
+            danhSachPhong[i].setSucChua(sucChuaMoi);
+            cout << "-> Da cap nhat suc chua thanh " << sucChuaMoi << "!\n";
 
-                            // N?u s?c ch?a thay d?i, t? d?ng c?p nh?t l?i so d? gh? tuong ?ng
-                            if (sucChuaMoi != sucChuaCu) {
-                                cout << "Phat hien thay doi suc chua. Dang cap nhat lai so do ghe...\n";
-                                
-                                vector<Seat> danhSachGhe;
-                                db.docDanhSachGhe(danhSachGhe);
+            // GHI NGAY DANH SÁCH PHÒNG XU?NG FILE Ð? DATABASE C?P NH?T K?P TH?I
+            db.ghiDanhSachPhong(danhSachPhong);
 
-                                // Xóa b? gh? cu c?a phòng này
-                                for (size_t j = 0; j < danhSachGhe.size(); ) {
-                                    if (danhSachGhe[j].getMaPhong() == ma) {
-                                        danhSachGhe.erase(danhSachGhe.begin() + j);
-                                    } else {
-                                        ++j;
-                                    }
-                                }
-                                db.ghiDanhSachGhe(danhSachGhe);
+            // N?u s?c ch?a thay d?i, ti?n hành reset và sinh l?i toàn b? gh? c?a phòng này
+            if (sucChuaMoi != sucChuaCu) {
+                cout << "Phat hien thay doi suc chua. Dang cap nhat lai so do ghe...\n";
+                
+                // 1. Ð?c toàn b? danh sách gh? hi?n t?i t? Database
+                vector<Seat> danhSachGhe;
+                db.docDanhSachGhe(danhSachGhe);
 
-                                // Sinh l?i so d? gh? m?i kh?p v?i s?c ch?a m?i
-                                SeatManager seatMgr;
-                                seatMgr.taiDuLieu(db);
-                                seatMgr.taoGheTuDongChoPhong(ma, db);
-                            }
-                        } else {
-                            cout << "Loi: Suc chua phai lon hon 0!\n";
-                        }
-                        break;
+                // 2. L?c b? (xóa) toàn b? gh? cu thu?c phòng này
+                vector<Seat> danhSachGheConLai;
+                for (size_t j = 0; j < danhSachGhe.size(); ++j) {
+                    if (danhSachGhe[j].getMaPhong() != ma) {
+                        danhSachGheConLai.push_back(danhSachGhe[j]);
                     }
+                }
+
+                // 3. T? d?ng sinh danh sách gh? m?i hoàn toàn theo s?c ch?a m?i
+                char hang = 'A';
+                int soThuTu = 1;
+                int soGheMoiHang = 10; // M?i hàng 10 gh?
+
+                for (int k = 1; k <= sucChuaMoi; ++k) {
+                    stringstream ss;
+                    ss << hang << soThuTu;  
+                    string maGhe = ss.str();
+
+                    string loaiGhe = (hang <= 'B') ? "Standard" : "VIP";
+                    double donGia = (loaiGhe == "VIP") ? 90000.0 : 60000.0;
+
+                    Seat newSeat(maGhe, ma, loaiGhe, donGia);
+                    danhSachGheConLai.push_back(newSeat);
+
+                    soThuTu++;
+                    if (soThuTu > soGheMoiHang) {
+                        soThuTu = 1;
+                        hang++;  
+                    }
+                }
+
+                // 4. Ghi dè toàn b? danh sách gh? m?i xu?ng Database ngay l?p t?c
+                db.ghiDanhSachGhe(danhSachGheConLai);
+                cout << "-> Da reset va sinh lai thanh cong " << sucChuaMoi << " ghe cho phong " << ma << "!\n";
+            }
+        } else {
+            cout << "Loi: Suc chua phai lon hon 0!\n";
+        }
+        break;
+    }
                     case 4: {
                         string trangThaiMoi;
                         cout << "Nhap trang thai moi (HoatDong / TamNgung) (" << danhSachPhong[i].getTrangThaiPhong() << "): ";
