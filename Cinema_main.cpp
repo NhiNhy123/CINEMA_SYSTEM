@@ -361,7 +361,6 @@ void menuStaff(Database& db, const string& maNV) {
     InvoiceManager invoiceMgr;
     ShiftManagement shiftMgr;
     
-    ticketMgr.taiDuLieu(db);
     invoiceMgr.taiDuLieu(db);
     shiftMgr.taiDuLieu(db);
 
