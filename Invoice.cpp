@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <limits>
 #include <ctime>
+#include <windows.h>
 
 using namespace std;
 
@@ -98,8 +99,7 @@ void InvoiceManager::taiDuLieu(Database& db) {
 }
 
 // --- PHAN HE 2: NHAN VIEN - THANH TOAN & XUAT HOA DON (T?NG H?P T? TICKET, F&B, PROMOTION) ---
-void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string& maKH, double tongTienHang, 
-                                 const vector<InvoiceFBItem>& dsFB, const string& phimChieuCode){
+void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string& maKH, double tongTienHang,                        const vector<InvoiceFBItem>& dsFB, const string& phimChieuCode){
     // Có th? m? r?ng nh?n thêm mã voucher ho?c t? d?ng d?c t? input n?u c?n
     string maCodeVoucher;
     cout << "Nhap ma voucher khuyen mai (Bam Enter de bo qua): ";
@@ -149,7 +149,7 @@ void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
     if (soTienGiamGia > 0) {
         cout << "Giam gia tu Promotion: -" << soTienGiamGia << " VND\n";
     }
-    cout << "TONG TIEN THUC THU: " << tongThanhToan << " VND\n";
+    cout << "TONG TIEN THUC THU: " << fixed << setprecision(0) << tongThanhToan << " VND\n";
     cout << "------------------------------------------------------------------\n";
     cout << "Chon phuong thuc thanh toan:\n";
     cout << "1. Tien mat (TienMat)\n";
@@ -163,21 +163,55 @@ void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
     string hinhThuc = "TienMat";
     string maGD = "N/A";
 
+    // X? lý phuong th?c thanh toán kèm hi?u ?ng ho?c nh?p ti?n
     if (chonThanhToan == 2) {
-        hinhThuc = "TheNganHang";
-        maGD = "TXN_CARD_" + maHD;
-        cout << "-> Dang quet the ngan hang... Giao dich thanh cong!\n";
+    	hinhThuc = "TheNganHang";
+    	maGD = "TXN_CARD_" + maHD;
+	    cout << "-> Dang ket noi the ngan hang";
+
+    	for (int i = 0; i < 3; ++i) {
+        	cout << "." << flush;
+        	Sleep(1000); // Cho 1000 mili giay = 1 giay
+    	}
+        cout << "\n-> Giao dich thanh cong!\n";
     } else if (chonThanhToan == 3) {
         hinhThuc = "QueQR";
         maGD = "TXN_QR_" + maHD;
-        cout << "\n[MA QR THANH TOAN MOH PHONG]\n";
+        cout << "\n[MA QR THANH TOAN MO PHONG]\n";
         cout << "||||||||||||||||||||||||||||||||\n";
-        cout << "|    QUET MA DE THANH TOAN NAY    |\n";
+        cout << "|    QUET MA DE THANH TOAN NAY   |\n";
         cout << "||||||||||||||||||||||||||||||||\n";
-        cout << "-> Khach da quet ma thanh toan thanh cong!\n";
+        cout << "-> Vui long doi khach hang quét ma";
+        for (int i = 0; i < 3; ++i) {
+        	cout << "." << flush;
+        	Sleep(1000); // Cho 1000 mili giay = 1 giay
+    	}
+        cout << "\n-> Khach da quet ma thanh toan thanh cong!\n";
     } else {
         hinhThuc = "TienMat";
-        cout << "-> Thanh toan bang tien mat truc tiep tai quay.\n";
+        double tienKhachDua = 0.0;
+        
+        // Vòng l?p yêu c?u thu ngân nh?p s? ti?n khách dua và tính ti?n th?a
+        while (true) {
+            cout << "-> Nhap so tien khach dua (VND): ";
+            cin >> tienKhachDua;
+
+            if (cin.fail()) {
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cout << "[Loi]: Vui long nhap mot so hop le!\n";
+            } else if (tienKhachDua < tongThanhToan) {
+                cout << "[Canh bao]: So tien khach dua (" << (long long)tienKhachDua 
+                     << " VND) thieu so voi tong thanh toan (" << (long long)tongThanhToan << " VND). Vui long nhap lai!\n";
+            } else {
+                double tienThua = tienKhachDua - tongThanhToan;
+                cout << "-> Nhan tien mat thanh cong.\n";
+                cout << "-> **TIEN THUA TRA LAI CHO KHACH**: " << fixed << setprecision(0) << tienThua << " VND\n";
+                break;
+            }
+        }
+        // T?o d? tr? nh? gi? l?p hoàn t?t nh?n ti?n m?t
+        Sleep(500);
     }
 
     // Kh?i t?o hóa don m?i v?i t?ng ti?n th?c t? sau khi áp d?ng Promotion
