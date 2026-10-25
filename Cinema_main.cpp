@@ -434,20 +434,24 @@ void menuStaff(Database& db, const string& maNV) {
                 invoiceMgr.hienThiLichSuGiaoDich();
                 break;
             case 5: {
-                system("cls"); // Ðã thêm clear màn hình
-                string maCa, ngayLam, gioBD, gioKT;
-                long long doanhThuHT, tienTT;
-                cout << "\n--- CHOT CA LAM VIEC ---\n";
-                cout << "Nhap ma ca (VD: CA_01): "; cin >> maCa;
-                cout << "Nhap ngay lam (DD/MM/YYYY): "; cin >> ngayLam;
-                cout << "Nhap gio bat dau (HH:MM): "; cin >> gioBD;
-                cout << "Nhap gio ket thuc (HH:MM): "; cin >> gioKT;
-                cout << "Nhap doanh thu he thong (VND): "; cin >> doanhThuHT;
-                cout << "Nhap tien thuc te kiem ke trong ngan (VND): "; cin >> tienTT;
+    			system("cls"); // Ðã thêm clear màn hình
+    			string maCa, gioBD;
+    			long long doanhThuHT, tienTT;
+    
+    			cout << "\n--- CHOT CA LAM VIEC ---\n";
+    			cout << "Nhap ma ca (VD: CA01): "; 
+    			cin >> maCa;
+    			cout << "Nhap gio bat dau (HH:MM): "; 
+    			cin >> gioBD;
+    			cout << "Nhap doanh thu he thong (VND): "; 
+    			cin >> doanhThuHT;
+    			cout << "Nhap tien thuc te kiem ke trong ngan (VND): "; 
+   				cin >> tienTT;
 
-                shiftMgr.chotCa(maCa, maNV, "Nhan Vien Thuc Te", ngayLam, gioBD, gioKT, doanhThuHT, tienTT, db);
-                break;
-            }
+    // G?i hàm chotCa v?i các tham s? dã du?c tinh ch?nh (ngày làm và gi? k?t thúc t? d?ng ghi nh?n)
+    			shiftMgr.chotCa(maCa, maNV, "Nhan Vien Thuc Te", gioBD, doanhThuHT, tienTT, db);
+    			break;
+			}
             case 0:
                 cout << "Dang xuat khoi tai khoan Staff...\n";
                 break;
