@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <limits>
 #include <cstdlib>
+#include <ctime>
 
 // --- IMPLEMENTATION OF TICKET CLASS ---
 
@@ -85,7 +86,7 @@ void Ticket::hienThi() const {
 // --- IMPLEMENTATION OF TICKET MANAGER (QUY TRÌNH BÁN VÉ 6 BU?C) ---
 
 Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon) {
-    cout << "\n==================================================================-\n";
+    cout << "\n===================================================================\n";
     cout << "                    XU LY THONG TIN KHACH HANG (CRM)                 \n";
     cout << "===================================================================\n";
     
@@ -93,6 +94,12 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon) {
     cout << "Nhap so dien thoai khach hang: ";
     cin >> sdt;
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
+
+    // T? d?ng l?y th?i gian th?c t? c?a h? th?ng (Ð?nh d?ng: DD/MM/YYYY HH:MM)
+    time_t now = time(0);
+    char bufTime[80];
+    strftime(bufTime, sizeof(bufTime), "%d/%m/%Y %H:%M", localtime(&now));
+    string thoiGian = string(bufTime);
 
     // 1. Ð?c danh sách khách hàng t? Database ([USERS] và [CUSTOMERS])
     vector<Customer> danhSachKH;
@@ -106,37 +113,22 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon) {
         }
     }
 
+    int soDiemThuong = static_cast<int>(tongTienHoaDon / 10000); // Quy u?c: 10.000d = 1 di?m
+    string maKHThaoTac = "";
+
     // 2. N?u tìm th?y thành viên cu
     if (khachHangTimThay != NULL) {
         cout << "-> He thong tim thay thanh vien: " << khachHangTimThay->getHoTen() 
              << " (Hang " << khachHangTimThay->getHangThanhVien() 
              << " - Diem tich luy: " << khachHangTimThay->getDiemTichLuy() << ")\n";
         
-        // Ti?n hành tích di?m t? hóa don hi?n t?i
-        int soDiemThuong = static_cast<int>(tongTienHoaDon / 10000); // Quy u?c: 10.000d = 1 di?m
-        string thoiGian = "6/5/2026 18:30"; // Ho?c l?y th?i gian h? th?ng th?c t?
         string noiDung = "Tich diem tu hoa don ban ve";
 
         khachHangTimThay->tichDiem(soDiemThuong, noiDung, thoiGian);
         khachHangTimThay->themChiTieu(static_cast<long long>(tongTienHoaDon));
-
-        // Ghi l?i l?ch s? giao d?ch di?m vào b?ng [CUSTOMER_POINTS_HISTORY]
-        vector<GiaoDichDiem> danhSachGD;
-        db.docLichSuGiaoDichDiem(danhSachGD);
-
-        stringstream ss;
-        ss << "GD0" << (danhSachGD.size() + 1);
-        string maGD = ss.str();
-
-        GiaoDichDiem gdMoi(maGD, khachHangTimThay->getMaKH(), "TichDiem", soDiemThuong, noiDung, thoiGian);
-        danhSachGD.push_back(gdMoi);
-
-        // Luu toàn b? thay d?i xu?ng Database
-        db.ghiDanhSachUsers(danhSachKH);
-        db.ghiLichSuGiaoDichDiem(danhSachGD);
-
+        
+        maKHThaoTac = khachHangTimThay->getMaKH();
         cout << "-> Da tich them " << soDiemThuong << " diem cho khach hang!\n";
-        return *khachHangTimThay;
     } 
     // 3. N?u chua có -> Yêu c?u nhân viên nh?p thông tin d? dang ký m?i
     else {
@@ -156,37 +148,40 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon) {
         stringstream ssMa;
         ssMa << "U0" << (danhSachKH.size() + 1);
         string maKHMoi = ssMa.str();
+        maKHThaoTac = maKHMoi;
 
         // Kh?i t?o d?i tu?ng khách hàng m?i (di?m = 0, chi tiêu = 0)
         Customer khachMoi(maKHMoi, hoTen, sdt, email, 0, "Thuong", 0);
         
-        // Tích di?m cho hóa don d?u tiên luôn
-        int soDiemThuong = static_cast<int>(tongTienHoaDon / 10000);
-        string thoiGian = "6/5/2026 18:30";
         string noiDung = "Tich diem hoa don dau tien";
-        
         khachMoi.tichDiem(soDiemThuong, noiDung, thoiGian);
         khachMoi.themChiTieu(static_cast<long long>(tongTienHoaDon));
 
         danhSachKH.push_back(khachMoi);
-
-        // Ghi nh?n l?ch s? giao d?ch di?m
-        vector<GiaoDichDiem> danhSachGD;
-        db.docLichSuGiaoDichDiem(danhSachGD);
-        
-        stringstream ssGD;
-        ssGD << "GD0" << (danhSachGD.size() + 1);
-        string maGD = ssGD.str();
-
-        GiaoDichDiem gdMoi(maGD, maKHMoi, "TichDiem", soDiemThuong, noiDung, thoiGian);
-	danhSachGD.push_back(gdMoi);
-
-        // Luu xu?ng file h? th?ng (`[USERS]`, `[CUSTOMERS]`, `[CUSTOMER_POINTS_HISTORY]`)
-        db.ghiDanhSachUsers(danhSachKH);
-        db.ghiLichSuGiaoDichDiem(danhSachGD);
-
         cout << "-> Dang ky thanh vien moi va tich " << soDiemThuong << " diem thanh cong! Ma KH: " << maKHMoi << "\n";
-        return khachMoi;
+    }
+
+    // Ghi nh?n l?ch s? giao d?ch di?m chung cho c? 2 tru?ng h?p vào b?ng [CUSTOMER_POINTS_HISTORY]
+    vector<GiaoDichDiem> danhSachGD;
+    db.docLichSuGiaoDichDiem(danhSachGD);
+
+    stringstream ssGD;
+    ssGD << "GD0" << (danhSachGD.size() + 1);
+    string maGD = ssGD.str();
+
+    string noiDungGD = (khachHangTimThay != NULL) ? "Tich diem tu hoa don ban ve" : "Tich diem hoa don dau tien";
+    GiaoDichDiem gdMoi(maGD, maKHThaoTac, "TichDiem", soDiemThuong, noiDungGD, thoiGian);
+    danhSachGD.push_back(gdMoi);
+
+    // Luu toàn b? thay d?i xu?ng Database h? th?ng
+    db.ghiDanhSachUsers(danhSachKH);
+    db.ghiLichSuGiaoDichDiem(danhSachGD);
+
+    // Tr? v? d?i tu?ng khách hàng tuong ?ng (tìm th?y ho?c v?a t?o m?i)
+    if (khachHangTimThay != NULL) {
+        return *khachHangTimThay;
+    } else {
+        return danhSachKH.back();
     }
 }
 
