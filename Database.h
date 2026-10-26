@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include <utility>
 #include "Customer.h"
 
 // Khai báo forward các l?p mô hình tuong ?ng
@@ -15,6 +16,7 @@ class Movie;
 class Showtime;
 class Ticket;
 class ShiftReport;
+class User;
 
 using namespace std;
 
@@ -27,6 +29,7 @@ public:
     // Thêm các dòng này vào bên trong khai báo class Database (trong Database.h)
     // --- Qu?n lý Khách hàng & Tích di?m (CRM) ---
 	void docDanhSachUsers(vector<Customer>& danhSachKH); // Ð?c t? b?ng [USERS] và [CUSTOMERS]
+	string layTenNhanVienQuaMa(string maNhanVien);
 	void ghiDanhSachUsers(const vector<Customer>& danhSachKH); // Ghi d?ng b?
 	void docLichSuGiaoDichDiem(vector<GiaoDichDiem>& danhSachGD);
 	void ghiLichSuGiaoDichDiem(const vector<GiaoDichDiem>& danhSachGD);
