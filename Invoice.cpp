@@ -138,10 +138,19 @@ void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
     string maHD = ssHD.str();
     
     // L?y th?i gian hi?n t?i làm th?i gian l?p hóa don
+    // L?y th?i gian hi?n t?i làm th?i gian l?p hóa don theo chu?n DD/MM/YYYY HH:MM:SS
     time_t now = time(0);
-    char buf[80];
-    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", localtime(&now));
-    string thoiGianLap = string(buf);
+    tm* ltm = localtime(&now);
+
+    stringstream ssTime;
+    ssTime << setfill('0') << setw(2) << ltm->tm_mday << "/"
+           << setfill('0') << setw(2) << (1 + ltm->tm_mon) << "/"
+           << (1900 + ltm->tm_year) << " "
+           << setfill('0') << setw(2) << ltm->tm_hour << ":"
+           << setfill('0') << setw(2) << ltm->tm_min << ":"
+           << setfill('0') << setw(2) << ltm->tm_sec;
+           
+    string thoiGianLap = ssTime.str();
 
     cout << "\n==================== XU LY THANH TOAN HOA DON ====================\n";
     cout << "Ma hoa don tam tao: " << maHD << "\n";
