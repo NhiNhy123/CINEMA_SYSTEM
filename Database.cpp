@@ -8,6 +8,7 @@
 #include "Showtime.h"
 #include "Ticket.h"
 #include "ShilftManagement.h"
+#include "User.h"
 
 #include <fstream>
 #include <sstream>
@@ -71,6 +72,33 @@ void Database::docDanhSachUsers(vector<Customer>& danhSachKH) {
         }
     }
     inFile.close();
+}
+
+string Database::layTenNhanVienQuaMa(string maNhanVien) {
+    ifstream inFile("DATA/quan_ly_nhan_su.csv");
+    if (!inFile.is_open()) return "Nhan vien chua ro";
+
+    string line;
+    bool readingUsers = false;
+
+    while (getline(inFile, line)) {
+        if (line.empty()) continue;
+        if (line.find("[USERS]") != string::npos) { readingUsers = true; continue; }
+        if (readingUsers && line[0] == '[') break;
+
+        if (readingUsers && line.find("maNguoiDung") == string::npos) {
+            vector<string> p = tachChuoiCSV(line);
+            if (p.size() >= 12) {
+                // p[0] là maNguoiDung, p[1] là hoTen, p[7] là taiKhoan
+                if (p[0] == maNhanVien || p[7] == maNhanVien) {
+                    inFile.close();
+                    return p[1]; // Tr? v? hoTen ngay khi tìm th?y
+                }
+            }
+        }
+    }
+    inFile.close();
+    return "Nhan vien chua ro";
 }
 
 void Database::ghiDanhSachUsers(const vector<Customer>& danhSachKH) {
