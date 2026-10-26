@@ -24,6 +24,14 @@ static string chuyenPhutThanhGio(int tongPhut) {
     return ss.str();
 }
 
+static int chuyenNgayThanhSo(string ngay) {
+    if (ngay.length() < 10) return 0;
+    int d = atoi(ngay.substr(0, 2).c_str());
+    int m = atoi(ngay.substr(3, 2).c_str());
+    int y = atoi(ngay.substr(6, 4).c_str());
+    return y * 10000 + m * 100 + d; // T?o s? d?ng 20260712 d? so sánh
+}
+
 // Constructor m?c d?nh & d?y d? tham s?
 Showtime::Showtime() { giaVeCoBan = 0.0; }
 Showtime::Showtime(string maSC, string maPhim, string maPhong, string ngay, string gioBD, string gioKT, double giaVe) {
@@ -113,10 +121,11 @@ void Showtime::themSuatChieu(Database& db) {
         }
     }
 
-    // 2. Nh?p mã phim và l?y th?i lu?ng
+    // 2. Nh?p mã phim và l?y th?i lu?ng + ngày kh?i chi?u / k?t thúc c?a phim
     vector<Movie> dsPhim;
     db.docDanhSachPhim(dsPhim);
     int thoiLuongPhim = 0;
+    string ngayKC = "", ngayKT = "";
     bool tonTaiPhim = false;
     
     while (true) {
@@ -126,6 +135,8 @@ void Showtime::themSuatChieu(Database& db) {
         for (size_t i = 0; i < dsPhim.size(); ++i) {
             if (dsPhim[i].getMaPhim() == maPhim) {
                 thoiLuongPhim = dsPhim[i].getThoiLuong(); // L?y th?i lu?ng phim (phút)
+                ngayKC = dsPhim[i].getNgayKhoiChieu();     // L?y ngày kh?i chi?u
+                ngayKT = dsPhim[i].getNgayKetThuc();       // L?y ngày k?t thúc
                 tonTaiPhim = true;
                 break;
             }
@@ -135,6 +146,7 @@ void Showtime::themSuatChieu(Database& db) {
             cout << "Loi: Ma phim '" << maPhim << "' khong ton tai trong he thong! Vui long nhap lai.\n";
         } else {
             cout << "-> Tim thay phim! Thoi luong: " << thoiLuongPhim << " phut.\n";
+            cout << "-> Dot chieu cua phim tu: " << ngayKC << " den " << ngayKT << "\n";
             break;
         }
     }
@@ -162,9 +174,23 @@ void Showtime::themSuatChieu(Database& db) {
         }
     }
 
-    // 4. Nh?p ngày chi?u (Ð?nh d?ng DD/MM/YYYY)
-    cout << "Nhap ngay chieu (DD/MM/YYYY, VD: 06/05/2026): "; 
-    cin >> ngay;
+    // 4. Nh?p ngày chi?u (DD/MM/YYYY) và ki?m tra ph?i n?m trong kho?ng [ngayKC, ngayKT]
+    int soNgayKC = chuyenNgayThanhSo(ngayKC);
+    int soNgayKT = chuyenNgayThanhSo(ngayKT);
+
+    while (true) {
+        cout << "Nhap ngay chieu (DD/MM/YYYY, VD: 06/05/2026): "; 
+        cin >> ngay;
+
+        int soNgayChieu = chuyenNgayThanhSo(ngay);
+
+        if (soNgayChieu < soNgayKC || soNgayChieu > soNgayKT) {
+            cout << "Loi: Ngay chieu phai nam trong khoang thoi gian phat hanh cua phim (" << ngayKC << " den " << ngayKT << ")! Vui long nhap lai.\n";
+        } else {
+            cout << "-> Ngay chieu hop le!\n";
+            break;
+        }
+    }
 
     // 5. Nh?p gi? b?t d?u, t? d?ng tính gi? k?t thúc và ki?m tra xung d?t chính xác b?ng phút
     string gioKT = "";
