@@ -6,6 +6,7 @@
 #include "Customer.h"
 #include "Invoice.h"
 #include "FAndB.h"
+#include "Room.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -186,15 +187,40 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon) {
 }
 
 void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
-    // BU?C 1.1: Ð?C VÀ HI?N TH? DANH SÁCH PHIM ÐANG CHI?U
-    vector<Showtime> dsShowtime;
-    db.docDanhSachSuatChieu(dsShowtime);
-    if (dsShowtime.empty()) {
+    // BU?C 1.1: Ð?C VÀ L?C DANH SÁCH SU?T CHI?U (LO?I B? PHÒNG ÐANG B? KHÓA)
+    vector<Showtime> dsShowtimeGoc;
+    db.docDanhSachSuatChieu(dsShowtimeGoc);
+    if (dsShowtimeGoc.empty()) {
         cout << "\n[LOI]: Hien tai khong co suat chieu nao!\n";
         return;
     }
 
-    // L?c ra danh sách các mã phim duy nh?t t? các su?t chi?u hi?n có
+    // Ð?c danh sách phòng d? ki?m tra tr?ng thái khóa/m?
+    vector<Room> dsPhong;
+    db.docDanhSachPhong(dsPhong); // Ð?m b?o Database c?a b?n có hàm này
+
+    vector<Showtime> dsShowtime;
+    for (size_t i = 0; i < dsShowtimeGoc.size(); ++i) {
+        bool phongBiKhoa = false;
+        for (size_t j = 0; j < dsPhong.size(); ++j) {
+            // Ki?m tra n?u mã phòng kh?p và tr?ng thái phòng là "Khoa"
+            if (dsPhong[j].getMaPhong() == dsShowtimeGoc[i].getMaPhong() && dsPhong[j].getTrangThaiPhong() == "TamNgung") {
+                phongBiKhoa = true;
+                break;
+            }
+        }
+        // Ch? thêm vào danh sách bán vé n?u phòng không b? khóa
+        if (!phongBiKhoa) {
+            dsShowtime.push_back(dsShowtimeGoc[i]);
+        }
+    }
+
+    if (dsShowtime.empty()) {
+        cout << "\n[LOI]: Tat ca cac suat chi?u hien tai deu thuoc phong dang bi khoa (bao tri)!\n";
+        return;
+    }
+
+    // L?c ra danh sách các mã phim duy nh?t t? các su?t chi?u kh? d?ng
     vector<string> dsMaPhim;
     for (size_t i = 0; i < dsShowtime.size(); ++i) {
         bool exist = false;
@@ -228,7 +254,7 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
     }
 
     cout << "\n===================================================================\n";
-    cout << "            SUAT CHI?U CHO PHIM: " << selectedMovie << "\n";
+    cout << "            SUAT CHI?U CHO PHIM: " << selectedMovie << " (Da loc phong kha dung)\n";
     cout << "===================================================================\n";
     cout << left << setw(6) << "STT" 
          << setw(10) << "Ma SC" 
@@ -333,7 +359,6 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
     vector<FoodAndBeverage> dsTam;
     db.docDanhSachFAndB(dsTam);
 
-    // T?o vector t?m ch? ch?a các món dang kinh doanh d? dánh STT t? 1
     vector<FoodAndBeverage> dsDangBan;
     for (size_t i = 0; i < dsTam.size(); ++i) {
         if (dsTam[i].getTrangThaiKinhDoanh() != "NgungBan") {
@@ -341,7 +366,6 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
         }
     }
 
-    // Hi?n th? danh sách tùy ch?nh: Ch? hi?n STT, Tên s?n ph?m và Giá bán
     cout << left << setw(6) << "STT" << setw(40) << "Ten San Pham" << setw(15) << "Gia Ban (VND)" << endl;
     cout << "-------------------------------------------------------------------\n";
     
@@ -374,7 +398,6 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
         if (chonSTT < 1 || chonSTT > (int)dsDangBan.size()) {
             cout << "[Loi]: Lua chon STT khong hop le!\n";
         } else {
-            // L?y món tuong ?ng d?a vào STT (ch? s? vector = chonSTT - 1)
             FoodAndBeverage selectedItem = dsDangBan[chonSTT - 1];
 
             cout << "Nhap so luong cho [" << selectedItem.getTenMatHang() << "]: ";
@@ -391,7 +414,7 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
 
                 InvoiceFBItem item;
                 item.maHoaDon = ""; 
-                item.maMatHang = selectedItem.getMaMatHang(); // V?n luu mã ng?m bên du?i cho database
+                item.maMatHang = selectedItem.getMaMatHang(); 
                 item.soLuong = soLuong;
                 item.thanhTien = thanhTien;
 
@@ -462,7 +485,6 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
         cout << (i + 1) << ". Ghe: " << dsGheChon[i] << " | Trang thai: DaDat\n";
     }
 
-    // Hi?n th? danh sách F&B dã ch?n d?a trên dsFBItems
     if (!dsFBItems.empty()) {
         cout << "--- CHI TIET F&B DA CHON ---\n";
         for (size_t i = 0; i < dsFBItems.size(); ++i) {
