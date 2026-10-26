@@ -1,8 +1,11 @@
 #include "ShilftManagement.h"
 #include "Database.h"
+#include "User.h"
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
+#include <sstream>
+#include <iomanip>
 
 static int chuyenNgayThanhSo(string ngay)
 {
@@ -113,23 +116,34 @@ void ShiftManagement::taiDuLieu(Database& db) { db.docDanhSachCa(danhSachCa); }
 void ShiftManagement::luuDuLieu(Database& db) const { db.ghiDanhSachCa(danhSachCa); }
 void ShiftManagement::themBaoCaoCa(ShiftReport ca) { danhSachCa.push_back(ca); }
 
-void ShiftManagement::chotCa(string maCa, string maNhanVien, string tenNhanVien, string gioBatDau, long long doanhThuHeThong, long long tienThucTe, Database& db)
+void ShiftManagement::chotCa(string maCa, string maNhanVien, string gioBatDau, long long doanhThuHeThong, long long tienThucTe, Database& db)
 {
-    time_t now = time(0);
-    char bufDate[80], bufTime[80];
-    strftime(bufDate, sizeof(bufDate), "%Y-%m-%d", localtime(&now));
-    strftime(bufTime, sizeof(bufTime), "%H:%M:%S", localtime(&now));
+    // G?I HÀM TR?C TI?P T? DATABASE Ð? L?Y TÊN NHÂN VIÊN G?N GÀNG NH?T
+    string tenNhanVien = db.layTenNhanVienQuaMa(maNhanVien);
 
-    ShiftReport ca(maCa, maNhanVien, tenNhanVien, string(bufDate), gioBatDau, string(bufTime), doanhThuHeThong, tienThucTe, "ChoDuyet", false);
+    time_t now = time(0);
+    tm* ltm = localtime(&now);
+
+    // L?y ngày hi?n t?i t? d?ng theo chu?n DD/MM/YYYY (00/00/0000)
+    stringstream ssDate;
+    ssDate << setfill('0') << setw(2) << ltm->tm_mday << "/"
+           << setfill('0') << setw(2) << (1 + ltm->tm_mon) << "/"
+           << (1900 + ltm->tm_year);
+    string ngayHienTai = ssDate.str();
+
+    char bufTime[80];
+    strftime(bufTime, sizeof(bufTime), "%H:%M:%S", ltm);
+
+    ShiftReport ca(maCa, maNhanVien, tenNhanVien, ngayHienTai, gioBatDau, string(bufTime), doanhThuHeThong, tienThucTe, "ChoDuyet", false);
     danhSachCa.push_back(ca);
     luuDuLieu(db);
 
     cout << "\n==============================================\n";
-    cout << "             CHOT CA THANH CONG               \n";
+    cout << "               CHOT CA THANH CONG             \n";
     cout << "==============================================\n";
     cout << "Ma ca      : " << maCa << "\n";
-    cout << "Nhan vien  : " << tenNhanVien << "\n";
-    cout << "Ngay lam   : " << bufDate << "\n";
+    cout << "Nhan vien  : " << tenNhanVien << " (" << maNhanVien << ")\n";
+    cout << "Ngay lam   : " << ngayHienTai << "\n";
     cout << "Thoi gian  : " << gioBatDau << " -> " << bufTime << "\n";
     cout << "Bao cao dang cho Admin duyet va da duoc luu vao he thong.\n";
 }
