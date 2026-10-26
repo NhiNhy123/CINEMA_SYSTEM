@@ -6,6 +6,23 @@
 #include <iomanip>
 #include <sstream>
 #include <vector>
+#include <cstdlib>
+
+// --- C√ÅC H√ÄM TI?N √çCH H? TR? CHUY?N √ê?I GI?/PH√öT ---
+static int chuyenGioThanhPhut(string gio) {
+    if (gio.length() < 5) return 0;
+    int h = atoi(gio.substr(0, 2).c_str());
+    int m = atoi(gio.substr(3, 2).c_str());
+    return h * 60 + m;
+}
+
+static string chuyenPhutThanhGio(int tongPhut) {
+    int h = (tongPhut / 60) % 24;
+    int m = tongPhut % 60;
+    stringstream ss;
+    ss << setfill('0') << setw(2) << h << ":" << setfill('0') << setw(2) << m;
+    return ss.str();
+}
 
 // Constructor m?c d?nh & d?y d? tham s?
 Showtime::Showtime() { giaVeCoBan = 0.0; }
@@ -54,7 +71,7 @@ Showtime Showtime::fromCSV(const string& line) {
     return Showtime(maSC, maPhim, maPhong, ngay, gioBD, gioKT, gia);
 }
 
-// H‡m hi?n th? m?t su?t chi?u don l? (D˘ng cho hienThiSuatChieuTheoPhim vÏ d„ cÛ tiÍu d? ch?a tÍn phim)
+// H√†m hi?n th? m?t su?t chi?u don l?
 void Showtime::hienThi() const {
     stringstream ssGia;
     ssGia << fixed << setprecision(0) << giaVeCoBan << " VND";
@@ -66,93 +83,145 @@ void Showtime::hienThi() const {
 }
 
 // ==========================================
-// C¡C H¿M X? L› NGHI?P V? (QU?N L› SU?T CHI?U)
+// C√ÅC H√ÄM X? L√ù NGHI?P V? (QU?N L√ù SU?T CHI?U)
 // ==========================================
-
 void Showtime::themSuatChieu(Database& db) {
-    string maSC, maPhim, maPhong, ngay, gioBD, gioKT;
+    string maSC, maPhim, maPhong, ngay, gioBD;
     double giaVe;
 
     cout << "\n--- THEM SUAT CHIEU MOI ---\n";
-    cout << "Nhap ma suat chieu (VD: SC10): "; cin >> maSC;
 
-    // L?y danh s·ch su?t chi?u t? Database tru?c d? ki?m tra tr˘ng m„
+    // 1. Ki?m tra tr√πng m√£ su?t chi?u (B?t nh?p l?i ngay n?u tr√πng)
     vector<Showtime> danhSach;
-    db.docDanhSachSuatChieu(danhSach);
+    while (true) {
+        db.docDanhSachSuatChieu(danhSach);
+        cout << "Nhap ma suat chieu (VD: SC10): "; 
+        cin >> maSC;
 
-    // Ki?m tra tr˘ng m„ su?t chi?u
-    for (size_t i = 0; i < danhSach.size(); ++i) {
-        if (danhSach[i].getMaSuatChieu() == maSC) {
-            cout << "Loi: Ma suat chieu '" << maSC << "' da ton tai trong he thong!\n";
-            return;
+        bool trungMa = false;
+        for (size_t i = 0; i < danhSach.size(); ++i) {
+            if (danhSach[i].getMaSuatChieu() == maSC) {
+                trungMa = true;
+                break;
+            }
         }
-    }
 
-    cout << "Nhap ma phim: "; cin >> maPhim;
-
-    // Ki?m tra m„ phim cÛ t?n t?i hay khÙng
-    vector<Movie> dsPhim;
-    db.docDanhSachPhim(dsPhim);
-    bool tonTaiPhim = false;
-    for (size_t i = 0; i < dsPhim.size(); ++i) {
-        if (dsPhim[i].getMaPhim() == maPhim) {
-            tonTaiPhim = true;
+        if (trungMa) {
+            cout << "Loi: Ma suat chieu '" << maSC << "' da ton tai trong he thong! Vui long nhap lai.\n";
+        } else {
             break;
         }
     }
-    if (!tonTaiPhim) {
-        cout << "Loi: Ma phim '" << maPhim << "' khong ton tai trong he thong!\n";
-        return;
+
+    // 2. Nh?p m√£ phim v√† l?y th?i lu?ng
+    vector<Movie> dsPhim;
+    db.docDanhSachPhim(dsPhim);
+    int thoiLuongPhim = 0;
+    bool tonTaiPhim = false;
+    
+    while (true) {
+        cout << "Nhap ma phim: "; 
+        cin >> maPhim;
+
+        for (size_t i = 0; i < dsPhim.size(); ++i) {
+            if (dsPhim[i].getMaPhim() == maPhim) {
+                thoiLuongPhim = dsPhim[i].getThoiLuong(); // L?y th?i lu?ng phim (ph√∫t)
+                tonTaiPhim = true;
+                break;
+            }
+        }
+
+        if (!tonTaiPhim) {
+            cout << "Loi: Ma phim '" << maPhim << "' khong ton tai trong he thong! Vui long nhap lai.\n";
+        } else {
+            cout << "-> Tim thay phim! Thoi luong: " << thoiLuongPhim << " phut.\n";
+            break;
+        }
     }
 
-    cout << "Nhap ma phong chieu: "; cin >> maPhong;
-
-    // Ki?m tra m„ phÚng cÛ t?n t?i hay khÙng
+    // 3. Nh?p m√£ ph√≤ng chi?u
     vector<Room> dsPhong;
     db.docDanhSachPhong(dsPhong);
     bool tonTaiPhong = false;
-    for (size_t i = 0; i < dsPhong.size(); ++i) {
-        if (dsPhong[i].getMaPhong() == maPhong) {
-            tonTaiPhong = true;
+
+    while (true) {
+        cout << "Nhap ma phong chieu: "; 
+        cin >> maPhong;
+
+        for (size_t i = 0; i < dsPhong.size(); ++i) {
+            if (dsPhong[i].getMaPhong() == maPhong) {
+                tonTaiPhong = true;
+                break;
+            }
+        }
+
+        if (!tonTaiPhong) {
+            cout << "Loi: Ma phong '" << maPhong << "' khong ton tai trong he thong! Vui long nhap lai.\n";
+        } else {
             break;
         }
     }
-    if (!tonTaiPhong) {
-        cout << "Loi: Ma phong '" << maPhong << "' khong ton tai trong he thong!\n";
-        return;
-    }
 
-    cout << "Nhap ngay chieu (YYYY-MM-DD): "; cin >> ngay;
-    cout << "Nhap gio bat dau (HH:MM): "; cin >> gioBD;
-    cout << "Nhap gio ket thuc (HH:MM): "; cin >> gioKT;
-    
-    do {
-        cout << "Nhap gia ve co ban (> 0): "; cin >> giaVe;
-        if (giaVe <= 0) cout << "Loi: Gia ve phai lon hon 0!\n";
-    } while (giaVe <= 0);
+    // 4. Nh?p ng√†y chi?u (√ê?nh d?ng DD/MM/YYYY)
+    cout << "Nhap ngay chieu (DD/MM/YYYY, VD: 06/05/2026): "; 
+    cin >> ngay;
 
-    // R¿NG BU?C LOGIC: Ki?m tra tr˘ng phÚng v‡ ch?ng chÈo th?i gian
-    for (size_t i = 0; i < danhSach.size(); ++i) {
-        if (danhSach[i].getMaPhong() == maPhong && danhSach[i].getNgayChieu() == ngay) {
-            // Ki?m tra xung d?t khung gi?
-            if (!(gioKT <= danhSach[i].getGioBatDau() || gioBD >= danhSach[i].getGioKetThuc())) {
-                cout << "Loi: Da co suat chieu trong thoi gian nay tai phong " << maPhong << "! Vui long chon thoi gian khac.\n";
-                return;
+    // 5. Nh?p gi? b?t d?u, t? d?ng t√≠nh gi? k?t th√∫c v√† ki?m tra xung d?t ch√≠nh x√°c b?ng ph√∫t
+    string gioKT = "";
+    while (true) {
+        cout << "Nhap gio bat dau (HH:MM): "; 
+        cin >> gioBD;
+
+        if (gioBD.length() < 5 || gioBD[2] != ':') {
+            cout << "Loi: Dinh dang gio khong hop le (Dung dinh dang HH:MM)! Vui long nhap lai.\n";
+            continue;
+        }
+
+        int startMoi = chuyenGioThanhPhut(gioBD);
+        int endMoi = startMoi + thoiLuongPhim;
+        gioKT = chuyenPhutThanhGio(endMoi);
+
+        cout << "-> He thong tu dong set gio ket thuc la: " << gioKT << "\n";
+
+        // Ki?m tra ch?ng ch√©o th?i gian b?ng kho?ng th?i gian (ph√∫t)
+        bool trungLich = false;
+        for (size_t i = 0; i < danhSach.size(); ++i) {
+            if (danhSach[i].getMaPhong() == maPhong && danhSach[i].getNgayChieu() == ngay) {
+                int startCu = chuyenGioThanhPhut(danhSach[i].getGioBatDau());
+                int endCu = chuyenGioThanhPhut(danhSach[i].getGioKetThuc());
+
+                // √êi?u ki?n ch?ng ch√©o: Su?t m?i b?t d?u tru?c khi su?t cu k?t th√∫c V√Ä su?t m?i k?t th√∫c sau khi su?t cu b?t d?u
+                if (startMoi < endCu && endMoi > startCu) {
+                    trungLich = true;
+                    break;
+                }
             }
+        }
+
+        if (trungLich) {
+            cout << "Loi: Da co suat chieu trong thoi gian nay tai phong " << maPhong << "! Vui long nhap lai gio khac.\n";
+        } else {
+            cout << "-> Khung gio hop le!\n";
+            break;
         }
     }
 
-    // N?u h?p l?, t?o d?i tu?ng v‡ thÍm v‡o danh s·ch
+    // 6. Nh?p gi√° v√© co b?n
+    do {
+        cout << "Nhap gia ve co ban (> 0): "; 
+        cin >> giaVe;
+        if (giaVe <= 0) cout << "Loi: Gia ve phai lon hon 0!\n";
+    } while (giaVe <= 0);
+
+    // 7. T?o d?i tu?ng v√† luu xu?ng Database
     Showtime moi(maSC, maPhim, maPhong, ngay, gioBD, gioKT, giaVe);
     danhSach.push_back(moi);
 
-    // Ghi xu?ng file Database
     db.ghiDanhSachSuatChieu(danhSach);
-    cout << "Them suat chieu thanh cÙng!\n";
+    cout << "Them suat chieu thanh cong va tu dong cap nhat thoi gian ket thuc!\n";
 }
 
 void Showtime::hienThiSuatChieuTheoPhim(const string& maPhimCanXem, Database& db) {
-    // 1. L?y tÍn phim t? danh s·ch phim d? hi?n th? tiÍu d? tr?c quan
     vector<Movie> dsPhim;
     db.docDanhSachPhim(dsPhim);
     string tenPhim = maPhimCanXem; 
@@ -163,7 +232,6 @@ void Showtime::hienThiSuatChieuTheoPhim(const string& maPhimCanXem, Database& db
         }
     }
 
-    // 2. –?c danh s·ch su?t chi?u
     vector<Showtime> danhSach;
     db.docDanhSachSuatChieu(danhSach);
 
@@ -185,7 +253,6 @@ void Showtime::hienThiSuatChieuTheoPhim(const string& maPhimCanXem, Database& db
 }
 
 void Showtime::hienThiTatCa(Database& db) {
-    // L?y danh s·ch phim d? ·nh x? m„ phim sang tÍn phim
     vector<Movie> dsPhim;
     db.docDanhSachPhim(dsPhim);
 
@@ -197,7 +264,6 @@ void Showtime::hienThiTatCa(Database& db) {
     cout << "---------------------------------------------------------------------------------------------------\n";
     
     for (size_t i = 0; i < danhSach.size(); ++i) {
-        // Tra c?u tÍn phim tuong ?ng v?i m„ phim c?a su?t chi?u
         string tenPhimHienThi = danhSach[i].getMaPhim();
         for (size_t j = 0; j < dsPhim.size(); ++j) {
             if (dsPhim[j].getMaPhim() == danhSach[i].getMaPhim()) {
@@ -209,7 +275,6 @@ void Showtime::hienThiTatCa(Database& db) {
         stringstream ssGia;
         ssGia << fixed << setprecision(0) << danhSach[i].getGiaVeCoBan() << " VND";
 
-        // In ra tÍn phim thay vÏ m„ phim ? c?t th? 2
         cout << left << setw(12) << danhSach[i].getMaSuatChieu() 
              << setw(30) << tenPhimHienThi 
              << setw(10) << danhSach[i].getMaPhong() 
