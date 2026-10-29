@@ -61,15 +61,14 @@ public:
 
     void themBaoCaoCa(ShiftReport ca);
     
-    // Ðã kh?p v?i hàm chotCa t? d?ng l?y th?i gian h? th?ng trong file .cpp
-    void chotCa(string maCa, string maNhanVien, string tenNhanVien, string gioBatDau, 
-                long long doanhThuHeThong, long long tienThucTe, Database& db);
+    // �� kh?p v?i h�m chotCa t? d?ng l?y th?i gian h? th?ng trong file .cpp
+    void chotCa(string maCa, string maNhanVien, string gioBatDau, long long doanhThuHeThong, long long tienThucTe, Database& db);
 
     ShiftReport* timCa(string maCa);
     bool duyetBaoCao(string maCa, Database& db);
     bool khoaBaoCao(string maCa, Database& db);
 
-    // Các hàm l?c và th?ng kê
+    // C�c h�m l?c v� th?ng k�
     vector<ShiftReport> locTheoThoiGian(string tuNgay, string denNgay) const;
     vector<ShiftReport> locTheoNhanVien(string maNhanVien) const;
     vector<ShiftReport> locBaoCao(string tuNgay, string denNgay, string maNhanVien) const;
