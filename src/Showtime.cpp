@@ -159,13 +159,70 @@ void Showtime::themSuatChieu(Database& db) {
     int thoiLuongPhim = 0;
     string ngayKC = "", ngayKT = "";
     bool tonTaiPhim = false;
+    bool phimKhongHopLe = false;
+    int ngayHienTai;
+    if (!DateFormat::todayDateKey(ngayHienTai)) {
+        cout << "Loi: Khong the xac dinh ngay hien tai!\n";
+        return;
+    }
+
+    if (dsPhim.empty()) {
+        cout << "Loi: Chua co phim nao trong he thong de them suat chieu.\n";
+        return;
+    }
+
+    cout << "\n--- DANH SACH PHIM ---\n";
+    cout << left << setw(10) << "Ma phim"
+         << setw(30) << "Ten phim"
+         << setw(15) << "Khoi chieu"
+         << setw(15) << "Ket thuc"
+         << "Trang thai\n";
+    bool coPhimCoTheXepLich = false;
+    for (size_t i = 0; i < dsPhim.size(); ++i) {
+        int ngayBatDauPhatHanh = DateFormat::dateKey(dsPhim[i].getNgayKhoiChieu());
+        int ngayKetThucPhatHanh = DateFormat::dateKey(dsPhim[i].getNgayKetThuc());
+        bool ngayPhatHanhHopLe = ngayBatDauPhatHanh != 0 &&
+                                ngayKetThucPhatHanh >= ngayBatDauPhatHanh;
+        bool daHetHan = ngayPhatHanhHopLe && ngayKetThucPhatHanh < ngayHienTai;
+        bool coTheXepLich = ngayPhatHanhHopLe && !daHetHan;
+        if (coTheXepLich) coPhimCoTheXepLich = true;
+
+        cout << left << setw(10) << dsPhim[i].getMaPhim()
+             << setw(30) << dsPhim[i].getTenPhim()
+             << setw(15) << dsPhim[i].getNgayKhoiChieu()
+             << setw(15) << dsPhim[i].getNgayKetThuc()
+             << (coTheXepLich ? "Co the xep lich" :
+                 (daHetHan ? "Da het han" : "Ngay phat hanh khong hop le"))
+             << "\n";
+    }
+    if (!coPhimCoTheXepLich) {
+        cout << "Loi: Khong co phim nao con trong thoi gian phat hanh de them suat chieu.\n";
+        return;
+    }
 
     while (true) {
         cout << "Nhap ma phim: ";
         cin >> maPhim;
+        tonTaiPhim = false;
+        phimKhongHopLe = false;
 
         for (size_t i = 0; i < dsPhim.size(); ++i) {
             if (dsPhim[i].getMaPhim() == maPhim) {
+                int ngayBatDauPhatHanh = DateFormat::dateKey(dsPhim[i].getNgayKhoiChieu());
+                int ngayKetThucPhatHanh = DateFormat::dateKey(dsPhim[i].getNgayKetThuc());
+                if (ngayBatDauPhatHanh == 0 ||
+                    ngayKetThucPhatHanh == 0 ||
+                    ngayKetThucPhatHanh < ngayBatDauPhatHanh) {
+                    cout << "Loi: Phim co thoi gian phat hanh khong hop le. Vui long kiem tra lai du lieu phim.\n";
+                    phimKhongHopLe = true;
+                    break;
+                }
+                if (ngayKetThucPhatHanh < ngayHienTai) {
+                    cout << "Loi: Phim '" << dsPhim[i].getTenPhim()
+                         << "' da het thoi gian phat hanh va khong the them suat chieu.\n";
+                    phimKhongHopLe = true;
+                    break;
+                }
                 thoiLuongPhim = dsPhim[i].getThoiLuong();
                 ngayKC = dsPhim[i].getNgayKhoiChieu();
                 ngayKT = dsPhim[i].getNgayKetThuc();
@@ -174,9 +231,9 @@ void Showtime::themSuatChieu(Database& db) {
             }
         }
 
-        if (!tonTaiPhim) {
+        if (!tonTaiPhim && !phimKhongHopLe) {
             cout << "Loi: Ma phim '" << maPhim << "' khong ton tai trong he thong! Vui long nhap lai.\n";
-        } else {
+        } else if (tonTaiPhim) {
             cout << "-> Tim thay phim! Thoi luong: " << thoiLuongPhim << " phut.\n";
             cout << "-> Dot chieu cua phim tu: " << ngayKC << " den " << ngayKT << "\n";
             break;
