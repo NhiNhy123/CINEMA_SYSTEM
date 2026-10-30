@@ -1,7 +1,6 @@
-#include "Room.h"
-#include "Seat.h"      // B? sung include này d? g?i SeatManager
-#include "Database.h"
-#include "Showtime.h"
+#include "../include/Room.h"
+#include "../include/Database.h"
+#include "../include/Showtime.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -35,10 +34,10 @@ void Room::setSucChua(int sc) { sucChua = sc; }
 void Room::setTrangThaiPhong(const string& tt) { trangThaiPhong = tt; }
 
 void Room::hienThi() const {
-    cout << left << setw(10) << maPhong 
-         << setw(20) << tenPhong 
-         << setw(12) << loaiPhong 
-         << setw(12) << sucChua 
+    cout << left << setw(10) << maPhong
+         << setw(20) << tenPhong
+         << setw(12) << loaiPhong
+         << setw(12) << sucChua
          << setw(15) << trangThaiPhong << endl;
 }
 
@@ -63,7 +62,7 @@ Room Room::fromCSV(const string& line) {
         stringstream ssSucChua(strSucChua);
         ssSucChua >> sucChua;
     }
-    
+
     return Room(ma, ten, loai, sucChua, trangThai);
 }
 
@@ -77,10 +76,10 @@ void RoomManager::hienThiDanhSach() const {
         return;
     }
     cout << "\n==================== DANH SACH PHONG CHIEU ====================\n";
-    cout << left << setw(10) << "Ma Phong" 
-         << setw(20) << "Ten Phong" 
-         << setw(12) << "Loai Phong" 
-         << setw(12) << "Suc Chua" 
+    cout << left << setw(10) << "Ma Phong"
+         << setw(20) << "Ten Phong"
+         << setw(12) << "Loai Phong"
+         << setw(12) << "Suc Chua"
          << setw(15) << "Trang Thai" << endl;
     cout << "---------------------------------------------------------------\n";
     for (size_t i = 0; i < danhSachPhong.size(); ++i) {
@@ -90,14 +89,13 @@ void RoomManager::hienThiDanhSach() const {
 }
 
 void RoomManager::themPhong(Database& db) {
-    string ma, ten, loai;
+    string ma, ten, loai, trangThai;
     int sucChua;
 
     cout << "\n--- THEM PHONG CHIEU MOI ---\n";
-    cout << "Nhap ma phong (VD: R01): ";
+    cout << "Nhap ma phong (VD: P01): ";
     cin >> ma;
 
-    // Kiem tra ma phong da ton tai chua
     for (size_t i = 0; i < danhSachPhong.size(); ++i) {
         if (danhSachPhong[i].getMaPhong() == ma) {
             cout << "Loi: Ma phong nay da ton tai trong co so du lieu!" << endl;
@@ -109,192 +107,70 @@ void RoomManager::themPhong(Database& db) {
 
     cout << "Nhap ten phong (VD: Phong 01, Phong IMAX): ";
     getline(cin, ten);
-    
+
     cout << "Nhap loai phong (2D, 3D, IMAX, 4DX...): ";
     cin >> loai;
-    
+
     cout << "Nhap suc chua tong the: ";
     cin >> sucChua;
 
-    // 1. Thêm phòng m?i vào danh sách và luu xu?ng Database
     Room newRoom(ma, ten, loai, sucChua, "HoatDong");
     danhSachPhong.push_back(newRoom);
     db.ghiDanhSachPhong(danhSachPhong);
 
-    // 2. T? Ð?NG SINH GH?: G?i SeatManager d? t? d?ng t?o so d? gh? kh?p tuy?t d?i v?i `sucChua`
-    SeatManager seatMgr;
-    seatMgr.taiDuLieu(db);
-    seatMgr.taoGheTuDongChoPhong(ma, db); // Hàm t? d?ng chia hàng/c?t và ghi vào file
-
-    cout << "Them phong chieu va tu dong sinh so do ghe thanh cong!" << endl;
+    cout << "Them phong chieu thanh cong va da luu vao file he thong!" << endl;
 }
 
 void RoomManager::suaPhong(Database& db) {
-    cout << "\n--- SUA THONG TIN PHONG CHIEU ---\n";
-    
-    // 1. Hi?n th? danh sách phòng d? ngu?i dùng xem mã phòng
-    hienThiDanhSach();
-
     string ma;
-    cout << "\nNhap ma phong can sua (nhap 0 de quay lai): ";
+    cout << "\n--- SUA THONG TIN PHONG CHIEU ---\n";
+    cout << "Nhap ma phong can sua: ";
     cin >> ma;
-    if (ma == "0") return;
 
-    // T?i l?i danh sách phòng m?i nh?t t? database
-    taiDuLieu(db);
     bool found = false;
 
     for (size_t i = 0; i < danhSachPhong.size(); ++i) {
         if (danhSachPhong[i].getMaPhong() == ma) {
             found = true;
-            int choice;
-            do {
-                // 2. In ra chi ti?t toàn b? thông tin hi?n t?i c?a phòng d? theo dõi
-                cout << "\n==================================================\n";
-                cout << "         THONG TIN CHI TIET PHONG DANG SUA        \n";
-                cout << "==================================================\n";
-                cout << "Ma phong    : " << danhSachPhong[i].getMaPhong() << "\n";
-                cout << "Ten phong   : " << danhSachPhong[i].getTenPhong() << "\n";
-                cout << "Loai phong  : " << danhSachPhong[i].getLoaiPhong() << "\n";
-                cout << "Suc chua    : " << danhSachPhong[i].getSucChua() << " ghe\n";
-                cout << "Trang thai  : " << danhSachPhong[i].getTrangThaiPhong() << "\n";
-                cout << "==================================================\n";
+            string ten, loai, trangThai;
+            int sucChua;
 
-                // Menu tùy ch?n s?a phòng
-                cout << "1. Sua ten phong\n";
-                cout << "2. Sua loai phong (2D, 3D, IMAX, 4DX...)\n";
-                cout << "3. Sua suc chua (Tong so ghe)\n";
-                cout << "4. Sua trang thai phong (HoatDong / TamNgung)\n";
-                cout << "0. Hoan tat va luu thay doi\n";
-                cout << "Chon thuoc tinh can sua (0-4): ";
-                cin >> choice;
+            cin.ignore();
+            cout << "Nhap ten phong moi (" << danhSachPhong[i].getTenPhong() << "): ";
+            getline(cin, ten);
+            cout << "Nhap loai phong moi (2D, 3D, IMAX, 4DX...) (" << danhSachPhong[i].getLoaiPhong() << "): ";
+            cin >> loai;
+            cout << "Nhap suc chua moi (" << danhSachPhong[i].getSucChua() << "): ";
+            cin >> sucChua;
+            cout << "Nhap trang thai moi (HoatDong / TamNgung) (" << danhSachPhong[i].getTrangThaiPhong() << "): ";
+            cin >> trangThai;
 
-                cin.ignore(numeric_limits<streamsize>::max(), '\n'); // Xóa b? d?m sau khi nh?p s?
+            danhSachPhong[i].setTenPhong(ten);
+            danhSachPhong[i].setLoaiPhong(loai);
+            danhSachPhong[i].setSucChua(sucChua);
+            danhSachPhong[i].setTrangThaiPhong(trangThai);
 
-                switch (choice) {
-                    case 1: {
-                        string tenMoi;
-                        cout << "Nhap ten phong moi (" << danhSachPhong[i].getTenPhong() << "): ";
-                        getline(cin, tenMoi);
-                        if (!tenMoi.empty()) {
-                            danhSachPhong[i].setTenPhong(tenMoi);
-                            cout << "-> Da cap nhat ten phong!\n";
-                        }
-                        break;
-                    }
-                    case 2: {
-                        string loaiMoi;
-                        cout << "Nhap loai phong moi (" << danhSachPhong[i].getLoaiPhong() << "): ";
-                        getline(cin, loaiMoi);
-                        if (!loaiMoi.empty()) {
-                            danhSachPhong[i].setLoaiPhong(loaiMoi);
-                            cout << "-> Da cap nhat loai phong!\n";
-                        }
-                        break;
-                    }
-                    case 3: {
-        int sucChuaCu = danhSachPhong[i].getSucChua();
-        int sucChuaMoi;
-        cout << "Nhap suc chua moi (" << sucChuaCu << "): ";
-        cin >> sucChuaMoi;
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-
-        if (sucChuaMoi > 0) {
-            danhSachPhong[i].setSucChua(sucChuaMoi);
-            cout << "-> Da cap nhat suc chua thanh " << sucChuaMoi << "!\n";
-
-            // GHI NGAY DANH SÁCH PHÒNG XU?NG FILE Ð? DATABASE C?P NH?T K?P TH?I
             db.ghiDanhSachPhong(danhSachPhong);
-
-            // N?u s?c ch?a thay d?i, ti?n hành reset và sinh l?i toàn b? gh? c?a phòng này
-            if (sucChuaMoi != sucChuaCu) {
-                cout << "Phat hien thay doi suc chua. Dang cap nhat lai so do ghe...\n";
-                
-                // 1. Ð?c toàn b? danh sách gh? hi?n t?i t? Database
-                vector<Seat> danhSachGhe;
-                db.docDanhSachGhe(danhSachGhe);
-
-                // 2. L?c b? (xóa) toàn b? gh? cu thu?c phòng này
-                vector<Seat> danhSachGheConLai;
-                for (size_t j = 0; j < danhSachGhe.size(); ++j) {
-                    if (danhSachGhe[j].getMaPhong() != ma) {
-                        danhSachGheConLai.push_back(danhSachGhe[j]);
-                    }
-                }
-
-                // 3. T? d?ng sinh danh sách gh? m?i hoàn toàn theo s?c ch?a m?i
-                char hang = 'A';
-                int soThuTu = 1;
-                int soGheMoiHang = 10; // M?i hàng 10 gh?
-
-                for (int k = 1; k <= sucChuaMoi; ++k) {
-                    stringstream ss;
-                    ss << hang << soThuTu;  
-                    string maGhe = ss.str();
-
-                    string loaiGhe = (hang <= 'B') ? "Standard" : "VIP";
-                    double donGia = (loaiGhe == "VIP") ? 90000.0 : 60000.0;
-
-                    Seat newSeat(maGhe, ma, loaiGhe, donGia);
-                    danhSachGheConLai.push_back(newSeat);
-
-                    soThuTu++;
-                    if (soThuTu > soGheMoiHang) {
-                        soThuTu = 1;
-                        hang++;  
-                    }
-                }
-
-                // 4. Ghi dè toàn b? danh sách gh? m?i xu?ng Database ngay l?p t?c
-                db.ghiDanhSachGhe(danhSachGheConLai);
-                cout << "-> Da reset va sinh lai thanh cong " << sucChuaMoi << " ghe cho phong " << ma << "!\n";
-            }
-        } else {
-            cout << "Loi: Suc chua phai lon hon 0!\n";
-        }
-        break;
-    }
-                    case 4: {
-                        string trangThaiMoi;
-                        cout << "Nhap trang thai moi (HoatDong / TamNgung) (" << danhSachPhong[i].getTrangThaiPhong() << "): ";
-                        getline(cin, trangThaiMoi);
-                        if (!trangThaiMoi.empty()) {
-                            danhSachPhong[i].setTrangThaiPhong(trangThaiMoi);
-                            cout << "-> Da cap nhat trang thai phong!\n";
-                        }
-                        break;
-                    }
-                    case 0: {
-                        // Luu toàn b? danh sách phòng sau khi ch?nh s?a vào database
-                        db.ghiDanhSachPhong(danhSachPhong);
-                        cout << "\nLuu thay doi thong tin phong thanh cong!\n";
-                        break;
-                    }
-                    default:
-                        cout << "Lua chon khong hop le! Vui long chon lai.\n";
-                }
-            } while (choice != 0);
-
+            cout << "Cap nhat thong tin phong thanh cong!" << endl;
             break;
         }
     }
-
     if (!found) {
         cout << "Khong tim thay phong co ma: " << ma << endl;
     }
 }
 
 bool RoomManager::kiemTraPhongDangChieu(const string& maPhong) const {
-    Database db; 
+    Database db;
     vector<Showtime> dsShowtime;
-    db.docDanhSachSuatChieu(dsShowtime); 
-    
+    db.docDanhSachSuatChieu(dsShowtime);
+
     for (size_t i = 0; i < dsShowtime.size(); ++i) {
         if (dsShowtime[i].getMaPhong() == maPhong) {
-            return true; 
+            return true;
         }
     }
-    return false;  
+    return false;
 }
 
 void RoomManager::xoaPhong(Database& db) {
