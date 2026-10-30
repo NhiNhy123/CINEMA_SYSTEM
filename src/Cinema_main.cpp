@@ -120,6 +120,91 @@ void menuLoaiGhe(Database& db, SeatManager& seatMgr) {
     } while (choice != 0);
 }
 
+void menuThongKeDoanhThu(Database& db, InvoiceManager& invoiceMgr) {
+    int choice = -1;
+    do {
+        system("cls");
+        cout << "\n--- LOC DOANH THU ---\n"
+             << "1. Theo ca lam viec\n"
+             << "2. Theo thu ngan\n"
+             << "3. Theo phuong thuc thanh toan\n"
+             << "4. Tong quan doanh thu\n"
+             << "0. Quay lai\n"
+             << "Chon: ";
+        cin >> choice;
+
+        if (cin.fail()) {
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            cout << "Loi: Vui long nhap so hop le!\n";
+            system("pause");
+            choice = -1;
+            continue;
+        }
+
+        if (choice == 1) {
+            vector<ShiftReport> shifts;
+            db.docDanhSachCa(shifts);
+            if (shifts.empty()) {
+                cout << "Chua co du lieu ca lam viec.\n";
+            } else {
+                cout << "\nMa ca | Thu ngan | Ngay | Gio bat dau - ket thuc\n";
+                for (size_t i = 0; i < shifts.size(); ++i) {
+                    cout << shifts[i].getMaCa() << " | "
+                         << shifts[i].getMaNhanVien() << " | "
+                         << shifts[i].getNgayLam() << " | "
+                         << shifts[i].getGioBatDau() << " - "
+                         << shifts[i].getGioKetThuc() << "\n";
+                }
+
+                string maCa;
+                cout << "Nhap ma ca can loc: ";
+                cin >> maCa;
+                bool found = false;
+                for (size_t i = 0; i < shifts.size(); ++i) {
+                    if (shifts[i].getMaCa() == maCa) {
+                        invoiceMgr.thongKeDoanhThuTheoCa(shifts[i]);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) cout << "Khong tim thay ma ca.\n";
+            }
+        } else if (choice == 2) {
+            string maThuNgan;
+            cout << "Nhap ma thu ngan: ";
+            cin >> maThuNgan;
+            invoiceMgr.thongKeDoanhThuTheoThuNgan(maThuNgan);
+        } else if (choice == 3) {
+            int paymentChoice;
+            cout << "1. Tien mat\n2. The ngan hang\n3. QR\nChon phuong thuc: ";
+            cin >> paymentChoice;
+            if (cin.fail()) {
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cout << "Loi: Vui long nhap so hop le!\n";
+            } else if (paymentChoice == 1) {
+                invoiceMgr.thongKeDoanhThuTheoPhuongThuc("TienMat");
+            } else if (paymentChoice == 2) {
+                invoiceMgr.thongKeDoanhThuTheoPhuongThuc("TheNganHang");
+            } else if (paymentChoice == 3) {
+                invoiceMgr.thongKeDoanhThuTheoPhuongThuc("QueQR");
+            } else {
+                cout << "Phuong thuc thanh toan khong hop le.\n";
+            }
+        } else if (choice == 4) {
+            invoiceMgr.thongKeTongQuanDoanhThu();
+        } else if (choice != 0) {
+            cout << "Lua chon khong hop le!\n";
+        }
+
+        if (choice != 0) {
+            cout << "\n";
+            system("pause");
+        }
+    } while (choice != 0);
+}
+
 void menuAdmin(Database& db, const string& maAdmin) {
     RoomManager roomMgr;
     SeatManager seatMgr;
@@ -391,7 +476,7 @@ void menuAdmin(Database& db, const string& maAdmin) {
                 break;
             case 8:
                 system("cls");
-                invoiceMgr.thongKeTongQuanDoanhThu();
+                menuThongKeDoanhThu(db, invoiceMgr);
                 break;
             case 9: {
                 int subShift = -1;

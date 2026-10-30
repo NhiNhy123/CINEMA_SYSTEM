@@ -5,6 +5,7 @@
 #include "../include/Promotion.h"
 #include "../include/DateFormat.h"
 #include "../include/ActivityLog.h"
+#include "../include/ShilftManagement.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -13,6 +14,100 @@
 #include <windows.h>
 
 using namespace std;
+
+namespace {
+bool parseTimeOfDay(const string& value, int& seconds) {
+    stringstream stream(value);
+    int hour, minute, second = 0;
+    char separator;
+    if (!(stream >> hour >> separator) || separator != ':' || !(stream >> minute)) return false;
+    if (stream.peek() == ':') {
+        stream.get();
+        if (!(stream >> second)) return false;
+    }
+    stream >> ws;
+    if (!stream.eof() || hour < 0 || hour > 23 ||
+        minute < 0 || minute > 59 || second < 0 || second > 59) {
+        return false;
+    }
+    seconds = hour * 3600 + minute * 60 + second;
+    return true;
+}
+
+bool nextDateKey(const string& date, int& nextKey) {
+    int day, month, year;
+    if (!DateFormat::parseDate(date, day, month, year)) return false;
+    const bool leapYear = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
+    const int daysInMonth[] = {31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    if (++day > daysInMonth[month - 1]) {
+        day = 1;
+        if (++month > 12) {
+            month = 1;
+            ++year;
+        }
+    }
+    nextKey = year * 10000 + month * 100 + day;
+    return true;
+}
+
+bool invoiceBelongsToShift(const Invoice& invoice, const ShiftReport& shift) {
+    if (invoice.getMaNhanVien() != shift.getMaNhanVien()) return false;
+
+    const string& timestamp = invoice.getThoiGianLap();
+    const size_t separator = timestamp.find(' ');
+    if (separator == string::npos) return false;
+
+    const string invoiceDate = timestamp.substr(0, separator);
+    const string invoiceTime = timestamp.substr(separator + 1);
+    const int invoiceDateKey = DateFormat::dateKey(invoiceDate);
+    const int shiftDateKey = DateFormat::dateKey(shift.getNgayLam());
+    int invoiceSeconds, shiftStart, shiftEnd;
+    if (invoiceDateKey == 0 || shiftDateKey == 0 ||
+        !parseTimeOfDay(invoiceTime, invoiceSeconds) ||
+        !parseTimeOfDay(shift.getGioBatDau(), shiftStart) ||
+        !parseTimeOfDay(shift.getGioKetThuc(), shiftEnd)) {
+        return false;
+    }
+
+    if (shiftEnd >= shiftStart) {
+        return invoiceDateKey == shiftDateKey &&
+               invoiceSeconds >= shiftStart && invoiceSeconds <= shiftEnd;
+    }
+
+    int nextShiftDateKey;
+    if (!nextDateKey(shift.getNgayLam(), nextShiftDateKey)) return false;
+    return (invoiceDateKey == shiftDateKey && invoiceSeconds >= shiftStart) ||
+           (invoiceDateKey == nextShiftDateKey && invoiceSeconds <= shiftEnd);
+}
+
+void hienThiKetQuaDoanhThu(const vector<Invoice>& invoices,
+                           const ShiftReport* shift,
+                           const string& maThuNgan,
+                           const string& phuongThuc) {
+    double total = 0.0;
+    size_t count = 0;
+    cout << "\nMa HD     Ma KH       Thu Ngan  Thoi Gian              Tong Tien      Hinh Thuc      Trang Thai\n";
+    cout << "---------------------------------------------------------------------------------------------\n";
+
+    for (size_t i = 0; i < invoices.size(); ++i) {
+        const Invoice& invoice = invoices[i];
+        if (invoice.getTrangThaiThanhToan() != "DaTra" ||
+            (!maThuNgan.empty() && invoice.getMaNhanVien() != maThuNgan) ||
+            (!phuongThuc.empty() && invoice.getHinhThucThanhToan() != phuongThuc) ||
+            (shift != NULL && !invoiceBelongsToShift(invoice, *shift))) {
+            continue;
+        }
+        invoice.hienThi();
+        total += invoice.getTongTien();
+        ++count;
+    }
+
+    cout << "---------------------------------------------------------------------------------------------\n";
+    cout << "So hoa don da thanh toan: " << count << "\n";
+    cout << "Tong doanh thu: " << fixed << setprecision(0) << total << " VND\n";
+    if (count == 0) cout << "Khong co hoa don phu hop voi dieu kien loc.\n";
+}
+}
 
 Invoice::Invoice() {
     this->tongTien = 0.0;
@@ -321,4 +416,22 @@ void InvoiceManager::thongKeTongQuanDoanhThu() const {
     cout << " - Chuyen khoan / QR    : " << chuyenKhoanOrQR << " VND\n";
     cout << " Tong so hoa don da xuat: " << danhSachHoaDon.size() << "\n";
     cout << "=======================================================================\n";
+}
+
+void InvoiceManager::thongKeDoanhThuTheoCa(const ShiftReport& ca) const {
+    cout << "\nDOANH THU CA " << ca.getMaCa()
+         << " | Thu ngan: " << ca.getMaNhanVien()
+         << " | Ngay: " << ca.getNgayLam()
+         << " | Gio: " << ca.getGioBatDau() << " - " << ca.getGioKetThuc() << "\n";
+    hienThiKetQuaDoanhThu(danhSachHoaDon, &ca, "", "");
+}
+
+void InvoiceManager::thongKeDoanhThuTheoThuNgan(const string& maThuNgan) const {
+    cout << "\nDOANH THU THEO THU NGAN: " << maThuNgan << "\n";
+    hienThiKetQuaDoanhThu(danhSachHoaDon, NULL, maThuNgan, "");
+}
+
+void InvoiceManager::thongKeDoanhThuTheoPhuongThuc(const string& phuongThuc) const {
+    cout << "\nDOANH THU THEO PHUONG THUC: " << phuongThuc << "\n";
+    hienThiKetQuaDoanhThu(danhSachHoaDon, NULL, "", phuongThuc);
 }

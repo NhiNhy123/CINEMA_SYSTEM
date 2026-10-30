@@ -7,6 +7,7 @@
 using namespace std;
 
 class Database;
+class ShiftReport;
 
 struct InvoiceFBItem {
     string maHoaDon;
@@ -67,6 +68,9 @@ public:
     void hienThiLichSuGiaoDich() const;
     void locDoanhThuTheoThoiGian(const string& tuNgay, const string& denNgay) const;
     void thongKeTongQuanDoanhThu() const;
+    void thongKeDoanhThuTheoCa(const ShiftReport& ca) const;
+    void thongKeDoanhThuTheoThuNgan(const string& maThuNgan) const;
+    void thongKeDoanhThuTheoPhuongThuc(const string& phuongThuc) const;
 };
 
 #endif
