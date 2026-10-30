@@ -94,7 +94,7 @@ void RoomManager::themPhong(Database& db) {
     int sucChua;
 
     cout << "\n--- THEM PHONG CHIEU MOI ---\n";
-    cout << "Nhap ma phong (VD: P01): ";
+    cout << "Nhap ma phong (VD: R01): ";
     cin >> ma;
 
     for (size_t i = 0; i < danhSachPhong.size(); ++i) {

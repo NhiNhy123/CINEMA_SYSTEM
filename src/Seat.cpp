@@ -222,25 +222,44 @@ static void hienThiSoDoGhe(const vector<Seat>& gheTrongPhong,
     cout << "=======================================================================\n";
 }
 
-static bool chonLoaiGiaGhe(const vector<pair<string, double> >& danhSachLoaiGhe,
+static bool chonLoaiGiaGhe(vector<pair<string, double> >& danhSachLoaiGhe,
                            string& loaiGhe, double& donGia) {
     if (danhSachLoaiGhe.empty()) {
         cout << "Danh muc loai ghe trong. Hay them loai ghe truoc.\n";
         return false;
     }
 
+    bool coLoaiGheDoi = false;
     cout << "\nDanh muc loai ghe:\n";
     for (size_t i = 0; i < danhSachLoaiGhe.size(); ++i) {
         cout << (i + 1) << ". " << danhSachLoaiGhe[i].first << " - "
              << fixed << setprecision(0) << danhSachLoaiGhe[i].second << " VND\n";
+        if (laLoaiGheDoi(danhSachLoaiGhe[i].first)) coLoaiGheDoi = true;
+    }
+    if (!coLoaiGheDoi) {
+        cout << (danhSachLoaiGhe.size() + 1)
+             << ". Tao loai ghe doi Couple va nhap gia\n";
     }
     cout << "Chon loai ghe: ";
     size_t luaChon;
-    if (!(cin >> luaChon) || luaChon == 0 || luaChon > danhSachLoaiGhe.size()) {
+    size_t luaChonCuoi = danhSachLoaiGhe.size() + (coLoaiGheDoi ? 0 : 1);
+    if (!(cin >> luaChon) || luaChon == 0 || luaChon > luaChonCuoi) {
         cin.clear();
         cin.ignore(numeric_limits<streamsize>::max(), '\n');
         cout << "Lua chon loai ghe khong hop le.\n";
         return false;
+    }
+    if (!coLoaiGheDoi && luaChon == danhSachLoaiGhe.size() + 1) {
+        cout << "Nhap gia cho ca ghe doi Couple (VND, > 0): ";
+        if (!(cin >> donGia) || donGia <= 0) {
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            cout << "Gia ghe doi phai la so lon hon 0.\n";
+            return false;
+        }
+        loaiGhe = "Couple";
+        danhSachLoaiGhe.push_back(make_pair(loaiGhe, donGia));
+        return true;
     }
     loaiGhe = danhSachLoaiGhe[luaChon - 1].first;
     donGia = danhSachLoaiGhe[luaChon - 1].second;
@@ -355,7 +374,7 @@ void SeatManager::taoGheTuDongChoPhong(const string& maPhong, Database& db) {
     while (true) {
         cout << "\n--- TUY CHINH SO DO GHE " << maPhong << " ---\n";
         cout << "1. Chinh loai va gia theo hang\n";
-        cout << "2. Chinh loai/gia tung ghe\n";
+        cout << "2. Chinh loai/gia tung ghe (chon ghe doi de gop ghe lien tiep)\n";
         cout << "3. Xem truoc va xac nhan luu\n";
         cout << "0. Huy, khong luu thay doi\n";
         cout << "Chon: ";
