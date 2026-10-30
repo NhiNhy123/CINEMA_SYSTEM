@@ -176,6 +176,13 @@ static void hienThiSoDoGhe(const vector<Seat>& gheTrongPhong,
     cout << " [MAN HINH CHIEU PHIM]\n";
     cout << "-----------------------------------------------------------------------\n";
 
+    if (gheTrongPhong.empty()) {
+        cout << "Phong nay chua duoc thiet lap so do ghe!\n";
+        cout << "-----------------------------------------------------------------------\n";
+        cout << "=======================================================================\n";
+        return;
+    }
+
     string hangTruoc;
     for (size_t i = 0; i < gheDaSapXep.size(); ++i) {
         string hang;
@@ -656,57 +663,13 @@ void SeatManager::hienThiSoDoPhong(Database& db) const {
              << "'. Vui long nhap lai.\n";
     }
 
-    cout << "\n==================== SO DO GHE PHONG CHIEU: " << maPhong << " ====================\n";
-    cout << " [MAN HINH CHIEU PHIM]\n";
-    cout << "-----------------------------------------------------------------------\n";
-
-    bool found = false;
-    vector<pair<string, double> > chuThichLoaiGia;
-
+    vector<Seat> ghePhong;
     for (size_t i = 0; i < danhSachGhe.size(); ++i) {
-        const Seat& ghe = danhSachGhe[i];
-        if (ghe.getMaPhong() != maPhong) continue;
-
-        string trangThai = "[ ]";
-        if (ghe.getTrangThai() == "DangChon" ||
-            ghe.getTrangThai().find("DangChon|") == 0) {
-            trangThai = "[?]";
-        } else if (ghe.getTrangThai() == "DaDat") {
-            trangThai = "[X]";
-        } else if (ghe.getTrangThai() == "KhongSuDung") {
-            trangThai = "[-]";
-        }
-        cout << left << setw(8) << (ghe.getMaGhe() + trangThai);
-        found = true;
-
-        bool daCoChuThich = false;
-        for (size_t j = 0; j < chuThichLoaiGia.size(); ++j) {
-            if (chuThichLoaiGia[j].first == ghe.getLoaiGhe() &&
-                chuThichLoaiGia[j].second == ghe.getDonGiaGhe()) {
-                daCoChuThich = true;
-                break;
-            }
-        }
-        if (!daCoChuThich) {
-            chuThichLoaiGia.push_back(
-                make_pair(ghe.getLoaiGhe(), ghe.getDonGiaGhe()));
-        }
+        if (danhSachGhe[i].getMaPhong() == maPhong)
+            ghePhong.push_back(danhSachGhe[i]);
     }
 
-    if (!found) {
-        cout << "Phong nay chua duoc thiet lap so do ghe!\n";
-    }
-    cout << "\n-----------------------------------------------------------------------\n";
-    cout << "Trang thai: [ ] Trong | [?] Dang chon | [X] Da dat | [-] Khong su dung\n";
-    if (!chuThichLoaiGia.empty()) {
-        cout << "Loai ghe va gia:\n";
-        for (size_t i = 0; i < chuThichLoaiGia.size(); ++i) {
-            cout << "  - " << chuThichLoaiGia[i].first << ": "
-                 << fixed << setprecision(0) << chuThichLoaiGia[i].second
-                 << " VND\n";
-        }
-    }
-    cout << "=======================================================================\n";
+    hienThiSoDoGhe(ghePhong, maPhong);
 }
 
 void SeatManager::hienThiDanhSachLoaiGhe(Database& db) const {
