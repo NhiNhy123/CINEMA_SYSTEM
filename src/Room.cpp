@@ -125,40 +125,102 @@ void RoomManager::themPhong(Database& db) {
 void RoomManager::suaPhong(Database& db) {
     string ma;
     cout << "\n--- SUA THONG TIN PHONG CHIEU ---\n";
+    hienThiDanhSach();
     cout << "Nhap ma phong can sua: ";
     cin >> ma;
 
-    bool found = false;
-
     for (size_t i = 0; i < danhSachPhong.size(); ++i) {
-        if (danhSachPhong[i].getMaPhong() == ma) {
-            found = true;
-            string ten, loai, trangThai;
-            int sucChua;
+        if (danhSachPhong[i].getMaPhong() != ma) continue;
 
-            cin.ignore();
-            cout << "Nhap ten phong moi (" << danhSachPhong[i].getTenPhong() << "): ";
-            getline(cin, ten);
-            cout << "Nhap loai phong moi (2D, 3D, IMAX, 4DX...) (" << danhSachPhong[i].getLoaiPhong() << "): ";
-            cin >> loai;
-            cout << "Nhap suc chua moi (" << danhSachPhong[i].getSucChua() << "): ";
-            cin >> sucChua;
-            cout << "Nhap trang thai moi (HoatDong / TamNgung) (" << danhSachPhong[i].getTrangThaiPhong() << "): ";
-            cin >> trangThai;
+        bool daThayDoi = false;
+        int luaChon = -1;
+        do {
+            cout << "\n--- CHINH SUA PHONG " << danhSachPhong[i].getMaPhong() << " ---\n";
+            cout << "Ten phong   : " << danhSachPhong[i].getTenPhong() << "\n";
+            cout << "Loai phong  : " << danhSachPhong[i].getLoaiPhong() << "\n";
+            cout << "Suc chua    : " << danhSachPhong[i].getSucChua() << "\n";
+            cout << "Trang thai  : " << danhSachPhong[i].getTrangThaiPhong() << "\n";
+            cout << "1. Sua ten phong\n";
+            cout << "2. Sua loai phong\n";
+            cout << "3. Sua suc chua\n";
+            cout << "4. Sua trang thai\n";
+            cout << "0. Hoan tat va luu\n";
+            cout << "Chon thuoc tinh can sua: ";
 
-            danhSachPhong[i].setTenPhong(ten);
-            danhSachPhong[i].setLoaiPhong(loai);
-            danhSachPhong[i].setSucChua(sucChua);
-            danhSachPhong[i].setTrangThaiPhong(trangThai);
+            if (!(cin >> luaChon)) {
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cout << "Loi: Vui long nhap lua chon bang so!\n";
+                continue;
+            }
 
-            db.ghiDanhSachPhong(danhSachPhong);
-            cout << "Cap nhat thong tin phong thanh cong!" << endl;
-            break;
-        }
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            switch (luaChon) {
+                case 1: {
+                    string tenMoi;
+                    cout << "Nhap ten phong moi: ";
+                    getline(cin, tenMoi);
+                    if (tenMoi.empty()) {
+                        cout << "Ten phong khong duoc de trong!\n";
+                    } else {
+                        danhSachPhong[i].setTenPhong(tenMoi);
+                        daThayDoi = true;
+                    }
+                    break;
+                }
+                case 2: {
+                    string loaiMoi;
+                    cout << "Nhap loai phong moi (2D, 3D, IMAX, 4DX...): ";
+                    cin >> loaiMoi;
+                    danhSachPhong[i].setLoaiPhong(loaiMoi);
+                    daThayDoi = true;
+                    break;
+                }
+                case 3: {
+                    int sucChuaMoi;
+                    cout << "Nhap suc chua moi (> 0): ";
+                    if (!(cin >> sucChuaMoi) || sucChuaMoi <= 0) {
+                        cin.clear();
+                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                        cout << "Loi: Suc chua phai la so nguyen lon hon 0!\n";
+                    } else {
+                        danhSachPhong[i].setSucChua(sucChuaMoi);
+                        daThayDoi = true;
+                    }
+                    break;
+                }
+                case 4: {
+                    int trangThai;
+                    cout << "1. Hoat dong\n";
+                    cout << "2. Tam ngung\n";
+                    cout << "Chon trang thai moi: ";
+                    if (!(cin >> trangThai) || (trangThai != 1 && trangThai != 2)) {
+                        cin.clear();
+                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                        cout << "Lua chon trang thai khong hop le!\n";
+                    } else {
+                        danhSachPhong[i].setTrangThaiPhong(
+                            trangThai == 1 ? "HoatDong" : "TamNgung");
+                        daThayDoi = true;
+                    }
+                    break;
+                }
+                case 0:
+                    if (daThayDoi) {
+                        db.ghiDanhSachPhong(danhSachPhong);
+                        cout << "Cap nhat thong tin phong thanh cong!\n";
+                    } else {
+                        cout << "Khong co thay doi nao.\n";
+                    }
+                    break;
+                default:
+                    cout << "Lua chon khong hop le!\n";
+                    break;
+            }
+        } while (luaChon != 0);
+        return;
     }
-    if (!found) {
-        cout << "Khong tim thay phong co ma: " << ma << endl;
-    }
+    cout << "Khong tim thay phong co ma: " << ma << endl;
 }
 
 bool RoomManager::kiemTraPhongDangChieu(const string& maPhong) const {
