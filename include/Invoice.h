@@ -6,10 +6,8 @@
 
 using namespace std;
 
-// Forward declaration d? tích h?p v?i Database chung
 class Database;
 
-// C?u trúc chi ti?t F&B trong hóa don (B?ng trung gian Invoice_FB)
 struct InvoiceFBItem {
     string maHoaDon;
     string maMatHang;
@@ -19,23 +17,21 @@ struct InvoiceFBItem {
 
 class Invoice {
 private:
-    string maHoaDon;          // Mã d?nh danh hóa don (PK)
-    string maKhachHang;       // Khách hàng th?c hi?n giao d?ch (Nullable)
-    string maNhanVien;        // Nhân viên thu ngân t?o don (FK t?i Users)
-    string thoiGianLap;       // Th?i di?m kh?i t?o và thanh toán
-    double tongTien;          // T?ng giá tr? thanh toán cu?i cùng
-    string hinhThucThanhToan; // TienMat, TheNganHang, QueQR
-    string maGiaoDich;        // Mã giao d?ch ngân hàng/ví di?n t? (Nullable)
-    string trangThaiThanhToan;// ChuaTra, DaTra
+    string maHoaDon;
+    string maKhachHang;
+    string maNhanVien;
+    string thoiGianLap;
+    double tongTien;
+    string hinhThucThanhToan;
+    string maGiaoDich;
+    string trangThaiThanhToan;
 
-    // Danh sách chi ti?t F&B di kèm trong hóa don này
     vector<InvoiceFBItem> chiTietFB;
 
 public:
     Invoice();
     Invoice(string maHD, string maKH, string maNV, string thoiGian, double tongT, string hinhThuc, string maGD, string trangThai);
 
-    // Getters
     string getMaHoaDon() const;
     string getMaKhachHang() const;
     string getMaNhanVien() const;
@@ -46,12 +42,11 @@ public:
     string getTrangThaiThanhToan() const;
     const vector<InvoiceFBItem>& getChiTietFB() const;
 
-    // Setters & Methods
     void themChiTietFB(const InvoiceFBItem& item);
     void setTrangThaiThanhToan(const string& trangThai);
     string toCSV() const;
     Invoice fromCSV(const string& line);
-    // Hi?n th? chi ti?t hóa don
+
     void hienThi() const;
 };
 
@@ -62,14 +57,13 @@ private:
 public:
     InvoiceManager();
 
-    // T?i d? li?u hóa don và chi ti?t F&B t? file thông qua Database
     void taiDuLieu(Database& db);
 
-    // --- PHÂN H? 2: NHÂN VIÊN (STAFF) - THANH TOÁN & XU?T HÓA ÐON ---
-    void taoHoaDonMoi(Database& db, const string& maNV, const string& maKH, double tongTienHang, 
-                      const vector<InvoiceFBItem>& dsFB, const string& phimChieuCode);
+    bool taoHoaDonMoi(Database& db, const string& maNV, const string& maKH, double tongTienHang,
+                      const vector<InvoiceFBItem>& dsFB, const string& phimChieuCode,
+                      double soTienDoiDiem, const string& maSuatChieu,
+                      const vector<string>& dsGheGiu, const string& maPhienGiu);
 
-    // --- PHÂN H? 1: QU?N TR? VIÊN (ADMIN) - QU?N LÝ DOANH THU & TH?NG KÊ ---
     void hienThiLichSuGiaoDich() const;
     void locDoanhThuTheoThoiGian(const string& tuNgay, const string& denNgay) const;
     void thongKeTongQuanDoanhThu() const;

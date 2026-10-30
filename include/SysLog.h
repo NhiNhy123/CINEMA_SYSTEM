@@ -1,5 +1,7 @@
 #ifndef SYSLOG_H
 #define SYSLOG_H
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 
 #include <iostream>
 #include <fstream>
@@ -14,12 +16,8 @@ using namespace std;
 class SysLog
 {
 private:
-    // Duong dan file CSV
-    string fileCSV;
 
-    // =========================
-    // GIAO DIEN
-    // =========================
+    string fileCSV;
 
     void gotoxy(int x, int y);
 
@@ -29,17 +27,9 @@ private:
 
     void hienThiGiaoDien();
 
-    // =========================
-    // NHAP DU LIEU
-    // =========================
-
     string nhapTaiKhoan();
 
     string nhapMatKhau();
-
-    // =========================
-    // KIEM TRA TAI KHOAN
-    // =========================
 
     User* timTaiKhoan(
         string taiKhoan,
@@ -50,7 +40,6 @@ public:
 
     SysLog(string fileCSV);
 
-    // Ham dang nhap chinh
     User* dangNhap();
 };
 

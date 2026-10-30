@@ -28,7 +28,7 @@ class Room {
     	void setLoaiPhong(const std::string& loai);
     	void setSucChua(int sucChua);
     	void setTrangThaiPhong(const std::string& trangThai);
-    	
+
     	void hienThi() const;
     	string toCSV() const;
     	static Room fromCSV(const std::string& line);

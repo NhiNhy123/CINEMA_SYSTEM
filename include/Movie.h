@@ -6,25 +6,24 @@
 
 using namespace std;
 
-class Database; // Khai báo tru?c l?p Database
+class Database;
 
 class Movie {
 private:
     string maPhim;
     string tenPhim;
-    int thoiLuong;          // Tính b?ng phút
-    int nhanDoTuoi;         // Ví d?: 13, 16, 18
-    string ngayKhoiChieu;   // Ð?nh d?ng: YYYY-MM-DD
+    int thoiLuong;
+    int nhanDoTuoi;
+    string ngayKhoiChieu;
     string ngayKetThuc;
     string moTa;
-    string poster;          // Link ho?c tên file poster/trailer
+    string poster;
 
 public:
-    // Constructor
+
     Movie();
     Movie(string ma, string ten, int thoiLuong, int nhanTuoi, string ngayKC, string ngayKT, string moTa, string poster);
 
-    // Getters
     string getMaPhim() const;
     string getTenPhim() const;
     int getThoiLuong() const;
@@ -34,7 +33,6 @@ public:
     string getMoTa() const;
     string getPoster() const;
 
-    // Setters
     void setTenPhim(const string& ten);
     void setThoiLuong(int tl);
     void setNhanDoTuoi(int tuoi);
@@ -43,14 +41,11 @@ public:
     void setMoTa(const string& desc);
     void setPoster(const string& p);
 
-    // Ð?c/Ghi d? li?u CSV tuong thích v?i Database
     string toCSV() const;
     static Movie fromCSV(const string& line);
 
-    // Hi?n th? thông tin
     void hienThi(Database& db) const;
 
-    // --- CÁC TÍNH NANG QU?N LÝ (THAY TH? CHO MOVIEMANAGER) ---
     static void hienThiDanhSach(Database& db);
     static void themPhim(Database& db);
     static void suaPhim(Database& db);
