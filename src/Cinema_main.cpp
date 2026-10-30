@@ -354,7 +354,7 @@ void menuAdmin(Database& db, const string& maAdmin, SysLog& sysLog, User& user) 
                     system("cls");
                     cout << "\n--- QUAN LY GHE ---\n";
                     cout << "1. Xem so do ghe phong\n";
-                    cout << "2. Khoi tao ghe hang loat cho phong\n";
+                    cout << "2. Tao/tuy chinh so do ghe theo suc chua phong\n";
                     cout << "3. Sao chep ghe giua cac phong\n";
                     cout << "4. Quan ly loai ghe va gia\n";
                     cout << "0. Quay lai menu chinh\n";

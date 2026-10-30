@@ -720,7 +720,8 @@ static bool ghiDuLieuPhongGhe(const vector<Room>& danhSachPhong,
     for (size_t i = 0; i < danhSachLoaiGhe.size(); ++i) {
         outFile << danhSachLoaiGhe[i].first << "," << danhSachLoaiGhe[i].second << "\n";
     }
-    return true;
+    outFile.close();
+    return outFile.good();
 }
 
 void Database::docDanhSachPhong(vector<Room>& ds) {
@@ -771,6 +772,13 @@ void Database::ghiDanhSachGhe(const vector<Seat>& danhSachGhe) {
     if (!ghiDuLieuPhongGhe(danhSachPhong, danhSachGhe, danhSachLoaiGhe)) {
         cout << "Loi: Khong the luu danh sach phong va ghe!\n";
     }
+}
+
+bool Database::ghiSoDoGhe(const vector<Seat>& danhSachGhe,
+                          const vector<pair<string, double> >& danhSachLoaiGhe) {
+    vector<Room> danhSachPhong;
+    docDanhSachPhong(danhSachPhong);
+    return ghiDuLieuPhongGhe(danhSachPhong, danhSachGhe, danhSachLoaiGhe);
 }
 
 void Database::docDanhSachLoaiGhe(vector<pair<string, double> >& ds) {
@@ -857,42 +865,6 @@ bool Database::xoaLoaiGhe(const string& tenLoaiGhe) {
         }
     }
     return false;
-}
-
-void Database::taoGheTuDongChoPhong(const string& maPhongCanTao, int sucChuaPhong) {
-    vector<Room> danhSachPhong; vector<Seat> danhSachGhe;
-    vector<pair<string, double> > danhSachLoaiGhe;
-    docDanhSachPhong(danhSachPhong); docDanhSachGhe(danhSachGhe);
-    docDanhSachLoaiGhe(danhSachLoaiGhe);
-    if (danhSachLoaiGhe.empty()) {
-        cout << "Loi: Chua co loai ghe trong danh muc. Hay tao loai ghe truoc!\n";
-        return;
-    }
-
-    string loaiChuan = danhSachLoaiGhe[0].first;
-    string loaiVIP = loaiChuan;
-    double giaChuan = danhSachLoaiGhe[0].second;
-    double giaVIP = giaChuan;
-    for (size_t i = 0; i < danhSachLoaiGhe.size(); ++i) {
-        if (danhSachLoaiGhe[i].first == "Standard") {
-            loaiChuan = danhSachLoaiGhe[i].first;
-            giaChuan = danhSachLoaiGhe[i].second;
-        }
-        if (danhSachLoaiGhe[i].first == "VIP") {
-            loaiVIP = danhSachLoaiGhe[i].first;
-            giaVIP = danhSachLoaiGhe[i].second;
-        }
-    }
-    char hang = 'A'; int soThuTu = 1;
-    for (int i = 1; i <= sucChuaPhong; ++i) {
-        stringstream ss; ss << hang << soThuTu;
-        bool laGheVIP = hang > 'B';
-        string loaiGhe = laGheVIP ? loaiVIP : loaiChuan;
-        double donGia = laGheVIP ? giaVIP : giaChuan;
-        danhSachGhe.push_back(Seat(ss.str(), maPhongCanTao, loaiGhe, donGia, "Trong"));
-        if (++soThuTu > 10) { soThuTu = 1; hang++; }
-    }
-    ghiDanhSachGhe(danhSachGhe);
 }
 
 void Database::docDanhSachPhim(vector<Movie>& ds) {

@@ -45,7 +45,6 @@ public:
     void taiDuLieu(Database& db);
 
     void taoGheTuDongChoPhong(const string& maPhong, Database& db);
-    void taoGheHangLoat(const string& maPhong, Database& db);
     void saoChepBucLuc(const string& phongDich, const string& phongNguon, Database& db);
     void hienThiSoDoPhong(Database& db) const;
     void hienThiDanhSachLoaiGhe(Database& db) const;

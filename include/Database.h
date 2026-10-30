@@ -50,13 +50,13 @@ public:
 
     void docDanhSachGhe(vector<Seat>& danhSachGhe);
     void ghiDanhSachGhe(const vector<Seat>& danhSachGhe);
+    bool ghiSoDoGhe(const vector<Seat>& danhSachGhe,
+                    const vector<pair<string, double> >& danhSachLoaiGhe);
     void docDanhSachLoaiGhe(vector<pair<string, double> >& danhSachLoaiGhe);
     bool themLoaiGhe(const string& tenLoaiGhe, double donGia);
     bool suaLoaiGhe(const string& tenLoaiGhe, const string& tenMoi, double donGiaMoi);
     bool xoaLoaiGhe(const string& tenLoaiGhe);
     void docTrangThaiGheSuatChieu(const string& maSuatChieuCanTim, vector<pair<string, string> >& trangThaiGheList);
-    void taoGheTuDongChoPhong(const string& maPhongCanTao, int sucChuaPhong);
-    
     void docDanhSachPhim(vector<Movie>& danhSachPhim);
     void ghiDanhSachPhim(const vector<Movie>& danhSachPhim);
 
