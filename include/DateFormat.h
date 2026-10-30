@@ -87,6 +87,42 @@ inline bool todayDateKey(int& key)
     return true;
 }
 
+inline bool isFutureDateTime(const std::string& date, const std::string& time)
+{
+    const int targetDateKey = dateKey(date);
+    if (targetDateKey == 0 ||
+        (time.size() != 5 && time.size() != 8) ||
+        time[2] != ':' ||
+        (time.size() == 8 && time[5] != ':')) {
+        return false;
+    }
+
+    const std::string hourText = time.substr(0, 2);
+    const std::string minuteText = time.substr(3, 2);
+    const std::string secondText = time.size() == 8 ? time.substr(6, 2) : "00";
+    if (!isDigits(hourText) || !isDigits(minuteText) || !isDigits(secondText)) return false;
+
+    const int hour = (hourText[0] - '0') * 10 + (hourText[1] - '0');
+    const int minute = (minuteText[0] - '0') * 10 + (minuteText[1] - '0');
+    const int second = (secondText[0] - '0') * 10 + (secondText[1] - '0');
+    if (hour > 23 || minute > 59 || second > 59) return false;
+
+    const std::time_t now = std::time(NULL);
+    const std::tm* localNow = std::localtime(&now);
+    if (localNow == NULL) return false;
+
+    const int currentDateKey = (localNow->tm_year + 1900) * 10000
+                             + (localNow->tm_mon + 1) * 100
+                             + localNow->tm_mday;
+    if (targetDateKey != currentDateKey) return targetDateKey > currentDateKey;
+
+    const int targetSeconds = hour * 3600 + minute * 60 + second;
+    const int currentSeconds = localNow->tm_hour * 3600
+                             + localNow->tm_min * 60
+                             + localNow->tm_sec;
+    return targetSeconds > currentSeconds;
+}
+
 inline std::string normalizeDateTime(const std::string& value)
 {
     const std::size_t separator = value.find(' ');

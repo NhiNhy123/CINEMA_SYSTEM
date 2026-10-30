@@ -282,13 +282,15 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
             }
         }
 
-        if (!phongBiKhoa) {
+        if (!phongBiKhoa &&
+            DateFormat::isFutureDateTime(dsShowtimeGoc[i].getNgayChieu(),
+                                        dsShowtimeGoc[i].getGioBatDau())) {
             dsShowtime.push_back(dsShowtimeGoc[i]);
         }
     }
 
     if (dsShowtime.empty()) {
-        cout << "\n[LOI]: Tat ca cac suat chi?u hien tai deu thuoc phong dang bi khoa (bao tri)!\n";
+        cout << "\n[LOI]: Khong co suat chieu tuong lai nao trong cac phong dang hoat dong!\n";
         return;
     }
 
@@ -306,8 +308,20 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
         }
     }
 
-    Movie movie;
-    movie.hienThiDanhSach(db);
+    vector<Movie> dsPhim;
+    db.docDanhSachPhim(dsPhim);
+    cout << "\n--- DANH SACH PHIM CO SUAT CHIEU TUONG LAI ---\n";
+    for (size_t i = 0; i < dsMaPhim.size(); ++i) {
+        string tenPhim = dsMaPhim[i];
+        for (size_t j = 0; j < dsPhim.size(); ++j) {
+            if (dsPhim[j].getMaPhim() == dsMaPhim[i]) {
+                tenPhim = dsPhim[j].getTenPhim();
+                break;
+            }
+        }
+        cout << (i + 1) << ". " << tenPhim << " (" << dsMaPhim[i] << ")\n";
+    }
+
     int chonPhimSTT;
     cout << "Nhap STT phim can xem (Nhap 0 de huy): ";
     cin >> chonPhimSTT;
@@ -350,6 +364,11 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
     }
 
     Showtime selectedShowtime = dsSuatChieuCuaPhim[chonSTT - 1];
+    if (!DateFormat::isFutureDateTime(selectedShowtime.getNgayChieu(),
+                                      selectedShowtime.getGioBatDau())) {
+        cout << "[CANH BAO]: Suat chieu da bat dau hoac da qua. Vui long chon suat khac.\n";
+        return;
+    }
     string selectedSC = selectedShowtime.getMaSuatChieu();
     string maPhongChieu = selectedShowtime.getMaPhong();
 

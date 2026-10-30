@@ -3,6 +3,7 @@
 #include "../include/Ticket.h"
 #include "../include/FAndB.h"
 #include "../include/Promotion.h"
+#include "../include/Showtime.h"
 #include "../include/DateFormat.h"
 #include "../include/ActivityLog.h"
 #include "../include/ShilftManagement.h"
@@ -48,6 +49,18 @@ bool nextDateKey(const string& date, int& nextKey) {
     }
     nextKey = year * 10000 + month * 100 + day;
     return true;
+}
+
+bool showtimeHasNotStarted(Database& db, const string& maSuatChieu) {
+    vector<Showtime> showtimes;
+    db.docDanhSachSuatChieu(showtimes);
+    for (size_t i = 0; i < showtimes.size(); ++i) {
+        if (showtimes[i].getMaSuatChieu() == maSuatChieu) {
+            return DateFormat::isFutureDateTime(showtimes[i].getNgayChieu(),
+                                                showtimes[i].getGioBatDau());
+        }
+    }
+    return false;
 }
 
 bool invoiceBelongsToShift(const Invoice& invoice, const ShiftReport& shift) {
@@ -263,6 +276,11 @@ bool InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
     }
     string thoiGianLap = timestamp;
 
+    if (!showtimeHasNotStarted(db, maSuatChieu)) {
+        cout << "[CANH BAO]: Suat chieu khong ton tai hoac da bat dau/ket thuc. Khong the tiep tuc ban ve.\n";
+        return false;
+    }
+
     cout << "\n==================== XU LY THANH TOAN HOA DON ====================\n";
     cout << "Ma hoa don tam tao: " << maHD << "\n";
     cout << "Tong tien ve (gia ban day du theo loai ghe): "
@@ -336,6 +354,11 @@ bool InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
         }
 
         Sleep(500);
+    }
+
+    if (!showtimeHasNotStarted(db, maSuatChieu)) {
+        cout << "\n[CANH BAO]: Suat chieu da bat dau trong luc xu ly thanh toan. Khong tao hoa don.\n";
+        return false;
     }
 
     if (!db.chotGheSuatChieu(maSuatChieu, dsGheGiu, maPhienGiu)) {
