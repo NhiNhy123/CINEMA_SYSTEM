@@ -146,6 +146,19 @@ void Movie::themPhim(Database& db) {
     cout << "Nhap ten phim: ";
     getline(cin, ten);
 
+    vector<pair<string, string> > dsTheLoai;
+    db.docDanhSachTheLoai(dsTheLoai);
+    cout << "\n--- DANH SACH THE LOAI HIEN CO ---\n";
+    if (dsTheLoai.empty()) {
+        cout << "Danh muc the loai dang trong.\n";
+    } else {
+        cout << left << setw(12) << "Ma the loai" << "Ten the loai\n";
+        for (size_t i = 0; i < dsTheLoai.size(); ++i) {
+            cout << left << setw(12) << dsTheLoai[i].first
+                 << dsTheLoai[i].second << "\n";
+        }
+    }
+    cout << "Nhap ten the loai moi neu chua co; he thong se tu dong tao va luu.\n";
     cout << "Nhap the loai phim (VD: Hanh Dong, Kinh Di, Hoat Hinh...): ";
     getline(cin, tenTheLoai);
 
@@ -198,17 +211,21 @@ void Movie::themPhim(Database& db) {
     cout << "Nhap duong dan poster/trailer: ";
     getline(cin, poster);
 
-    // 1. Thêm phim vào danh sách và ghi xu?ng database [MOVIES]
     Movie moi(ma, ten, thoiLuong, nhanDoTuoi, ngayKC, ngayKT, moTa, poster);
     danhSach.push_back(moi);
     db.ghiDanhSachPhim(danhSach);
 
-    // 2. T? d?ng g?n th? lo?i cho phim v?a t?o thông qua Database
     if (!tenTheLoai.empty()) {
-        db.themTheLoaiChoPhim(ma, tenTheLoai);
+        if (!db.themTheLoaiChoPhim(ma, tenTheLoai)) {
+            cout << "Loi: Phim da duoc luu, nhung khong the tao/gán the loai. "
+                    "Vui long kiem tra ten the loai va quyen ghi file.\n";
+            return;
+        }
     }
 
-    cout << "Them phim moi va gan the loai thanh cong va da luu vao he thong!\n";
+    cout << (tenTheLoai.empty()
+        ? "Them phim moi thanh cong va da luu vao he thong!\n"
+        : "Them phim moi, tao/gan the loai thanh cong va da luu vao he thong!\n");
 }
 
 void Movie::suaPhim(Database& db) {
@@ -277,7 +294,7 @@ void Movie::suaPhim(Database& db) {
                             cout << "QUAN LY THE LOAI CHO PHIM: " << danhSach[i].getTenPhim() << "\n";
                             cout << "The loai hien tai: " << db.layTheLoaiCuaPhim(danhSach[i].getMaPhim()) << "\n";
                             cout << "--------------------------------------------------\n";
-                            cout << "Danh sach tat ca the loai trong he thong:\n";
+                            cout << "Danh sach the loai hien co (nhap ten moi neu chua co):\n";
                             for (size_t k = 0; k < dsTheLoai.size(); ++k) {
                                 cout << "  - " << dsTheLoai[k].second << " (Ma: " << dsTheLoai[k].first << ")\n";
                             }
@@ -295,8 +312,12 @@ void Movie::suaPhim(Database& db) {
                                 cout << "Nhap ten the loai muon them: ";
                                 getline(cin, theLoaiThem);
                                 if (!theLoaiThem.empty()) {
-                                    db.themTheLoaiChoPhim(danhSach[i].getMaPhim(), theLoaiThem);
-                                    cout << "-> Da them the loai thanh cong!\n";
+                                    if (db.themTheLoaiChoPhim(danhSach[i].getMaPhim(), theLoaiThem)) {
+                                        cout << "-> Da tao/gan the loai thanh cong!\n";
+                                    } else {
+                                        cout << "Loi: Khong the tao/gan the loai. "
+                                                "Vui long kiem tra ten the loai va quyen ghi file.\n";
+                                    }
                                 }
                             } 
                             else if (subChoice == 2) {
@@ -304,8 +325,12 @@ void Movie::suaPhim(Database& db) {
                                 cout << "Nhap ten the loai thay the moi: ";
                                 getline(cin, theLoaiMoi);
                                 if (!theLoaiMoi.empty()) {
-                                    db.capNhatTheLoaiChoPhim(danhSach[i].getMaPhim(), theLoaiMoi);
-                                    cout << "-> Da thay the toan bo the loai thanh cong!\n";
+                                    if (db.capNhatTheLoaiChoPhim(danhSach[i].getMaPhim(), theLoaiMoi)) {
+                                        cout << "-> Da tao va thay the toan bo the loai thanh cong!\n";
+                                    } else {
+                                        cout << "Loi: Khong the tao/thay the the loai. "
+                                                "Vui long kiem tra ten the loai va quyen ghi file.\n";
+                                    }
                                 }
                             } 
                             else if (subChoice != 0) {

@@ -624,51 +624,80 @@ string Database::layTheLoaiCuaPhim(string maPhimToFind) {
     return ketQua.empty() ? "Chua cap nhat" : ketQua;
 }
 
-void Database::themTheLoaiChoPhim(string maPhim, string tenTheLoaiMoi) {
-    vector<pair<string, string> > dsTheLoai; vector<pair<string, string> > movieGenres; vector<Movie> danhSachPhim;
-    docDanhSachTheLoai(dsTheLoai); docMovieGenres(movieGenres); docDanhSachPhim(danhSachPhim);
+static bool luuTheLoaiChoPhim(Database& db, const string& maPhim,
+                              const string& tenTheLoai, bool thayThe) {
+    if (tenTheLoai.find_first_not_of(" \t") == string::npos ||
+        tenTheLoai.find_first_of(",\r\n") != string::npos) {
+        return false;
+    }
 
-    string maTheLoai = "";
+    vector<pair<string, string> > dsTheLoai;
+    vector<pair<string, string> > movieGenres;
+    vector<Movie> danhSachPhim;
+    db.docDanhSachTheLoai(dsTheLoai);
+    db.docMovieGenres(movieGenres);
+    db.docDanhSachPhim(danhSachPhim);
+
+    bool coPhim = false;
+    for (size_t i = 0; i < danhSachPhim.size(); ++i) {
+        if (danhSachPhim[i].getMaPhim() == maPhim) {
+            coPhim = true;
+            break;
+        }
+    }
+    if (!coPhim) return false;
+
+    string maTheLoai;
     for (size_t i = 0; i < dsTheLoai.size(); ++i) {
-        if (dsTheLoai[i].second == tenTheLoaiMoi) { maTheLoai = dsTheLoai[i].first; break; }
-    }
-    if (maTheLoai.empty()) {
-        cout << "Loi: The loai chua duoc tao trong danh muc!\n";
-        return;
+        if (dsTheLoai[i].second == tenTheLoai) {
+            maTheLoai = dsTheLoai[i].first;
+            break;
+        }
     }
 
-    bool daCo = false;
+    if (maTheLoai.empty()) {
+        size_t nextId = 1;
+        bool daTonTai;
+        do {
+            stringstream ss;
+            ss << "TL0" << nextId++;
+            maTheLoai = ss.str();
+            daTonTai = false;
+            for (size_t i = 0; i < dsTheLoai.size(); ++i) {
+                if (dsTheLoai[i].first == maTheLoai) {
+                    daTonTai = true;
+                    break;
+                }
+            }
+        } while (daTonTai);
+        dsTheLoai.push_back(make_pair(maTheLoai, tenTheLoai));
+    }
+
+    if (thayThe) {
+        for (size_t i = 0; i < movieGenres.size();) {
+            if (movieGenres[i].first == maPhim) {
+                movieGenres.erase(movieGenres.begin() + i);
+            } else {
+                ++i;
+            }
+        }
+    }
+
     for (size_t i = 0; i < movieGenres.size(); ++i) {
-        if (movieGenres[i].first == maPhim && movieGenres[i].second == maTheLoai) { daCo = true; break; }
-    }
-    if (!daCo) movieGenres.push_back(make_pair(maPhim, maTheLoai));
-
-    if (!ghiDuLieuPhim(dsTheLoai, movieGenres, danhSachPhim)) {
-        cout << "Loi: Khong the luu danh sach the loai phim!\n";
-    }
-}
-
-void Database::capNhatTheLoaiChoPhim(string maPhim, string tenTheLoaiMoi) {
-    vector<pair<string, string> > dsTheLoai; vector<pair<string, string> > movieGenres; vector<Movie> danhSachPhim;
-    docDanhSachTheLoai(dsTheLoai); docMovieGenres(movieGenres); docDanhSachPhim(danhSachPhim);
-
-    string maTheLoai = "";
-    for (size_t i = 0; i < dsTheLoai.size(); ++i) {
-        if (dsTheLoai[i].second == tenTheLoaiMoi) { maTheLoai = dsTheLoai[i].first; break; }
-    }
-    if (maTheLoai.empty()) {
-        cout << "Loi: The loai chua duoc tao trong danh muc!\n";
-        return;
-    }
-    for (size_t i = 0; i < movieGenres.size(); ) {
-        if (movieGenres[i].first == maPhim) movieGenres.erase(movieGenres.begin() + i);
-        else ++i;
+        if (movieGenres[i].first == maPhim && movieGenres[i].second == maTheLoai) {
+            return ghiDuLieuPhim(dsTheLoai, movieGenres, danhSachPhim);
+        }
     }
     movieGenres.push_back(make_pair(maPhim, maTheLoai));
+    return ghiDuLieuPhim(dsTheLoai, movieGenres, danhSachPhim);
+}
 
-    if (!ghiDuLieuPhim(dsTheLoai, movieGenres, danhSachPhim)) {
-        cout << "Loi: Khong the luu danh sach the loai phim!\n";
-    }
+bool Database::themTheLoaiChoPhim(string maPhim, string tenTheLoaiMoi) {
+    return luuTheLoaiChoPhim(*this, maPhim, tenTheLoaiMoi, false);
+}
+
+bool Database::capNhatTheLoaiChoPhim(string maPhim, string tenTheLoaiMoi) {
+    return luuTheLoaiChoPhim(*this, maPhim, tenTheLoaiMoi, true);
 }
 
 static bool ghiDuLieuPhongGhe(const vector<Room>& danhSachPhong,

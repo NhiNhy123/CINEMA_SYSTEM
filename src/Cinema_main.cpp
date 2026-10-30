@@ -259,10 +259,8 @@ void menuAdmin(Database& db, const string& maAdmin, SysLog& sysLog, User& user) 
         cout << "7. Xem lich su giao dich hoa don\n";
         cout << "8. Thong ke tong quan doanh thu\n";
         cout << "9. Quan ly & Duyet bao cao ca lam viec (Shift Management)\n";
-        cout << "10. Quan ly The loai phim\n";
-        cout << "11. Quan ly Loai ghe\n";
-        cout << "12. Xem nhat ky hoat dong\n";
-        cout << "13. Doi mat khau\n";
+        cout << "10. Xem nhat ky hoat dong\n";
+        cout << "11. Doi mat khau\n";
         cout << "0. Dang xuat (Quay lai man hinh dang nhap)\n";
         cout << "========================================================================================\n";
         cout << "Nhap lua chon cua ban: ";
@@ -287,6 +285,7 @@ void menuAdmin(Database& db, const string& maAdmin, SysLog& sysLog, User& user) 
                     cout << "2. Them phim\n";
                     cout << "3. Sua phim\n";
                     cout << "4. Xoa phim\n";
+                    cout << "5. Quan ly the loai phim\n";
                     cout << "0. Quay lai menu chinh\n";
                     cout << "Chon: ";
                     cin >> subChoice;
@@ -303,6 +302,7 @@ void menuAdmin(Database& db, const string& maAdmin, SysLog& sysLog, User& user) 
                     else if (subChoice == 2) Movie::themPhim(db);
                     else if (subChoice == 3) Movie::suaPhim(db);
                     else if (subChoice == 4) Movie::xoaPhim(db);
+                    else if (subChoice == 5) menuTheLoai(db);
                     else if (subChoice == 0) break;
                     else cout << "Lua chon khong hop le!\n";
 
@@ -356,6 +356,7 @@ void menuAdmin(Database& db, const string& maAdmin, SysLog& sysLog, User& user) 
                     cout << "1. Xem so do ghe phong\n";
                     cout << "2. Khoi tao ghe hang loat cho phong\n";
                     cout << "3. Sao chep ghe giua cac phong\n";
+                    cout << "4. Quan ly loai ghe va gia\n";
                     cout << "0. Quay lai menu chinh\n";
                     cout << "Chon: ";
                     cin >> subChoice;
@@ -381,6 +382,8 @@ void menuAdmin(Database& db, const string& maAdmin, SysLog& sysLog, User& user) 
                         cout << "Nhap phong dich (nhan): "; cin >> pDich;
                         cout << "Nhap phong nguon (mau): "; cin >> pNguon;
                         seatMgr.saoChepBucLuc(pDich, pNguon, db);
+                    } else if (subChoice == 4) {
+                        menuLoaiGhe(db, seatMgr);
                     } else if (subChoice == 0) {
                         break;
                     } else {
@@ -565,13 +568,7 @@ void menuAdmin(Database& db, const string& maAdmin, SysLog& sysLog, User& user) 
                 } while (subShift != 0);
                 break;
             }
-            case 10:
-                menuTheLoai(db);
-                break;
-            case 11:
-                menuLoaiGhe(db, seatMgr);
-                break;
-            case 12: {
+            case 10: {
                 string maNguoiDung;
                 cin.ignore(numeric_limits<streamsize>::max(), '\n');
                 cout << "Nhap ma nguoi dung de loc (Enter de xem tat ca): ";
@@ -579,7 +576,7 @@ void menuAdmin(Database& db, const string& maAdmin, SysLog& sysLog, User& user) 
                 ActivityLog::hienThi(maNguoiDung);
                 break;
             }
-            case 13:
+            case 11:
                 menuDoiMatKhau(sysLog, user);
                 break;
             case 0:

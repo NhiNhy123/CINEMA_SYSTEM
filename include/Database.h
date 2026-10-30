@@ -43,8 +43,8 @@ public:
 	bool xoaLoaiTheLoai(const string& maTheLoai);
 	void docMovieGenres(vector<pair<string, string> >& movieGenres);
 	string layTheLoaiCuaPhim(string maPhimToFind);
-	void themTheLoaiChoPhim(string maPhim, string tenTheLoaiMoi);
-	void capNhatTheLoaiChoPhim(string maPhim, string tenTheLoaiMoi);
+	bool themTheLoaiChoPhim(string maPhim, string tenTheLoaiMoi);
+	bool capNhatTheLoaiChoPhim(string maPhim, string tenTheLoaiMoi);
     void docDanhSachPhong(vector<Room>& danhSachPhong);
     void ghiDanhSachPhong(const vector<Room>& danhSachPhong);
 
