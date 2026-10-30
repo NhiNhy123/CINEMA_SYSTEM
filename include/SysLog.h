@@ -41,6 +41,7 @@ public:
     SysLog(string fileCSV);
 
     User* dangNhap();
+    bool doiMatKhau(User& user, const string& matKhauHienTai, const string& matKhauMoi);
 };
 
 #endif

@@ -1,5 +1,6 @@
 #include "../include/SysLog.h"
 #include <fstream>
+#include <vector>
 
 
 // =====================================================
@@ -384,4 +385,115 @@ User* SysLog::dangNhap()
     system("pause");
 
     return user;
+}
+
+bool SysLog::doiMatKhau(User& user, const string& matKhauHienTai, const string& matKhauMoi)
+{
+    if (!user.kiemTraDangNhap(user.getTaiKhoan(), matKhauHienTai))
+    {
+        cout << "Mat khau hien tai khong chinh xac.\n";
+        return false;
+    }
+
+    if (matKhauMoi.empty() ||
+        matKhauMoi.find_first_of(",\r\n") != string::npos ||
+        matKhauMoi == matKhauHienTai)
+    {
+        cout << "Mat khau moi khong hop le hoac trung voi mat khau hien tai.\n";
+        return false;
+    }
+
+    ifstream input(fileCSV.c_str());
+    if (!input.is_open())
+    {
+        cerr << "Khong the mo file tai khoan: " << fileCSV << "\n";
+        return false;
+    }
+
+    vector<string> lines;
+    string line;
+    bool readingUsers = false;
+    bool found = false;
+    while (getline(input, line))
+    {
+        if (!line.empty() && line[0] == '[')
+        {
+            readingUsers = line == "[USERS]";
+            lines.push_back(line);
+            continue;
+        }
+
+        if (readingUsers && line.find("maNguoiDung") != 0)
+        {
+            stringstream row(line);
+            string fields[10];
+            int fieldCount = 0;
+            while (fieldCount < 10 && getline(row, fields[fieldCount], ','))
+            {
+                ++fieldCount;
+            }
+
+            if (fieldCount >= 10 &&
+                fields[0] == user.getMaNguoiDung() &&
+                fields[7] == user.getTaiKhoan() &&
+                fields[9] == user.getVaiTro())
+            {
+                if (found)
+                {
+                    cerr << "Tim thay tai khoan bi trung lap: " << user.getMaNguoiDung() << "\n";
+                    return false;
+                }
+
+                size_t fieldStart = 0;
+                for (int i = 0; i < 8; ++i)
+                {
+                    fieldStart = line.find(',', fieldStart);
+                    if (fieldStart == string::npos)
+                    {
+                        cerr << "Dong tai khoan khong dung dinh dang CSV.\n";
+                        return false;
+                    }
+                    ++fieldStart;
+                }
+                const size_t passwordEnd = line.find(',', fieldStart);
+                line = line.substr(0, fieldStart) + matKhauMoi +
+                       (passwordEnd == string::npos ? "" : line.substr(passwordEnd));
+                found = true;
+            }
+        }
+        lines.push_back(line);
+    }
+    if (input.bad())
+    {
+        cerr << "Loi khi doc file tai khoan: " << fileCSV << "\n";
+        return false;
+    }
+    input.close();
+
+    if (!found)
+    {
+        cerr << "Khong tim thay tai khoan trong muc [USERS]: "
+             << user.getMaNguoiDung() << "\n";
+        return false;
+    }
+
+    ofstream output(fileCSV.c_str(), ios::trunc);
+    if (!output.is_open())
+    {
+        cerr << "Khong the ghi file tai khoan: " << fileCSV << "\n";
+        return false;
+    }
+    for (size_t i = 0; i < lines.size(); ++i)
+    {
+        output << lines[i] << "\n";
+    }
+    output.close();
+    if (!output)
+    {
+        cerr << "Loi khi luu file tai khoan: " << fileCSV << "\n";
+        return false;
+    }
+
+    user.setMatKhau(matKhauMoi);
+    return true;
 }

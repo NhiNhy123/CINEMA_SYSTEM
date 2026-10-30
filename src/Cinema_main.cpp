@@ -205,7 +205,32 @@ void menuThongKeDoanhThu(Database& db, InvoiceManager& invoiceMgr) {
     } while (choice != 0);
 }
 
-void menuAdmin(Database& db, const string& maAdmin) {
+void menuDoiMatKhau(SysLog& sysLog, User& user) {
+    string matKhauHienTai;
+    string matKhauMoi;
+    string xacNhanMatKhau;
+
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    cout << "Nhap mat khau hien tai: ";
+    getline(cin, matKhauHienTai);
+    cout << "Nhap mat khau moi: ";
+    getline(cin, matKhauMoi);
+    cout << "Xac nhan mat khau moi: ";
+    getline(cin, xacNhanMatKhau);
+
+    if (matKhauMoi != xacNhanMatKhau) {
+        cout << "Mat khau xac nhan khong khop.\n";
+        return;
+    }
+
+    if (sysLog.doiMatKhau(user, matKhauHienTai, matKhauMoi)) {
+        ActivityLog::ghiNhan(user.getMaNguoiDung(), user.getVaiTro(),
+                             "DOI_MAT_KHAU", "Doi mat khau thanh cong");
+        cout << "Doi mat khau thanh cong.\n";
+    }
+}
+
+void menuAdmin(Database& db, const string& maAdmin, SysLog& sysLog, User& user) {
     RoomManager roomMgr;
     SeatManager seatMgr;
     FAndBManager fandbMgr;
@@ -236,6 +261,7 @@ void menuAdmin(Database& db, const string& maAdmin) {
         cout << "10. Quan ly The loai phim\n";
         cout << "11. Quan ly Loai ghe\n";
         cout << "12. Xem nhat ky hoat dong\n";
+        cout << "13. Doi mat khau\n";
         cout << "0. Dang xuat (Quay lai man hinh dang nhap)\n";
         cout << "========================================================================================\n";
         cout << "Nhap lua chon cua ban: ";
@@ -552,6 +578,9 @@ void menuAdmin(Database& db, const string& maAdmin) {
                 ActivityLog::hienThi(maNguoiDung);
                 break;
             }
+            case 13:
+                menuDoiMatKhau(sysLog, user);
+                break;
             case 0:
                 cout << "Dang xuat khoi tai khoan Admin...\n";
                 break;
@@ -566,7 +595,7 @@ void menuAdmin(Database& db, const string& maAdmin) {
     } while (choice != 0);
 }
 
-void menuStaff(Database& db, const string& maNV) {
+void menuStaff(Database& db, const string& maNV, SysLog& sysLog, User& user) {
     TicketManager ticketMgr;
     InvoiceManager invoiceMgr;
     ShiftManagement shiftMgr;
@@ -584,6 +613,7 @@ void menuStaff(Database& db, const string& maNV) {
         cout << "4. Xem lich su giao dich hoa don\n";
         cout << "5. Chot ca lam viec & nop tien doanh thu\n";
         cout << "6. Xem nhat ky hoat dong ca nhan\n";
+        cout << "7. Doi mat khau\n";
         cout << "0. Dang xuat (Quay lai man hinh dang nhap)\n";
         cout << "====================================================================================\n";
         cout << "Nhap lua chon cua ban: ";
@@ -668,6 +698,9 @@ void menuStaff(Database& db, const string& maNV) {
                 system("cls");
                 ActivityLog::hienThi(maNV);
                 break;
+            case 7:
+                menuDoiMatKhau(sysLog, user);
+                break;
             case 0:
                 if (!shiftMgr.daChotCaHomNay(maNV)) {
                     cout << "Khong the dang xuat: vui long chot ca hom nay truoc.\n";
@@ -704,9 +737,9 @@ int main() {
 
             system("cls");
             if (vaiTro == "Admin") {
-                menuAdmin(db, maNV);
+                menuAdmin(db, maNV, sysLog, *currentUser);
             } else if (vaiTro == "Staff") {
-                menuStaff(db, maNV);
+                menuStaff(db, maNV, sysLog, *currentUser);
             }
 
             ActivityLog::ghiNhan(maNV, vaiTro, "DANG_XUAT", "Dang xuat thanh cong");
