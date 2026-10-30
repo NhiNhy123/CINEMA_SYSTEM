@@ -3,6 +3,7 @@
 #include "../include/Ticket.h"
 #include "../include/FAndB.h"
 #include "../include/Promotion.h"
+#include "../include/DateFormat.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -11,8 +12,6 @@
 #include <windows.h>
 
 using namespace std;
-
-// --- CLASS INVOICE ---
 
 Invoice::Invoice() {
     this->tongTien = 0.0;
@@ -23,14 +22,13 @@ Invoice::Invoice(string maHD, string maKH, string maNV, string thoiGian, double 
     this->maHoaDon = maHD;
     this->maKhachHang = maKH;
     this->maNhanVien = maNV;
-    this->thoiGianLap = thoiGian;
+    this->thoiGianLap = DateFormat::normalizeDateTime(thoiGian);
     this->tongTien = tongT;
     this->hinhThucThanhToan = hinhThuc;
     this->maGiaoDich = maGD;
     this->trangThaiThanhToan = trangThai;
 }
 
-// Getters
 string Invoice::getMaHoaDon() const { return maHoaDon; }
 string Invoice::getMaKhachHang() const { return maKhachHang; }
 string Invoice::getMaNhanVien() const { return maNhanVien; }
@@ -51,8 +49,8 @@ void Invoice::setTrangThaiThanhToan(const string& trangThai) {
 
 string Invoice::toCSV() const {
     stringstream ss;
-    ss << maHoaDon << "," << maKhachHang << "," << maNhanVien << "," << thoiGianLap << "," 
-       << fixed << setprecision(0) << tongTien << "," << hinhThucThanhToan << "," 
+    ss << maHoaDon << "," << maKhachHang << "," << maNhanVien << "," << thoiGianLap << ","
+       << fixed << setprecision(0) << tongTien << "," << hinhThucThanhToan << ","
        << maGiaoDich << "," << trangThaiThanhToan;
     return ss.str();
 }
@@ -80,17 +78,14 @@ Invoice Invoice::fromCSV(const string& line) {
 }
 
 void Invoice::hienThi() const {
-    cout << left << setw(10) << maHoaDon 
+    cout << left << setw(10) << maHoaDon
          << setw(12) << (maKhachHang.empty() ? "KhachLe" : maKhachHang)
-         << setw(10) << maNhanVien 
-         << setw(23) << thoiGianLap 
-         << setw(15) << fixed << setprecision(0) << tongTien 
-         << setw(15) << hinhThucThanhToan 
+         << setw(10) << maNhanVien
+         << setw(23) << thoiGianLap
+         << setw(15) << fixed << setprecision(0) << tongTien
+         << setw(15) << hinhThucThanhToan
          << setw(12) << trangThaiThanhToan << endl;
 }
-
-
-// --- CLASS INVOICE MANAGER ---
 
 InvoiceManager::InvoiceManager() {}
 
@@ -98,24 +93,39 @@ void InvoiceManager::taiDuLieu(Database& db) {
     db.docDanhSachHoaDon(danhSachHoaDon);
 }
 
-// --- PHAN HE 2: NHAN VIEN - THANH TOAN & XUAT HOA DON (T?NG H?P T? TICKET, F&B, PROMOTION) ---
-void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string& maKH, double tongTienHang,                        const vector<InvoiceFBItem>& dsFB, const string& phimChieuCode){
-    // Có th? m? r?ng nh?n thêm mã voucher ho?c t? d?ng d?c t? input n?u c?n
+bool InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string& maKH, double tongTienHang,
+                                   const vector<InvoiceFBItem>& dsFB, const string& phimChieuCode,
+                                   double soTienDoiDiem, const string& maSuatChieu,
+                                   const vector<string>& dsGheGiu, const string& maPhienGiu) {
+
     string maCodeVoucher;
     cout << "Nhap ma voucher khuyen mai (Bam Enter de bo qua): ";
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
     getline(cin, maCodeVoucher);
 
-    // 1. T? d?ng ki?m tra và áp d?ng Promotion (Mã gi?m giá) n?u có
     double soTienGiamGia = 0.0;
+    double tongTienSauDoiDiem = tongTienHang - soTienDoiDiem;
+    if (tongTienSauDoiDiem < 0) tongTienSauDoiDiem = 0;
     if (!maCodeVoucher.empty()) {
         vector<Promotion> dsKM;
         db.docDanhSachKhuyenMai(dsKM);
         for (size_t i = 0; i < dsKM.size(); ++i) {
             if (dsKM[i].getMaCode() == maCodeVoucher) {
+                int todayKey;
+                int startKey = DateFormat::dateKey(dsKM[i].getNgayBatDau());
+                int endKey = DateFormat::dateKey(dsKM[i].getNgayKetThuc());
+                if (!DateFormat::todayDateKey(todayKey)) {
+                    cout << "-> [Canh bao]: Khong the xac dinh ngay hien tai de kiem tra voucher!\n";
+                    break;
+                }
+                if (startKey == 0 || endKey == 0 || todayKey < startKey || todayKey > endKey) {
+                    cout << "-> [Canh bao]: Voucher chua den ngay ap dung hoac da het han!\n";
+                    break;
+                }
+
                 string phamVi = dsKM[i].getPhamViApDung();
                 if (phamVi == "All" || phamVi == phimChieuCode) {
-                    double giam = tongTienHang * (dsKM[i].getPhanTramGiam() / 100.0);
+                    double giam = tongTienSauDoiDiem * (dsKM[i].getPhanTramGiam() / 100.0);
                     if (dsKM[i].getMucGiamToiDa() > 0 && giam > dsKM[i].getMucGiamToiDa()) {
                         soTienGiamGia = dsKM[i].getMucGiamToiDa();
                     } else {
@@ -130,15 +140,13 @@ void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
         }
     }
 
-    double tongThanhToan = tongTienHang - soTienGiamGia;
+    double tongThanhToan = tongTienSauDoiDiem - soTienGiamGia;
     if (tongThanhToan < 0) tongThanhToan = 0;
 
     stringstream ssHD;
     ssHD << "HD_" << (danhSachHoaDon.size() + 1);
     string maHD = ssHD.str();
-    
-    // L?y th?i gian hi?n t?i làm th?i gian l?p hóa don
-    // L?y th?i gian hi?n t?i làm th?i gian l?p hóa don theo chu?n DD/MM/YYYY HH:MM:SS
+
     time_t now = time(0);
     tm* ltm = localtime(&now);
 
@@ -149,12 +157,15 @@ void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
            << setfill('0') << setw(2) << ltm->tm_hour << ":"
            << setfill('0') << setw(2) << ltm->tm_min << ":"
            << setfill('0') << setw(2) << ltm->tm_sec;
-           
+
     string thoiGianLap = ssTime.str();
 
     cout << "\n==================== XU LY THANH TOAN HOA DON ====================\n";
     cout << "Ma hoa don tam tao: " << maHD << "\n";
     cout << "Tong gia tri don hang (Da gom Ve + F&B): " << fixed << setprecision(0) << tongTienHang << " VND\n";
+    if (soTienDoiDiem > 0) {
+        cout << "Giam gia tu diem: -" << soTienDoiDiem << " VND\n";
+    }
     if (soTienGiamGia > 0) {
         cout << "Giam gia tu Promotion: -" << soTienGiamGia << " VND\n";
     }
@@ -165,14 +176,13 @@ void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
     cout << "2. The ngan hang (TheNganHang)\n";
     cout << "3. Quet ma QR (QueQR)\n";
     cout << "Lua chon cua ban (1-3): ";
-    
+
     int chonThanhToan;
     cin >> chonThanhToan;
 
     string hinhThuc = "TienMat";
     string maGD = "N/A";
 
-    // X? lý phuong th?c thanh toán kèm hi?u ?ng ho?c nh?p ti?n
     if (chonThanhToan == 2) {
     	hinhThuc = "TheNganHang";
     	maGD = "TXN_CARD_" + maHD;
@@ -180,7 +190,7 @@ void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
 
     	for (int i = 0; i < 3; ++i) {
         	cout << "." << flush;
-        	Sleep(1000); // Cho 1000 mili giay = 1 giay
+        	Sleep(1000);
     	}
         cout << "\n-> Giao dich thanh cong!\n";
     } else if (chonThanhToan == 3) {
@@ -193,14 +203,13 @@ void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
         cout << "-> Vui long doi khach hang quét ma";
         for (int i = 0; i < 3; ++i) {
         	cout << "." << flush;
-        	Sleep(1000); // Cho 1000 mili giay = 1 giay
+        	Sleep(1000);
     	}
         cout << "\n-> Khach da quet ma thanh toan thanh cong!\n";
     } else {
         hinhThuc = "TienMat";
         double tienKhachDua = 0.0;
-        
-        // Vòng l?p yêu c?u thu ngân nh?p s? ti?n khách dua và tính ti?n th?a
+
         while (true) {
             cout << "-> Nhap so tien khach dua (VND): ";
             cin >> tienKhachDua;
@@ -210,7 +219,7 @@ void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
                 cin.ignore(numeric_limits<streamsize>::max(), '\n');
                 cout << "[Loi]: Vui long nhap mot so hop le!\n";
             } else if (tienKhachDua < tongThanhToan) {
-                cout << "[Canh bao]: So tien khach dua (" << (long long)tienKhachDua 
+                cout << "[Canh bao]: So tien khach dua (" << (long long)tienKhachDua
                      << " VND) thieu so voi tong thanh toan (" << (long long)tongThanhToan << " VND). Vui long nhap lai!\n";
             } else {
                 double tienThua = tienKhachDua - tongThanhToan;
@@ -219,14 +228,17 @@ void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
                 break;
             }
         }
-        // T?o d? tr? nh? gi? l?p hoàn t?t nh?n ti?n m?t
+
         Sleep(500);
     }
 
-    // Kh?i t?o hóa don m?i v?i t?ng ti?n th?c t? sau khi áp d?ng Promotion
+    if (!db.chotGheSuatChieu(maSuatChieu, dsGheGiu, maPhienGiu)) {
+        cout << "\n[CANH BAO]: Thoi gian giu ghe da het hoac ghe khong con thuoc giao dich nay. Khong tao hoa don.\n";
+        return false;
+    }
+
     Invoice newInvoice(maHD, maKH, maNV, thoiGianLap, tongThanhToan, hinhThuc, maGD, "DaTra");
 
-    // Thêm các s?n ph?m F&B vào chi ti?t hóa don
     for (size_t i = 0; i < dsFB.size(); ++i) {
         InvoiceFBItem itemNho = dsFB[i];
         itemNho.maHoaDon = maHD;
@@ -235,10 +247,8 @@ void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
 
     danhSachHoaDon.push_back(newInvoice);
 
-    // Ð?ng b? luu xu?ng file thông qua Database
     db.ghiDanhSachHoaDon(danhSachHoaDon);
 
-    // Xu?t hóa don chi ti?t ra màn hình cho khách hàng
     cout << "\n==================================================================\n";
     cout << "                    CINEMA TICKET INVOICE                         \n";
     cout << "==================================================================\n";
@@ -246,24 +256,30 @@ void InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
     cout << "Thoi gian: " << thoiGianLap << "\n";
     cout << "Khach hang: " << (maKH.empty() ? "Khach vang lai" : maKH) << "\n";
     cout << "------------------------------------------------------------------\n";
+    cout << "Tong gia tri don hang: " << fixed << setprecision(0) << tongTienHang << " VND\n";
+    if (soTienDoiDiem > 0) {
+        cout << "Giam gia tu diem: -" << soTienDoiDiem << " VND\n";
+    }
+    if (soTienGiamGia > 0) {
+        cout << "Giam gia voucher: -" << soTienGiamGia << " VND\n";
+    }
     cout << "Phuong thuc: " << hinhThuc << " | Ma GD: " << maGD << "\n";
     cout << "Trang thai: DA THANH TOAN (DaTra)\n";
     cout << "TONG THANH TOAN SAU GIAM GIA: " << fixed << setprecision(0) << tongThanhToan << " VND\n";
     cout << "==================================================================\n";
     cout << "          Cam on quy khach va hen gap lai lan sau!                \n";
     cout << "==================================================================\n";
+    return true;
 }
 
-
-// --- PHAN HE 1: QUAN TRI VIEN - QUAN LY DOANH THU & THONG KE ---
 void InvoiceManager::hienThiLichSuGiaoDich() const {
     cout << "\n================================= LICH SU GIAO DICH HOA DON ==================================\n";
-    cout << left << setw(10) << "Ma HD" 
-         << setw(12) << "Ma KH" 
-         << setw(10) << "Thu Ngan" 
-         << setw(23) << "Thoi Gian" 
-         << setw(15) << "Tong Tien" 
-         << setw(15) << "Hinh Thuc" 
+    cout << left << setw(10) << "Ma HD"
+         << setw(12) << "Ma KH"
+         << setw(10) << "Thu Ngan"
+         << setw(23) << "Thoi Gian"
+         << setw(15) << "Tong Tien"
+         << setw(15) << "Hinh Thuc"
          << setw(12) << "Trang Thai" << endl;
     cout << "---------------------------------------------------------------------------------------------\n";
     if (danhSachHoaDon.empty()) {
