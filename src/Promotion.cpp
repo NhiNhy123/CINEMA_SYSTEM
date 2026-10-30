@@ -1,5 +1,6 @@
 #include "../include/Promotion.h"
 #include "../include/Database.h"
+#include "../include/DateFormat.h"
 #include <iostream>
 #include <iomanip>
 #include <limits>
@@ -20,8 +21,8 @@ Promotion::Promotion(string maKM, string tenKM, string code, double ptGiam, doub
     this->maCode = code;
     this->phanTramGiam = ptGiam;
     this->mucGiamToiDa = maxGiam;
-    this->ngayBatDau = start;
-    this->ngayKetThuc = end;
+    this->ngayBatDau = DateFormat::normalizeDate(start);
+    this->ngayKetThuc = DateFormat::normalizeDate(end);
     this->phamViApDung = phamVi;
 }
 
@@ -40,8 +41,8 @@ void Promotion::setTenKhuyenMai(const string& ten) { tenKhuyenMai = ten; }
 void Promotion::setMaCode(const string& code) { maCode = code; }
 void Promotion::setPhanTramGiam(double pt) { if (pt >= 0 && pt <= 100) phanTramGiam = pt; }
 void Promotion::setMucGiamToiDa(double maxGia) { if (maxGia >= 0) mucGiamToiDa = maxGia; }
-void Promotion::setNgayBatDau(const string& start) { ngayBatDau = start; }
-void Promotion::setNgayKetThuc(const string& end) { ngayKetThuc = end; }
+void Promotion::setNgayBatDau(const string& start) { ngayBatDau = DateFormat::normalizeDate(start); }
+void Promotion::setNgayKetThuc(const string& end) { ngayKetThuc = DateFormat::normalizeDate(end); }
 void Promotion::setPhamViApDung(const string& pv) { phamViApDung = pv; }
 
 string Promotion::toCSV() const {
@@ -151,13 +152,18 @@ void PromotionManager::themKhuyenMai(Database& db) {
     cout << "Nhap muc giam tien toi da (VND): ";
     cin >> maxGiam;
 
-    cout << "Nhap ngay bat dau (YYYY-MM-DD): ";
+    cout << "Nhap ngay bat dau (DD/MM/YYYY): ";
     cin >> start;
-    cout << "Nhap ngay ket thuc (YYYY-MM-DD): ";
+    cout << "Nhap ngay ket thuc (DD/MM/YYYY): ";
     cin >> end;
 
-    // Rang buoc logic: Ngay bat dau khong duoc sau ngay ket thuc
-    if (start > end) {
+    if (!DateFormat::isValidDate(start) || !DateFormat::isValidDate(end)) {
+        cout << "Loi: Ngay khong hop le! Hay nhap theo dinh dang DD/MM/YYYY.\n";
+        return;
+    }
+    start = DateFormat::normalizeDate(start);
+    end = DateFormat::normalizeDate(end);
+    if (DateFormat::dateKey(start) > DateFormat::dateKey(end)) {
         cout << "Loi: Ngay bat dau khong the sau ngay ket thuc! Huy thao tac them.\n";
         return;
     }
@@ -255,17 +261,19 @@ void PromotionManager::suaKhuyenMai(Database& db) {
                     }
                     case 4: {
                         string startMoi, endMoi;
-                        cout << "Nhap ngay bat dau moi (YYYY-MM-DD) (" << danhSachKhuyenMai[i].getNgayBatDau() << "): ";
+                        cout << "Nhap ngay bat dau moi (DD/MM/YYYY) (" << danhSachKhuyenMai[i].getNgayBatDau() << "): ";
                         getline(cin, startMoi);
-                        cout << "Nhap ngay ket thuc moi (YYYY-MM-DD) (" << danhSachKhuyenMai[i].getNgayKetThuc() << "): ";
+                        cout << "Nhap ngay ket thuc moi (DD/MM/YYYY) (" << danhSachKhuyenMai[i].getNgayKetThuc() << "): ";
                         getline(cin, endMoi);
 
                         if (!startMoi.empty() && !endMoi.empty()) {
-                            if (startMoi > endMoi) {
+                            if (!DateFormat::isValidDate(startMoi) || !DateFormat::isValidDate(endMoi)) {
+                                cout << "Loi: Ngay khong hop le! Hay nhap theo dinh dang DD/MM/YYYY.\n";
+                            } else if (DateFormat::dateKey(startMoi) > DateFormat::dateKey(endMoi)) {
                                 cout << "Loi: Ngay bat dau sau ngay ket thuc! Khong luu thay doi thoi gian.\n";
                             } else {
-                                danhSachKhuyenMai[i].setNgayBatDau(startMoi);
-                                danhSachKhuyenMai[i].setNgayKetThuc(endMoi);
+                                danhSachKhuyenMai[i].setNgayBatDau(DateFormat::normalizeDate(startMoi));
+                                danhSachKhuyenMai[i].setNgayKetThuc(DateFormat::normalizeDate(endMoi));
                                 cout << "-> Da cap nhat thoi gian ap dung!\n";
                             }
                         }
