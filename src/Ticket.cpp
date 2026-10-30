@@ -129,11 +129,13 @@ void Ticket::hienThi() const {
 
 Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& soTienDoiDiem,
                                   vector<Customer>& danhSachKH,
-                                  vector<GiaoDichDiem>& danhSachGDCapNhat) {
+                                  vector<GiaoDichDiem>& danhSachGDCapNhat,
+                                  bool& khachHangMoi) {
     cout << "\n===================================================================\n";
     cout << "                    XU LY THONG TIN KHACH HANG (CRM)                 \n";
     cout << "===================================================================\n";
     soTienDoiDiem = 0.0;
+    khachHangMoi = false;
 
     string sdt;
     do {
@@ -163,7 +165,6 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& s
     string maKHThaoTac = "";
     bool daDoiDiem = false;
     int soDiemDaDoi = 0;
-    int soDiemThuong = 0;
 
     if (khachHangTimThay != NULL) {
         cout << "-> He thong tim thay thanh vien: " << khachHangTimThay->getHoTen()
@@ -203,20 +204,11 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& s
             cout << "-> Don hang khong du dieu kien toi thieu de doi diem.\n";
         }
 
-        double tongTienSauDoiDiem = tongTienHoaDon - soTienDoiDiem;
-        soDiemThuong = static_cast<int>(tongTienSauDoiDiem / 10000);
-        string noiDung = "Tich diem tu hoa don ban ve";
-
-        khachHangTimThay->tichDiem(soDiemThuong, noiDung, thoiGian);
-        khachHangTimThay->themChiTieu(static_cast<long long>(tongTienSauDoiDiem));
-
         maKHThaoTac = khachHangTimThay->getMaKH();
-        if (soDiemThuong > 0) {
-            cout << "-> Du kien tich them " << soDiemThuong << " diem sau khi thanh toan thanh cong.\n";
-        }
     }
 
     else {
+        khachHangMoi = true;
         cout << "-> Khong tim thay khach hang voi SÐT: " << sdt << ". Vui long dang ky thong tin moi!\n";
 
         string hoTen, email, ngaySinh, gioiTinh, cccd;
@@ -244,17 +236,12 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& s
         string maKHMoi = ssMa.str();
         maKHThaoTac = maKHMoi;
 
-        soDiemThuong = static_cast<int>(tongTienHoaDon / 10000);
         Customer khachMoi(maKHMoi, hoTen, sdt, email, 0, "Thuong", 0);
         khachMoi.setCCCD(cccd);
 
-        string noiDung = "Tich diem hoa don dau tien";
-        khachMoi.tichDiem(soDiemThuong, noiDung, thoiGian);
-        khachMoi.themChiTieu(static_cast<long long>(tongTienHoaDon));
-
         danhSachKH.push_back(khachMoi);
         cout << "-> Da nhap thong tin thanh vien moi, ma KH: " << maKHMoi << "\n";
-        cout << "-> Diem va thong tin thanh vien se duoc luu sau khi thanh toan thanh cong.\n";
+        cout << "-> Diem se duoc cong sau khi thanh toan thanh cong.\n";
     }
 
     db.docLichSuGiaoDichDiem(danhSachGDCapNhat);
@@ -265,16 +252,6 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& s
         danhSachGDCapNhat.push_back(GiaoDichDiem(ssGD.str(), maKHThaoTac, "DoiDiem",
                                                 soDiemDaDoi, "Doi diem khi thanh toan", thoiGian));
     }
-    if (soDiemThuong > 0) {
-        stringstream ssGD;
-        ssGD << "GD0" << (danhSachGDCapNhat.size() + 1);
-        string noiDungGD = (khachHangTimThay != NULL)
-                         ? "Tich diem tu hoa don ban ve"
-                         : "Tich diem hoa don dau tien";
-        danhSachGDCapNhat.push_back(GiaoDichDiem(ssGD.str(), maKHThaoTac, "TichDiem",
-                                                soDiemThuong, noiDungGD, thoiGian));
-    }
-
     if (khachHangTimThay != NULL) {
         return *khachHangTimThay;
     } else {
@@ -625,8 +602,10 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
     double soTienDoiDiem = 0.0;
     vector<Customer> danhSachKHCapNhat;
     vector<GiaoDichDiem> danhSachGDCapNhat;
+    bool khachHangMoi = false;
     Customer khachHangThanhToan = xuLyThongTinKhachHangCRM(
-        db, tongTienHang, soTienDoiDiem, danhSachKHCapNhat, danhSachGDCapNhat);
+        db, tongTienHang, soTienDoiDiem, danhSachKHCapNhat, danhSachGDCapNhat,
+        khachHangMoi);
     string maKH = khachHangThanhToan.getMaKH();
     string tenKH = khachHangThanhToan.getHoTen();
     string sdt = khachHangThanhToan.getSoDienThoai();
@@ -642,6 +621,43 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
     vector<Invoice> danhSachHD;
     db.docDanhSachHoaDon(danhSachHD);
     string maHD = danhSachHD.empty() ? "HD_UNKNOWN" : danhSachHD.back().getMaHoaDon();
+    double soTienThanhToan = danhSachHD.empty()
+                           ? tongTienHang - soTienDoiDiem
+                           : danhSachHD.back().getTongTien();
+    int soDiemThuong = static_cast<int>(soTienThanhToan / 10000.0);
+
+    time_t thoiDiemThanhToan = time(0);
+    char bufThoiDiemThanhToan[80];
+    strftime(bufThoiDiemThanhToan, sizeof(bufThoiDiemThanhToan),
+             "%d/%m/%Y %H:%M:%S", localtime(&thoiDiemThanhToan));
+    string thoiGianThanhToan(bufThoiDiemThanhToan);
+
+    bool daCapNhatKhachHang = false;
+    for (size_t i = 0; i < danhSachKHCapNhat.size(); ++i) {
+        if (danhSachKHCapNhat[i].getMaKH() != maKH) {
+            continue;
+        }
+
+        danhSachKHCapNhat[i].themChiTieu(static_cast<long long>(soTienThanhToan));
+        if (soDiemThuong > 0) {
+            string noiDung = khachHangMoi
+                           ? "Tich diem hoa don dau tien"
+                           : "Tich diem tu hoa don ban ve";
+            danhSachKHCapNhat[i].tichDiem(soDiemThuong, noiDung, thoiGianThanhToan);
+
+            stringstream ssGD;
+            ssGD << "GD0" << (danhSachGDCapNhat.size() + 1);
+            danhSachGDCapNhat.push_back(GiaoDichDiem(
+                ssGD.str(), maKH, "TichDiem", soDiemThuong, noiDung, thoiGianThanhToan));
+        }
+        daCapNhatKhachHang = true;
+        break;
+    }
+
+    if (!daCapNhatKhachHang) {
+        cerr << "[LOI]: Khong tim thay khach hang " << maKH
+             << " de cap nhat diem sau thanh toan.\n";
+    }
 
     cout << "[THONG BAO]: Da luu trang thai dat ghe cho suat chieu " << selectedSC << " thanh cong!\n";
 
@@ -684,7 +700,7 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
     }
 
     cout << "\nDiem tich luy khach hang moi nhan: +"
-         << (int)((tongTienHang - soTienDoiDiem) / 10000) << " diem.\n";
+         << soDiemThuong << " diem.\n";
     cout << "===================================================================\n";
     cout << "In ve thanh cong! Trang thai ghe, hoa don va thong tin CRM da duoc cap nhat.\n";
 }
