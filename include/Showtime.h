@@ -34,7 +34,7 @@ public:
 
     string toCSV() const;
     static Showtime fromCSV(const string& line);
-    void hienThi() const;
+    void hienThi(Database& db) const;
 
     static void themSuatChieu(Database& db);
 

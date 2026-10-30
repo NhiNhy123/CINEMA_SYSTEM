@@ -3,12 +3,14 @@
 #include "../include/Room.h"
 #include "../include/Database.h"
 #include "../include/DateFormat.h"
+#include "../include/Seat.h"
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <vector>
 #include <cstdlib>
 #include <ctime>
+#include <cmath>
 
 static int chuyenGioThanhPhut(string gio) {
     if (gio.length() < 5) return 0;
@@ -39,6 +41,38 @@ static string chuyenPhutThanhGio(int tongPhut) {
 
 static int chuyenNgayThanhSo(string ngay) {
     return DateFormat::dateKey(ngay);
+}
+
+static bool layGiaThapNhatCuaPhong(Database& db, const string& maPhong, double& giaThapNhat) {
+    vector<Seat> danhSachGhe;
+    db.docDanhSachGhe(danhSachGhe);
+    bool timThayGiaHopLe = false;
+
+    for (size_t i = 0; i < danhSachGhe.size(); ++i) {
+        double giaGhe = danhSachGhe[i].getDonGiaGhe();
+        if (danhSachGhe[i].getMaPhong() == maPhong &&
+            giaGhe > 0 && std::isfinite(giaGhe) &&
+            (!timThayGiaHopLe || giaGhe < giaThapNhat)) {
+            giaThapNhat = giaGhe;
+            timThayGiaHopLe = true;
+        }
+    }
+
+    return timThayGiaHopLe;
+}
+
+static string dinhDangGiaThamKhao(const Showtime& suatChieu, Database& db) {
+    double giaThapNhat = 0.0;
+    bool coGiaGhe = layGiaThapNhatCuaPhong(db, suatChieu.getMaPhong(), giaThapNhat);
+    if (!coGiaGhe) {
+        giaThapNhat = suatChieu.getGiaVeCoBan();
+    }
+    if (giaThapNhat <= 0 || !std::isfinite(giaThapNhat)) return "Khong co";
+
+    stringstream ssGia;
+    ssGia << (coGiaGhe ? "Tu " : "Gia cu ")
+          << fixed << setprecision(0) << giaThapNhat << " VND";
+    return ssGia.str();
 }
 
 Showtime::Showtime() { giaVeCoBan = 0.0; }
@@ -85,19 +119,17 @@ Showtime Showtime::fromCSV(const string& line) {
     return Showtime(maSC, maPhim, maPhong, ngay, gioBD, gioKT, gia);
 }
 
-void Showtime::hienThi() const {
-    stringstream ssGia;
-    ssGia << fixed << setprecision(0) << giaVeCoBan << " VND";
+void Showtime::hienThi(Database& db) const {
     cout << left << setw(12) << maSuatChieu
          << setw(10) << maPhong
          << setw(12) << ngayChieu
          << setw(15) << (gioBatDau + " - " + gioKetThuc)
-         << setw(15) << ssGia.str() << endl;
+         << setw(22) << dinhDangGiaThamKhao(*this, db) << endl;
 }
 
 void Showtime::themSuatChieu(Database& db) {
     string maSC, maPhim, maPhong, ngay, gioBD;
-    double giaVe;
+    double giaThamKhao;
 
     cout << "\n--- THEM SUAT CHIEU MOI ---\n";
 
@@ -171,6 +203,12 @@ void Showtime::themSuatChieu(Database& db) {
         } else {
             break;
         }
+    }
+
+    if (!layGiaThapNhatCuaPhong(db, maPhong, giaThamKhao)) {
+        cout << "Loi: Phong " << maPhong
+             << " chua co ghe voi gia hop le. Vui long tao so do ghe truoc khi them suat chieu.\n";
+        return;
     }
 
     int soNgayKC = chuyenNgayThanhSo(ngayKC);
@@ -259,13 +297,7 @@ void Showtime::themSuatChieu(Database& db) {
         }
     }
 
-    do {
-        cout << "Nhap gia tham khao cho suat chieu (> 0; khong dung de tinh tien ve): ";
-        cin >> giaVe;
-        if (giaVe <= 0) cout << "Loi: Gia ve phai lon hon 0!\n";
-    } while (giaVe <= 0);
-
-    Showtime moi(maSC, maPhim, maPhong, ngay, gioBD, gioKT, giaVe);
+    Showtime moi(maSC, maPhim, maPhong, ngay, gioBD, gioKT, giaThamKhao);
     danhSach.push_back(moi);
 
     db.ghiDanhSachSuatChieu(danhSach);
@@ -287,14 +319,14 @@ void Showtime::hienThiSuatChieuTheoPhim(const string& maPhimCanXem, Database& db
     db.docDanhSachSuatChieu(danhSach);
 
     cout << "\n--- DANH SACH SUAT CHIEU CUA PHIM: " << tenPhim << " ---\n";
-    cout << left << setw(12) << "Ma SC" << setw(10) << "Phong" << setw(12) << "Ngay" << setw(15) << "Khung gio" << setw(15) << "Gia tham khao" << endl;
-    cout << "(Gia tinh tien ve duoc lay theo loai ghe.)\n";
+    cout << left << setw(12) << "Ma SC" << setw(10) << "Phong" << setw(12) << "Ngay" << setw(15) << "Khung gio" << setw(22) << "Gia tu (tham khao)" << endl;
+    cout << "(Gia tham khao lay tu gia ghe thap nhat; gia thanh toan lay truc tiep tu ghe.)\n";
     cout << "-------------------------------------------------------------\n";
 
     bool found = false;
     for (size_t i = 0; i < danhSach.size(); ++i) {
         if (danhSach[i].getMaPhim() == maPhimCanXem) {
-            danhSach[i].hienThi();
+            danhSach[i].hienThi(db);
             found = true;
         }
     }
@@ -312,8 +344,8 @@ void Showtime::hienThiTatCa(Database& db) {
     db.docDanhSachSuatChieu(danhSach);
 
     cout << "\n================================ TAT CA SUAT CHIEU TRONG HE THONG =================================\n";
-    cout << left << setw(12) << "Ma SC" << setw(30) << "Ten Phim" << setw(10) << "Phong" << setw(12) << "Ngay" << setw(15) << "Khung gio" << setw(15) << "Gia tham khao" << endl;
-    cout << "(Gia tinh tien ve duoc lay theo loai ghe.)\n";
+    cout << left << setw(12) << "Ma SC" << setw(30) << "Ten Phim" << setw(10) << "Phong" << setw(12) << "Ngay" << setw(15) << "Khung gio" << setw(22) << "Gia tu (tham khao)" << endl;
+    cout << "(Gia tham khao lay tu gia ghe thap nhat; gia thanh toan lay truc tiep tu ghe.)\n";
     cout << "---------------------------------------------------------------------------------------------------\n";
 
     for (size_t i = 0; i < danhSach.size(); ++i) {
@@ -325,15 +357,12 @@ void Showtime::hienThiTatCa(Database& db) {
             }
         }
 
-        stringstream ssGia;
-        ssGia << fixed << setprecision(0) << danhSach[i].getGiaVeCoBan() << " VND";
-
         cout << left << setw(12) << danhSach[i].getMaSuatChieu()
              << setw(30) << tenPhimHienThi
              << setw(10) << danhSach[i].getMaPhong()
              << setw(12) << danhSach[i].getNgayChieu()
              << setw(15) << (danhSach[i].getGioBatDau() + " - " + danhSach[i].getGioKetThuc())
-             << setw(15) << ssGia.str() << endl;
+             << setw(22) << dinhDangGiaThamKhao(danhSach[i], db) << endl;
     }
     cout << "===================================================================================================\n";
 }
