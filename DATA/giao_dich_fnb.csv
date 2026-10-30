@@ -1,0 +1,22 @@
+[FOOD_AND_BEVERAGES]
+maMatHang,tenMatHang,loai,giaTien,trangThaiKinhDoanh
+FB01,Bap ngot lon,Bap,50000,NgungBan
+FB02,Coca-Cola lon,Nuoc,30000,DangBan
+FB03,Combo Solo (1 Bap + 1 Nuoc),Combo,70000,DangBan
+
+[PROMOTIONS]
+maKhuyenMai,tenKhuyenMai,maCode,phanTramGiam,mucGiamToiDa,ngayBatDau,ngayKetThuc,phamViApDung
+KM01,Uu dai khai truong,HELLO2026,10,50000,2026-01-01,2026-12-31,All
+
+[INVOICES]
+maHoaDon,maKhachHang,maNhanVien,thoiGianLap,tongTien,hinhThucThanhToan,maGiaoDich,trangThaiThanhToan
+HD01,U03,U02,2026-06-05 18:30:00,210000,TienMat,,DaTra
+HD_2,U03,U002,2026-10-21 21:31:37,90000,QueQR,TXN_QR_HD_2,DaTra
+HD_3,U02,U002,2026-10-21 21:40:16,125000,TheNganHang,TXN_CARD_HD_3,DaTra
+HD_4,U04,U002,2026-10-21 21:51:34,150000,TienMat,N/A,DaTra
+HD_5,U02,U002,2026-10-23 08:29:33,120000,TheNganHang,TXN_CARD_HD_5,DaTra
+HD_6,U03,U002,2026-10-23 08:59:07,180000,TienMat,N/A,DaTra
+HD_7,U03,U002,2026-10-24 09:29:41,120000,QueQR,TXN_QR_HD_7,DaTra
+HD_8,U02,U002,2026-10-25 19:49:11,90000,TienMat,N/A,DaTra
+HD_9,U02,U002,2026-10-25 19:59:37,130000,TienMat,N/A,DaTra
+HD_10,U02,U002,2026-10-26 20:44:04,90000,TienMat,N/A,DaTra

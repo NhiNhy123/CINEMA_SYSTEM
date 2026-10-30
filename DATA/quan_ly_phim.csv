@@ -1,0 +1,31 @@
+[GENRES]
+maTheLoai,tenTheLoai
+TL01,Hanh Dong
+TL02,Kinh Di
+TL03,Tinh Cam
+TL04,Hoat Hinh
+TL05,Tam Ly
+TL06,Gia Dinh
+TL07,Hoat Hinh
+TL08,Kich Tinh
+
+[MOVIE_GENRES]
+maPhim,maTheLoai
+P02,TL02
+P03,TL03
+P04,TL01
+P01,TL05
+P01,TL01
+P05,TL04
+P07,TL09
+P07,TL03
+P06,TL08
+
+[MOVIES]
+maPhim,tenPhim,thoiLuong,nhanDoTuoi,ngayKhoiChieu,ngayKetThuc,moTa,poster
+P01,Lat Mat 7,120,18,01/04/2026,2026-05-01,Phim ve gia dinh va tinh mau tu,latmat7.jpg
+P02,Mai,135,18,2026-02-10,2026-03-30,Cau chuyen tinh yeu cua Mai va Duong,mai.jpg
+P03,Tho Oi!,127,18,2026-10-15,2026-11-28,Cau chuyen thuc te ve tinh yeu va xa hoi,ThoOi.jpg
+P04,Avatar: Lua va Tro,190,13,2026-12-18,2027-02-15,Hanh trinh tiep theo tai Pandora,avatar3.jpg
+P05,Conan Movie 28,150,13,2026-07-12,2026-10-12,Khong,Conan_movie28.jgp
+P06,Chi Chi Em Em 3,112,18,25/10/2026,25/11/2026,Khong,CCEE3.jgp
