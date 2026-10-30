@@ -1,6 +1,7 @@
-#include "ShilftManagement.h"
-#include "Database.h"
-#include "User.h"
+#include "../include/ShilftManagement.h"
+#include "../include/Database.h"
+#include "../include/User.h"
+#include "../include/DateFormat.h"
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
@@ -9,21 +10,7 @@
 
 static int chuyenNgayThanhSo(string ngay)
 {
-    if (ngay.length() != 10 || ngay[2] != '/' || ngay[5] != '/')
-        return 0;
-
-    try
-    {
-        int ngayInt = atoi(ngay.substr(0, 2).c_str());
-        int thangInt = atoi(ngay.substr(3, 2).c_str());
-        int namInt = atoi(ngay.substr(6, 4).c_str());
-
-        return namInt * 10000 + thangInt * 100 + ngayInt;
-    }
-    catch (...)
-    {
-        return 0;
-    }
+    return DateFormat::dateKey(ngay);
 }
 
 static bool trongKhoangThoiGian(string ngay, string tuNgay, string denNgay)
@@ -38,7 +25,6 @@ static bool trongKhoangThoiGian(string ngay, string tuNgay, string denNgay)
     return ngayHienTai >= ngayBatDau && ngayHienTai <= ngayKetThuc;
 }
 
-// ================= ShiftReport =================
 ShiftReport::ShiftReport()
 {
     maCa = maNhanVien = tenNhanVien = ngayLam = gioBatDau = gioKetThuc = "";
@@ -52,7 +38,7 @@ ShiftReport::ShiftReport(string maCa, string maNhanVien, string tenNhanVien, str
     this->maCa = maCa;
     this->maNhanVien = maNhanVien;
     this->tenNhanVien = tenNhanVien;
-    this->ngayLam = ngayLam;
+    this->ngayLam = DateFormat::normalizeDate(ngayLam);
     this->gioBatDau = gioBatDau;
     this->gioKetThuc = gioKetThuc;
     this->doanhThuHeThong = doanhThuHeThong;
@@ -110,7 +96,6 @@ void ShiftReport::hienThi() const
     cout << "==================================================\n";
 }
 
-// ================= ShiftManagement =================
 ShiftManagement::ShiftManagement() { danhSachCa.clear(); }
 void ShiftManagement::taiDuLieu(Database& db) { db.docDanhSachCa(danhSachCa); }
 void ShiftManagement::luuDuLieu(Database& db) const { db.ghiDanhSachCa(danhSachCa); }
@@ -118,13 +103,12 @@ void ShiftManagement::themBaoCaoCa(ShiftReport ca) { danhSachCa.push_back(ca); }
 
 void ShiftManagement::chotCa(string maCa, string maNhanVien, string gioBatDau, long long doanhThuHeThong, long long tienThucTe, Database& db)
 {
-    // G?I HÀM TR?C TI?P T? DATABASE Ð? L?Y TÊN NHÂN VIÊN G?N GÀNG NH?T
+
     string tenNhanVien = db.layTenNhanVienQuaMa(maNhanVien);
 
     time_t now = time(0);
     tm* ltm = localtime(&now);
 
-    // L?y ngày hi?n t?i t? d?ng theo chu?n DD/MM/YYYY (00/00/0000)
     stringstream ssDate;
     ssDate << setfill('0') << setw(2) << ltm->tm_mday << "/"
            << setfill('0') << setw(2) << (1 + ltm->tm_mon) << "/"
