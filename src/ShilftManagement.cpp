@@ -137,6 +137,20 @@ void ShiftManagement::chotCa(string maCa, string maNhanVien, string gioBatDau, l
     cout << "Bao cao dang cho Admin duyet va da duoc luu vao he thong.\n";
 }
 
+bool ShiftManagement::daChotCaHomNay(const string& maNhanVien) const
+{
+    int todayKey;
+    if (!DateFormat::todayDateKey(todayKey)) return false;
+
+    for (size_t i = 0; i < danhSachCa.size(); ++i) {
+        if (danhSachCa[i].getMaNhanVien() == maNhanVien &&
+            DateFormat::dateKey(danhSachCa[i].getNgayLam()) == todayKey) {
+            return true;
+        }
+    }
+    return false;
+}
+
 ShiftReport* ShiftManagement::timCa(string maCa)
 {
     for (size_t i = 0; i < danhSachCa.size(); ++i)

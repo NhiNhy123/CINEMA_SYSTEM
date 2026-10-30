@@ -93,6 +93,8 @@ public:
         Database& db
     );
 
+    bool daChotCaHomNay(const string& maNhanVien) const;
+
     ShiftReport* timCa(string maCa);
 
     bool duyetBaoCao(string maCa, Database& db);

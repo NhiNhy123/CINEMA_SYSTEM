@@ -584,7 +584,14 @@ void menuStaff(Database& db, const string& maNV) {
                 ActivityLog::hienThi(maNV);
                 break;
             case 0:
-                cout << "Dang xuat khoi tai khoan Staff...\n";
+                if (!shiftMgr.daChotCaHomNay(maNV)) {
+                    cout << "Khong the dang xuat: vui long chot ca hom nay truoc.\n";
+                    ActivityLog::ghiNhan(maNV, "Staff", "DANG_XUAT_TU_CHOI",
+                                         "Nhan vien chua chot ca hom nay");
+                    choice = -1;
+                } else {
+                    cout << "Dang xuat khoi tai khoan Staff...\n";
+                }
                 break;
             default:
                 cout << "Lua chon khong hop le!\n";
