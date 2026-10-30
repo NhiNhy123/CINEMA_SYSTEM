@@ -47,7 +47,7 @@ public:
     void taoGheTuDongChoPhong(const string& maPhong, Database& db);
     void taoGheHangLoat(const string& maPhong, Database& db);
     void saoChepBucLuc(const string& phongDich, const string& phongNguon, Database& db);
-    void hienThiSoDoPhong(const string& maPhong) const;
+    void hienThiSoDoPhong(Database& db) const;
     void hienThiDanhSachLoaiGhe(Database& db) const;
     void themLoaiGhe(Database& db);
     void suaLoaiGhe(Database& db);

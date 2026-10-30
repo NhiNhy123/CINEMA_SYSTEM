@@ -370,9 +370,7 @@ void menuAdmin(Database& db, const string& maAdmin, SysLog& sysLog, User& user) 
                     }
 
                     if (subChoice == 1) {
-                        string maP;
-                        cout << "Nhap ma phong: "; cin >> maP;
-                        seatMgr.hienThiSoDoPhong(maP);
+                        seatMgr.hienThiSoDoPhong(db);
                     } else if (subChoice == 2) {
                         string maP;
                         cout << "Nhap ma phong: "; cin >> maP;

@@ -15,6 +15,7 @@
 #include <limits>
 #include <cstdlib>
 #include <ctime>
+#include <utility>
 
 static bool laChuoiChuSo(const string& giaTri) {
     if (giaTri.empty()) return false;
@@ -441,6 +442,7 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
         cout << " [MAN HINH CHIEU PHIM]\n";
         cout << "-----------------------------------------------------------------------\n";
         bool coGheTrongPhong = false;
+        vector<pair<string, double> > chuThichLoaiGia;
         for (size_t k = 0; k < dsGhePhong.size(); ++k) {
             if (dsGhePhong[k].getMaPhong() != maPhongChieu) {
                 continue;
@@ -454,16 +456,45 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
                 }
             }
 
-            Seat gheHienThi = dsGhePhong[k];
-            gheHienThi.setTrangThai(trangThaiGhe);
-            gheHienThi.hienThi();
+            string hienThiTrangThai = "[ ]";
+            if (trangThaiGhe == "DangChon" ||
+                trangThaiGhe.find("DangChon|") == 0) {
+                hienThiTrangThai = "[?]";
+            } else if (trangThaiGhe == "DaDat") {
+                hienThiTrangThai = "[X]";
+            } else if (trangThaiGhe == "KhongSuDung") {
+                hienThiTrangThai = "[-]";
+            }
+            cout << left << setw(8)
+                 << (dsGhePhong[k].getMaGhe() + hienThiTrangThai);
+
+            bool daCoChuThich = false;
+            for (size_t i = 0; i < chuThichLoaiGia.size(); ++i) {
+                if (chuThichLoaiGia[i].first == dsGhePhong[k].getLoaiGhe() &&
+                    chuThichLoaiGia[i].second == dsGhePhong[k].getDonGiaGhe()) {
+                    daCoChuThich = true;
+                    break;
+                }
+            }
+            if (!daCoChuThich) {
+                chuThichLoaiGia.push_back(make_pair(
+                    dsGhePhong[k].getLoaiGhe(), dsGhePhong[k].getDonGiaGhe()));
+            }
             coGheTrongPhong = true;
         }
         if (!coGheTrongPhong) {
             cout << "Phong nay chua duoc thiet lap so do ghe!\n";
         }
         cout << "\n-----------------------------------------------------------------------\n";
-        cout << "Chu thich: [ ] Trong | [?] Dang duoc giu | [X] Da dat\n";
+        cout << "Trang thai: [ ] Trong | [?] Dang duoc giu | [X] Da dat | [-] Khong su dung\n";
+        if (!chuThichLoaiGia.empty()) {
+            cout << "Loai ghe va gia:\n";
+            for (size_t i = 0; i < chuThichLoaiGia.size(); ++i) {
+                cout << "  - " << chuThichLoaiGia[i].first << ": "
+                     << fixed << setprecision(0) << chuThichLoaiGia[i].second
+                     << " VND\n";
+            }
+        }
         if (!dsGheChon.empty()) {
             cout << "Ghe dang giu: ";
             for (size_t i = 0; i < dsGheChon.size(); ++i) {
