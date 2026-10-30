@@ -1,8 +1,4 @@
-#include "User.h"
-
-// =====================================================
-// USER
-// =====================================================
+#include "../include/User.h"
 
 User::User()
 {
@@ -18,11 +14,6 @@ User::User()
     matKhau = "";
     vaiTro = "";
 }
-
-
-// =====================================================
-// USER CONSTRUCTOR
-// =====================================================
 
 User::User(string maNguoiDung,
            string hoTen,
@@ -48,19 +39,9 @@ User::User(string maNguoiDung,
     this->vaiTro = vaiTro;
 }
 
-
-// =====================================================
-// DESTRUCTOR
-// =====================================================
-
 User::~User()
 {
 }
-
-
-// =====================================================
-// GETTER
-// =====================================================
 
 string User::getMaNguoiDung() const
 {
@@ -107,11 +88,6 @@ string User::getVaiTro() const
     return vaiTro;
 }
 
-
-// =====================================================
-// SETTER
-// =====================================================
-
 void User::setHoTen(string hoTen)
 {
     this->hoTen = hoTen;
@@ -147,11 +123,6 @@ void User::setMatKhau(string matKhau)
     this->matKhau = matKhau;
 }
 
-
-// =====================================================
-// USER KIEM TRA DANG NHAP
-// =====================================================
-
 bool User::kiemTraDangNhap(
     string taiKhoan,
     string matKhau) const
@@ -159,11 +130,6 @@ bool User::kiemTraDangNhap(
     return this->taiKhoan == taiKhoan &&
            this->matKhau == matKhau;
 }
-
-
-// =====================================================
-// USER HIEN THI THONG TIN
-// =====================================================
 
 void User::hienThiThongTin() const
 {
@@ -178,17 +144,11 @@ void User::hienThiThongTin() const
     cout << "Vai tro: " << vaiTro << endl;
 }
 
-
-// =====================================================
-// ADMIN
-// =====================================================
-
 Admin::Admin()
     : User()
 {
     vaiTro = "Admin";
 }
-
 
 Admin::Admin(string maNguoiDung,
              string hoTen,
@@ -212,11 +172,6 @@ Admin::Admin(string maNguoiDung,
 {
 }
 
-
-// =====================================================
-// ADMIN CAP TAI KHOAN STAFF
-// =====================================================
-
 void Admin::capTaiKhoanStaff(
     Staff& staff,
     string taiKhoan,
@@ -238,11 +193,6 @@ void Admin::capTaiKhoanStaff(
     cout << "Tai khoan: " << taiKhoan << endl;
 }
 
-
-// =====================================================
-// ADMIN XOA TAI KHOAN STAFF
-// =====================================================
-
 void Admin::xoaTaiKhoanStaff(Staff& staff)
 {
     if (!staff.getCoTaiKhoan())
@@ -260,11 +210,6 @@ void Admin::xoaTaiKhoanStaff(Staff& staff)
     cout << "Da xoa tai khoan Staff." << endl;
 }
 
-
-// =====================================================
-// ADMIN KHOA TAI KHOAN STAFF
-// =====================================================
-
 void Admin::khoaTaiKhoanStaff(Staff& staff)
 {
     if (!staff.getCoTaiKhoan())
@@ -279,11 +224,6 @@ void Admin::khoaTaiKhoanStaff(Staff& staff)
          << staff.getTaiKhoan()
          << endl;
 }
-
-
-// =====================================================
-// ADMIN MO KHOA TAI KHOAN STAFF
-// =====================================================
 
 void Admin::moKhoaTaiKhoanStaff(Staff& staff)
 {
@@ -307,16 +247,10 @@ void Admin::moKhoaTaiKhoanStaff(Staff& staff)
          << endl;
 }
 
-
-// =====================================================
-// ADMIN CHO STAFF NGHI VIEC
-// =====================================================
-
 void Admin::choNghiViecStaff(Staff& staff)
 {
     staff.trangThaiLamViec = "DaNghiViec";
 
-    // Neu co tai khoan thi tu dong khoa
     if (staff.getCoTaiKhoan())
     {
         staff.trangThaiTaiKhoan = "BiKhoa";
@@ -334,16 +268,10 @@ void Admin::choNghiViecStaff(Staff& staff)
     }
 }
 
-
-// =====================================================
-// ADMIN CHO STAFF LAM LAI
-// =====================================================
-
 void Admin::choLamLaiStaff(Staff& staff)
 {
     staff.trangThaiLamViec = "DangLam";
 
-    // Khong tu dong mo khoa tai khoan
     cout << "Staff "
          << staff.getHoTen()
          << " da duoc chuyen sang DangLam."
@@ -356,11 +284,6 @@ void Admin::choLamLaiStaff(Staff& staff)
     }
 }
 
-
-// =====================================================
-// ADMIN HIEN THI THONG TIN
-// =====================================================
-
 void Admin::hienThiThongTin() const
 {
     cout << endl;
@@ -369,11 +292,6 @@ void Admin::hienThiThongTin() const
 
     User::hienThiThongTin();
 }
-
-
-// =====================================================
-// ADMIN CHUC NANG
-// =====================================================
 
 void Admin::hienThiChucNang() const
 {
@@ -394,11 +312,6 @@ void Admin::hienThiChucNang() const
     cout << "11. Quan ly tai khoan" << endl;
 }
 
-
-// =====================================================
-// STAFF
-// =====================================================
-
 Staff::Staff()
     : User()
 {
@@ -412,11 +325,6 @@ Staff::Staff()
 
     coTaiKhoan = false;
 }
-
-
-// =====================================================
-// STAFF CONSTRUCTOR NHAN VIEN MOI
-// =====================================================
 
 Staff::Staff(string maNguoiDung,
              string hoTen,
@@ -440,12 +348,6 @@ Staff::Staff(string maNguoiDung,
     trangThaiTaiKhoan = "ChuaCoTaiKhoan";
     coTaiKhoan = false;
 }
-
-
-// =====================================================
-// STAFF CONSTRUCTOR DAY DU
-// DUNG KHI DOC CSV
-// =====================================================
 
 Staff::Staff(string maNguoiDung,
              string hoTen,
@@ -475,11 +377,6 @@ Staff::Staff(string maNguoiDung,
     this->coTaiKhoan = coTaiKhoan;
 }
 
-
-// =====================================================
-// STAFF GETTER
-// =====================================================
-
 string Staff::getTrangThaiLamViec() const
 {
     return trangThaiLamViec;
@@ -495,28 +392,21 @@ bool Staff::getCoTaiKhoan() const
     return coTaiKhoan;
 }
 
-
-// =====================================================
-// STAFF KIEM TRA DANG NHAP
-// =====================================================
-
 bool Staff::kiemTraDangNhap(
     string taiKhoan,
     string matKhau) const
 {
-    // Chua co tai khoan
+
     if (!coTaiKhoan)
     {
         return false;
     }
 
-    // Tai khoan bi khoa
     if (trangThaiTaiKhoan == "BiKhoa")
     {
         return false;
     }
 
-    // Nhan vien da nghi viec
     if (trangThaiLamViec == "DaNghiViec")
     {
         return false;
@@ -526,11 +416,6 @@ bool Staff::kiemTraDangNhap(
         taiKhoan,
         matKhau);
 }
-
-
-// =====================================================
-// STAFF HIEN THI THONG TIN
-// =====================================================
 
 void Staff::hienThiThongTin() const
 {
@@ -555,11 +440,6 @@ void Staff::hienThiThongTin() const
              << endl;
     }
 }
-
-
-// =====================================================
-// STAFF CHUC NANG
-// =====================================================
 
 void Staff::hienThiChucNang() const
 {
