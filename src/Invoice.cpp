@@ -145,7 +145,8 @@ void Invoice::setTrangThaiThanhToan(const string& trangThai) {
 
 string Invoice::toCSV() const {
     stringstream ss;
-    ss << maHoaDon << "," << maKhachHang << "," << maNhanVien << "," << thoiGianLap << ","
+    ss << maHoaDon << "," << maKhachHang << "," << maNhanVien << ","
+       << DateFormat::normalizeDateTime(thoiGianLap) << ","
        << fixed << setprecision(0) << tongTien << "," << hinhThucThanhToan << ","
        << maGiaoDich << "," << trangThaiThanhToan;
     return ss.str();
@@ -177,7 +178,7 @@ void Invoice::hienThi() const {
     cout << left << setw(10) << maHoaDon
          << setw(12) << (maKhachHang.empty() ? "KhachLe" : maKhachHang)
          << setw(10) << maNhanVien
-         << setw(23) << thoiGianLap
+         << setw(23) << DateFormat::normalizeDateTime(thoiGianLap)
          << setw(15) << fixed << setprecision(0) << tongTien
          << setw(15) << hinhThucThanhToan
          << setw(12) << trangThaiThanhToan << endl;
@@ -243,18 +244,18 @@ bool InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
     ssHD << "HD_" << (danhSachHoaDon.size() + 1);
     string maHD = ssHD.str();
 
-    time_t now = time(0);
-    tm* ltm = localtime(&now);
-
-    stringstream ssTime;
-    ssTime << setfill('0') << setw(2) << ltm->tm_mday << "/"
-           << setfill('0') << setw(2) << (1 + ltm->tm_mon) << "/"
-           << (1900 + ltm->tm_year) << " "
-           << setfill('0') << setw(2) << ltm->tm_hour << ":"
-           << setfill('0') << setw(2) << ltm->tm_min << ":"
-           << setfill('0') << setw(2) << ltm->tm_sec;
-
-    string thoiGianLap = ssTime.str();
+    const time_t now = time(0);
+    const tm* localTime = localtime(&now);
+    if (localTime == NULL) {
+        cout << "[Loi]: Khong the xac dinh thoi gian lap hoa don.\n";
+        return false;
+    }
+    char timestamp[20];
+    if (strftime(timestamp, sizeof(timestamp), "%d/%m/%Y %H:%M:%S", localTime) == 0) {
+        cout << "[Loi]: Khong the dinh dang thoi gian lap hoa don.\n";
+        return false;
+    }
+    string thoiGianLap = timestamp;
 
     cout << "\n==================== XU LY THANH TOAN HOA DON ====================\n";
     cout << "Ma hoa don tam tao: " << maHD << "\n";

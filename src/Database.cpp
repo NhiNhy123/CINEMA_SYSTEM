@@ -9,6 +9,7 @@
 #include "../include/Ticket.h"
 #include "../include/ShilftManagement.h"
 #include "../include/User.h"
+#include "../include/DateFormat.h"
 
 #include <fstream>
 #include <sstream>
@@ -942,11 +943,11 @@ static void ghiFileGiaoDichFNB(const vector<FoodAndBeverage>& fnb, const vector<
 
     outFile << "\n[PROMOTIONS]\nmaKhuyenMai,tenKhuyenMai,maCode,phanTramGiam,mucGiamToiDa,ngayBatDau,ngayKetThuc,phamViApDung\n";
     for (size_t i = 0; i < km.size(); ++i)
-        outFile << km[i].getMaKhuyenMai() << "," << km[i].getTenKhuyenMai() << "," << km[i].getMaCode() << "," << km[i].getPhanTramGiam() << "," << km[i].getMucGiamToiDa() << "," << km[i].getNgayBatDau() << "," << km[i].getNgayKetThuc() << "," << km[i].getPhamViApDung() << "\n";
+        outFile << km[i].getMaKhuyenMai() << "," << km[i].getTenKhuyenMai() << "," << km[i].getMaCode() << "," << km[i].getPhanTramGiam() << "," << km[i].getMucGiamToiDa() << "," << DateFormat::normalizeDate(km[i].getNgayBatDau()) << "," << DateFormat::normalizeDate(km[i].getNgayKetThuc()) << "," << km[i].getPhamViApDung() << "\n";
 
     outFile << "\n[INVOICES]\nmaHoaDon,maKhachHang,maNhanVien,thoiGianLap,tongTien,hinhThucThanhToan,maGiaoDich,trangThaiThanhToan\n";
     for (size_t i = 0; i < hd.size(); ++i)
-        outFile << hd[i].getMaHoaDon() << "," << hd[i].getMaKhachHang() << "," << hd[i].getMaNhanVien() << "," << hd[i].getThoiGianLap() << "," << hd[i].getTongTien() << "," << hd[i].getHinhThucThanhToan() << "," << hd[i].getMaGiaoDich() << "," << hd[i].getTrangThaiThanhToan() << "\n";
+        outFile << hd[i].getMaHoaDon() << "," << hd[i].getMaKhachHang() << "," << hd[i].getMaNhanVien() << "," << DateFormat::normalizeDateTime(hd[i].getThoiGianLap()) << "," << hd[i].getTongTien() << "," << hd[i].getHinhThucThanhToan() << "," << hd[i].getMaGiaoDich() << "," << hd[i].getTrangThaiThanhToan() << "\n";
     outFile.close();
 }
 

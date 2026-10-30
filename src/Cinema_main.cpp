@@ -16,6 +16,7 @@
 #include "../include/ShilftManagement.h"
 #include "../include/SysLog.h"
 #include "../include/ActivityLog.h"
+#include "../include/DateFormat.h"
 
 using namespace std;
 
@@ -152,7 +153,7 @@ void menuThongKeDoanhThu(Database& db, InvoiceManager& invoiceMgr) {
                 for (size_t i = 0; i < shifts.size(); ++i) {
                     cout << shifts[i].getMaCa() << " | "
                          << shifts[i].getMaNhanVien() << " | "
-                         << shifts[i].getNgayLam() << " | "
+                         << DateFormat::normalizeDate(shifts[i].getNgayLam()) << " | "
                          << shifts[i].getGioBatDau() << " - "
                          << shifts[i].getGioKetThuc() << "\n";
                 }
