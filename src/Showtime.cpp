@@ -260,7 +260,7 @@ void Showtime::themSuatChieu(Database& db) {
     }
 
     do {
-        cout << "Nhap gia ve co ban (> 0): ";
+        cout << "Nhap gia tham khao cho suat chieu (> 0; khong dung de tinh tien ve): ";
         cin >> giaVe;
         if (giaVe <= 0) cout << "Loi: Gia ve phai lon hon 0!\n";
     } while (giaVe <= 0);
@@ -287,7 +287,8 @@ void Showtime::hienThiSuatChieuTheoPhim(const string& maPhimCanXem, Database& db
     db.docDanhSachSuatChieu(danhSach);
 
     cout << "\n--- DANH SACH SUAT CHIEU CUA PHIM: " << tenPhim << " ---\n";
-    cout << left << setw(12) << "Ma SC" << setw(10) << "Phong" << setw(12) << "Ngay" << setw(15) << "Khung gio" << setw(15) << "Gia ve" << endl;
+    cout << left << setw(12) << "Ma SC" << setw(10) << "Phong" << setw(12) << "Ngay" << setw(15) << "Khung gio" << setw(15) << "Gia tham khao" << endl;
+    cout << "(Gia tinh tien ve duoc lay theo loai ghe.)\n";
     cout << "-------------------------------------------------------------\n";
 
     bool found = false;
@@ -311,7 +312,8 @@ void Showtime::hienThiTatCa(Database& db) {
     db.docDanhSachSuatChieu(danhSach);
 
     cout << "\n================================ TAT CA SUAT CHIEU TRONG HE THONG =================================\n";
-    cout << left << setw(12) << "Ma SC" << setw(30) << "Ten Phim" << setw(10) << "Phong" << setw(12) << "Ngay" << setw(15) << "Khung gio" << setw(15) << "Gia ve" << endl;
+    cout << left << setw(12) << "Ma SC" << setw(30) << "Ten Phim" << setw(10) << "Phong" << setw(12) << "Ngay" << setw(15) << "Khung gio" << setw(15) << "Gia tham khao" << endl;
+    cout << "(Gia tinh tien ve duoc lay theo loai ghe.)\n";
     cout << "---------------------------------------------------------------------------------------------------\n";
 
     for (size_t i = 0; i < danhSach.size(); ++i) {

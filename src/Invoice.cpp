@@ -195,6 +195,12 @@ bool InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
                                    double soTienDoiDiem, const string& maSuatChieu,
                                    const vector<string>& dsGheGiu, const string& maPhienGiu) {
 
+    double tongTienFB = 0.0;
+    for (size_t i = 0; i < dsFB.size(); ++i) {
+        tongTienFB += dsFB[i].thanhTien;
+    }
+    const double tongTienVe = tongTienHang - tongTienFB;
+
     string maCodeVoucher;
     cout << "Nhap ma voucher khuyen mai (Bam Enter de bo qua): ";
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
@@ -259,7 +265,10 @@ bool InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
 
     cout << "\n==================== XU LY THANH TOAN HOA DON ====================\n";
     cout << "Ma hoa don tam tao: " << maHD << "\n";
-    cout << "Tong gia tri don hang (Da gom Ve + F&B): " << fixed << setprecision(0) << tongTienHang << " VND\n";
+    cout << "Tong tien ve (gia ban day du theo loai ghe): "
+         << fixed << setprecision(0) << tongTienVe << " VND\n";
+    cout << "Tong tien F&B: " << tongTienFB << " VND\n";
+    cout << "Tong gia tri don hang: " << tongTienHang << " VND\n";
     if (soTienDoiDiem > 0) {
         cout << "Giam gia tu diem: -" << soTienDoiDiem << " VND\n";
     }
@@ -359,7 +368,9 @@ bool InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
     cout << "Thoi gian: " << thoiGianLap << "\n";
     cout << "Khach hang: " << (maKH.empty() ? "Khach vang lai" : maKH) << "\n";
     cout << "------------------------------------------------------------------\n";
-    cout << "Tong gia tri don hang: " << fixed << setprecision(0) << tongTienHang << " VND\n";
+    cout << "Tong tien ve: " << fixed << setprecision(0) << tongTienVe << " VND\n";
+    cout << "Tong tien F&B: " << tongTienFB << " VND\n";
+    cout << "Tong gia tri don hang: " << tongTienHang << " VND\n";
     if (soTienDoiDiem > 0) {
         cout << "Giam gia tu diem: -" << soTienDoiDiem << " VND\n";
     }

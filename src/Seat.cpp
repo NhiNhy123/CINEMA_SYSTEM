@@ -62,7 +62,8 @@ void Seat::hienThi() const {
     else if (trangThai == "DaDat") hienThiTT = "[X]";
     else if (trangThai == "KhongSuDung") hienThiTT = "[-]";
 
-    cout << maGhe << hienThiTT << "(" << loaiGhe << ") ";
+    cout << maGhe << hienThiTT << "(" << loaiGhe << ": "
+         << fixed << setprecision(0) << donGiaGhe << " VND) ";
 }
 
 SeatManager::SeatManager() {}
@@ -103,7 +104,7 @@ void SeatManager::taoGheHangLoat(const string& maPhong, Database& db) {
     cin >> loaiGhe;
 
     do {
-        cout << "Nhap don gia co ban (Phai > 0): ";
+        cout << "Nhap gia ban day du cho moi ghe (Phai > 0): ";
         cin >> donGia;
         if (donGia <= 0) cout << "Loi: Don gia khong duoc am hoac bang 0!\n";
     } while (donGia <= 0);
@@ -175,7 +176,7 @@ void SeatManager::hienThiDanhSachLoaiGhe(Database& db) const {
     }
 
     cout << "\n========== DANH MUC LOAI GHE ==========\n";
-    cout << left << setw(6) << "STT" << setw(24) << "Loai ghe" << "Don gia (VND)\n";
+    cout << left << setw(6) << "STT" << setw(24) << "Loai ghe" << "Gia ban day du (VND)\n";
     for (size_t i = 0; i < danhSachLoaiGhe.size(); ++i) {
         cout << left << setw(6) << (i + 1) << setw(24) << danhSachLoaiGhe[i].first
              << fixed << setprecision(0) << danhSachLoaiGhe[i].second << "\n";
@@ -189,7 +190,7 @@ void SeatManager::themLoaiGhe(Database& db) {
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
     cout << "Nhap ten loai ghe moi: ";
     getline(cin, tenLoaiGhe);
-    cout << "Nhap don gia (VND, > 0): ";
+    cout << "Nhap gia ban day du cho moi ghe (VND, > 0): ";
     if (!(cin >> donGia) || donGia <= 0) {
         cin.clear();
         cin.ignore(numeric_limits<streamsize>::max(), '\n');
@@ -224,7 +225,7 @@ void SeatManager::suaLoaiGhe(Database& db) {
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
     cout << "Nhap ten loai ghe moi: ";
     getline(cin, tenMoi);
-    cout << "Nhap don gia moi (VND, > 0): ";
+    cout << "Nhap gia ban day du moi (VND, > 0): ";
     if (!(cin >> donGiaMoi) || donGiaMoi <= 0) {
         cin.clear();
         cin.ignore(numeric_limits<streamsize>::max(), '\n');

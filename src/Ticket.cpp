@@ -495,8 +495,9 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
         dsGiaVeGheChon.push_back(giaGheHienTai);
         tongTienGhe += giaGheHienTai;
 
-        cout << "Da chon ghe [" << ghe << "] thanh cong (giu toi da 15 phut). Tam tinh tien ghe: "
-             << (int)tongTienGhe << " VND\n";
+        cout << "Da chon ghe [" << ghe << "] thanh cong (giu toi da 15 phut). Gia ghe: "
+             << fixed << setprecision(0) << giaGheHienTai
+             << " VND. Tam tinh tien ve: " << tongTienGhe << " VND\n";
         cout << "Ban co muon chon them ghe nua khong? (y/n): ";
         cin >> tiepTucChon;
     }
@@ -684,8 +685,11 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
 
     cout << "--- CHI TIET GHE DA DAT ---\n";
     for (size_t i = 0; i < dsGheChon.size(); ++i) {
-        cout << (i + 1) << ". Ghe: " << dsGheChon[i] << " | Trang thai: DaDat\n";
+        cout << (i + 1) << ". Ghe: " << dsGheChon[i]
+             << " | Gia ve: " << fixed << setprecision(0) << dsGiaVeGheChon[i]
+             << " VND | Trang thai: DaDat\n";
     }
+    cout << "Tong tien ve: " << fixed << setprecision(0) << tongTienGhe << " VND\n";
 
     if (!dsFBItems.empty()) {
         cout << "--- CHI TIET F&B DA CHON ---\n";
