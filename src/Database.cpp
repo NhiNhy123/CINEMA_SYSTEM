@@ -17,6 +17,8 @@
 #include <cstdlib>
 #include <utility>
 #include <ctime>
+#include <iomanip>
+#include <limits>
 #include <windows.h>
 
 using namespace std;
@@ -49,6 +51,74 @@ bool ghiToanBoFile(const string& path, const string& content) {
         return false;
     }
     return true;
+}
+
+bool tachDongCSV(const string& line, vector<string>& fields) {
+    fields.clear();
+    string field;
+    bool inQuotes = false;
+    bool closedQuote = false;
+    for (size_t i = 0; i < line.size(); ++i) {
+        const char ch = line[i];
+        if (inQuotes) {
+            if (ch == '"') {
+                if (i + 1 < line.size() && line[i + 1] == '"') {
+                    field += '"';
+                    ++i;
+                } else {
+                    inQuotes = false;
+                    closedQuote = true;
+                }
+            } else {
+                field += ch;
+            }
+        } else if (ch == ',') {
+            fields.push_back(field);
+            field.clear();
+            closedQuote = false;
+        } else if (ch == '"' && field.empty() && !closedQuote) {
+            inQuotes = true;
+        } else if (closedQuote) {
+            return false;
+        } else {
+            field += ch;
+        }
+    }
+    if (inQuotes) return false;
+    if (!field.empty() && field[field.size() - 1] == '\r') field.erase(field.size() - 1);
+    fields.push_back(field);
+    return true;
+}
+
+string quoteCSVField(const string& value) {
+    string field;
+    bool needsQuotes = false;
+    for (size_t i = 0; i < value.size(); ++i) {
+        const char ch = value[i];
+        if (ch == ',' || ch == '"') needsQuotes = true;
+        if (ch == '\r' || ch == '\n') {
+            field += ' ';
+        } else {
+            if (ch == '"') field += '"';
+            field += ch;
+        }
+    }
+    return needsQuotes ? "\"" + field + "\"" : field;
+}
+
+bool parsePositiveInteger(const string& value, int& result) {
+    stringstream stream(value);
+    if (!(stream >> result)) return false;
+    stream >> ws;
+    return stream.eof() && result > 0;
+}
+
+bool parseNonNegativeDouble(const string& value, double& result) {
+    stringstream stream(value);
+    if (!(stream >> result)) return false;
+    stream >> ws;
+    return stream.eof() &&
+           result >= 0.0 && result <= numeric_limits<double>::max();
 }
 }
 
@@ -1031,6 +1101,20 @@ static bool ghiFileGiaoDichFNB(const vector<FoodAndBeverage>& fnb, const vector<
     output << "\n[INVOICES]\nmaHoaDon,maKhachHang,maNhanVien,thoiGianLap,tongTien,hinhThucThanhToan,maGiaoDich,trangThaiThanhToan\n";
     for (size_t i = 0; i < hd.size(); ++i)
         output << hd[i].getMaHoaDon() << "," << hd[i].getMaKhachHang() << "," << hd[i].getMaNhanVien() << "," << DateFormat::normalizeDateTime(hd[i].getThoiGianLap()) << "," << hd[i].getTongTien() << "," << hd[i].getHinhThucThanhToan() << "," << hd[i].getMaGiaoDich() << "," << hd[i].getTrangThaiThanhToan() << "\n";
+
+    output << "\n[INVOICE_FB_ITEMS]\nmaHoaDon,maMatHang,tenMatHangTaiThoiDiem,soLuong,donGiaTaiThoiDiem,thanhTien\n";
+    output << setprecision(numeric_limits<double>::max_digits10);
+    for (size_t i = 0; i < hd.size(); ++i) {
+        const vector<InvoiceFBItem>& items = hd[i].getChiTietFB();
+        for (size_t j = 0; j < items.size(); ++j) {
+            output << quoteCSVField(hd[i].getMaHoaDon()) << ","
+                   << quoteCSVField(items[j].maMatHang) << ","
+                   << quoteCSVField(items[j].tenMatHangTaiThoiDiem) << ","
+                   << items[j].soLuong << ","
+                   << items[j].donGiaTaiThoiDiem << ","
+                   << items[j].thanhTien << "\n";
+        }
+    }
     return ghiToanBoFile("DATA/giao_dich_fnb.csv", output.str());
 }
 
@@ -1074,15 +1158,56 @@ void Database::ghiDanhSachKhuyenMai(const vector<Promotion>& km) {
 
 void Database::docDanhSachHoaDon(vector<Invoice>& ds) {
     ds.clear(); ifstream inFile("DATA/giao_dich_fnb.csv");
-    if (!inFile.is_open()) return; string line; bool reading = false;
+    if (!inFile.is_open()) return;
+    string line;
+    int section = 0;
     while (getline(inFile, line)) {
-        if (line.find("[INVOICES]") != string::npos) { reading = true; continue; }
-        if (reading && line[0] == '[') { reading = false; break; }
-        if (reading && line.find("maHoaDon") == string::npos && !line.empty()) {
+        if (line.empty()) continue;
+        if (line[0] == '[') {
+            if (line.find("[INVOICES]") == 0) section = 1;
+            else if (line.find("[INVOICE_FB_ITEMS]") == 0) section = 2;
+            else section = 0;
+            continue;
+        }
+        if (section == 1 && line.find("maHoaDon") == string::npos) {
             vector<string> p = tachChuoiCSV(line);
             if (p.size() >= 8) ds.push_back(Invoice(p[0], p[1], p[2], p[3], atof(p[4].c_str()), p[5], p[6], p[7]));
+        } else if (section == 2 && line.find("maHoaDon") != 0) {
+            vector<string> p;
+            int quantity;
+            double unitPrice, total;
+            if (!tachDongCSV(line, p) || p.size() != 6 ||
+                !parsePositiveInteger(p[3], quantity) ||
+                !parseNonNegativeDouble(p[4], unitPrice) ||
+                !parseNonNegativeDouble(p[5], total)) {
+                cerr << "[CANH BAO]: Bo qua dong chi tiet F&B khong hop le trong giao_dich_fnb.csv.\n";
+                continue;
+            }
+
+            size_t invoiceIndex = ds.size();
+            for (size_t i = 0; i < ds.size(); ++i) {
+                if (ds[i].getMaHoaDon() == p[0]) {
+                    invoiceIndex = i;
+                    break;
+                }
+            }
+            if (invoiceIndex == ds.size()) {
+                cerr << "[CANH BAO]: Chi tiet F&B tham chieu hoa don khong ton tai: "
+                     << p[0] << "\n";
+                continue;
+            }
+
+            InvoiceFBItem item;
+            item.maHoaDon = p[0];
+            item.maMatHang = p[1];
+            item.tenMatHangTaiThoiDiem = p[2];
+            item.soLuong = quantity;
+            item.donGiaTaiThoiDiem = unitPrice;
+            item.thanhTien = total;
+            ds[invoiceIndex].themChiTietFB(item);
         }
     }
+    if (inFile.bad()) cerr << "[LOI]: Khong doc duoc day du du lieu hoa don va chi tiet F&B.\n";
     inFile.close();
 }
 

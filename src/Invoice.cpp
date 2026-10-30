@@ -194,6 +194,13 @@ void Invoice::hienThi() const {
          << setw(15) << fixed << setprecision(0) << tongTien
          << setw(15) << hinhThucThanhToan
          << setw(12) << trangThaiThanhToan << endl;
+    for (size_t i = 0; i < chiTietFB.size(); ++i) {
+        const InvoiceFBItem& item = chiTietFB[i];
+        cout << "  F&B: " << item.tenMatHangTaiThoiDiem << " (" << item.maMatHang << ")"
+             << " x" << item.soLuong
+             << " | Don gia: " << fixed << setprecision(0) << item.donGiaTaiThoiDiem
+             << " | Thanh tien: " << item.thanhTien << " VND\n";
+    }
 }
 
 InvoiceManager::InvoiceManager() {}

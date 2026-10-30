@@ -12,7 +12,9 @@ class ShiftReport;
 struct InvoiceFBItem {
     string maHoaDon;
     string maMatHang;
+    string tenMatHangTaiThoiDiem;
     int soLuong;
+    double donGiaTaiThoiDiem;
     double thanhTien;
 };
 

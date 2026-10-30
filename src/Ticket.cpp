@@ -602,7 +602,9 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
                 InvoiceFBItem item;
                 item.maHoaDon = "";
                 item.maMatHang = selectedItem.getMaMatHang();
+                item.tenMatHangTaiThoiDiem = selectedItem.getTenMatHang();
                 item.soLuong = soLuong;
+                item.donGiaTaiThoiDiem = selectedItem.getGiaTien();
                 item.thanhTien = thanhTien;
 
                 dsFBItems.push_back(item);
