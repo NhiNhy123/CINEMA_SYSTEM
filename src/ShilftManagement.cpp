@@ -8,6 +8,7 @@
 #include <ctime>
 #include <sstream>
 #include <iomanip>
+#include <limits>
 
 static int chuyenNgayThanhSo(string ngay)
 {
@@ -104,6 +105,20 @@ void ShiftManagement::themBaoCaoCa(ShiftReport ca) { danhSachCa.push_back(ca); }
 
 void ShiftManagement::chotCa(string maCa, string maNhanVien, string gioBatDau, long long doanhThuHeThong, long long tienThucTe, Database& db)
 {
+    while (maCa.empty() || timCa(maCa) != NULL) {
+        if (!maCa.empty()) {
+            cout << "Loi: Ma ca '" << maCa << "' da ton tai. Vui long nhap ma ca khac.\n";
+        }
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cout << "Nhap lai ma ca: ";
+        if (!(cin >> maCa)) {
+            if (cin.eof()) return;
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            cout << "Loi: Ma ca khong hop le.\n";
+            maCa.clear();
+        }
+    }
 
     string tenNhanVien = db.layTenNhanVienQuaMa(maNhanVien);
 
