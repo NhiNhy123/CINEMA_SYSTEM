@@ -127,7 +127,9 @@ void Ticket::hienThi() const {
          << setw(15) << trangThaiSuDung << endl;
 }
 
-Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& soTienDoiDiem) {
+Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& soTienDoiDiem,
+                                  vector<Customer>& danhSachKH,
+                                  vector<GiaoDichDiem>& danhSachGDCapNhat) {
     cout << "\n===================================================================\n";
     cout << "                    XU LY THONG TIN KHACH HANG (CRM)                 \n";
     cout << "===================================================================\n";
@@ -148,7 +150,6 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& s
     strftime(bufTime, sizeof(bufTime), "%d/%m/%Y %H:%M:%S", localtime(&now));
     string thoiGian = string(bufTime);
 
-    vector<Customer> danhSachKH;
     db.docDanhSachUsers(danhSachKH);
 
     Customer* khachHangTimThay = NULL;
@@ -191,8 +192,9 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& s
                     daDoiDiem = true;
                     soDiemDaDoi = diemMuonDoi;
                     soTienDoiDiem = diemMuonDoi * 100.0;
-                    cout << "-> Da doi " << diemMuonDoi << " diem, giam "
-                         << fixed << setprecision(0) << soTienDoiDiem << " VND.\n";
+                    cout << "-> Du kien doi " << diemMuonDoi << " diem, giam "
+                         << fixed << setprecision(0) << soTienDoiDiem
+                         << " VND sau khi thanh toan thanh cong.\n";
                 } else {
                     cout << "-> Khong the doi diem; khong ap dung giam gia diem.\n";
                 }
@@ -210,7 +212,7 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& s
 
         maKHThaoTac = khachHangTimThay->getMaKH();
         if (soDiemThuong > 0) {
-            cout << "-> Da tich them " << soDiemThuong << " diem cho khach hang!\n";
+            cout << "-> Du kien tich them " << soDiemThuong << " diem sau khi thanh toan thanh cong.\n";
         }
     }
 
@@ -251,30 +253,27 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& s
         khachMoi.themChiTieu(static_cast<long long>(tongTienHoaDon));
 
         danhSachKH.push_back(khachMoi);
-        cout << "-> Dang ky thanh vien moi va tich " << soDiemThuong << " diem thanh cong! Ma KH: " << maKHMoi << "\n";
+        cout << "-> Da nhap thong tin thanh vien moi, ma KH: " << maKHMoi << "\n";
+        cout << "-> Diem va thong tin thanh vien se duoc luu sau khi thanh toan thanh cong.\n";
     }
 
-    vector<GiaoDichDiem> danhSachGD;
-    db.docLichSuGiaoDichDiem(danhSachGD);
+    db.docLichSuGiaoDichDiem(danhSachGDCapNhat);
 
     if (daDoiDiem) {
         stringstream ssGD;
-        ssGD << "GD0" << (danhSachGD.size() + 1);
-        danhSachGD.push_back(GiaoDichDiem(ssGD.str(), maKHThaoTac, "DoiDiem",
-                                         soDiemDaDoi, "Doi diem khi thanh toan", thoiGian));
+        ssGD << "GD0" << (danhSachGDCapNhat.size() + 1);
+        danhSachGDCapNhat.push_back(GiaoDichDiem(ssGD.str(), maKHThaoTac, "DoiDiem",
+                                                soDiemDaDoi, "Doi diem khi thanh toan", thoiGian));
     }
     if (soDiemThuong > 0) {
         stringstream ssGD;
-        ssGD << "GD0" << (danhSachGD.size() + 1);
+        ssGD << "GD0" << (danhSachGDCapNhat.size() + 1);
         string noiDungGD = (khachHangTimThay != NULL)
                          ? "Tich diem tu hoa don ban ve"
                          : "Tich diem hoa don dau tien";
-        danhSachGD.push_back(GiaoDichDiem(ssGD.str(), maKHThaoTac, "TichDiem",
-                                         soDiemThuong, noiDungGD, thoiGian));
+        danhSachGDCapNhat.push_back(GiaoDichDiem(ssGD.str(), maKHThaoTac, "TichDiem",
+                                                soDiemThuong, noiDungGD, thoiGian));
     }
-
-    db.ghiDanhSachUsers(danhSachKH);
-    db.ghiLichSuGiaoDichDiem(danhSachGD);
 
     if (khachHangTimThay != NULL) {
         return *khachHangTimThay;
@@ -624,7 +623,10 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
     }
 
     double soTienDoiDiem = 0.0;
-    Customer khachHangThanhToan = xuLyThongTinKhachHangCRM(db, tongTienHang, soTienDoiDiem);
+    vector<Customer> danhSachKHCapNhat;
+    vector<GiaoDichDiem> danhSachGDCapNhat;
+    Customer khachHangThanhToan = xuLyThongTinKhachHangCRM(
+        db, tongTienHang, soTienDoiDiem, danhSachKHCapNhat, danhSachGDCapNhat);
     string maKH = khachHangThanhToan.getMaKH();
     string tenKH = khachHangThanhToan.getHoTen();
     string sdt = khachHangThanhToan.getSoDienThoai();
@@ -655,6 +657,8 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
         dsVeHienTai.push_back(veMoi);
     }
     db.ghiDanhSachVe(dsVeHienTai);
+    db.ghiDanhSachUsers(danhSachKHCapNhat);
+    db.ghiLichSuGiaoDichDiem(danhSachGDCapNhat);
 
     cout << "\n===================================================================\n";
     cout << "                    XUAT THONG TIN VE XEM PHIM                     \n";
