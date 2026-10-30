@@ -813,37 +813,92 @@ void TicketManager::hienThiDanhSachVe(Database& db) {
 }
 
 void TicketManager::checkInVe(Database& db, const string& maNhanVien) {
-    string maCheckIn;
     cout << "\n--- SOAT VE / CHECK-IN TAI RAP ---\n";
-    cout << "Nhap Ma ve hoac quet Ma QR Code cua khach: ";
-    cin >> maCheckIn;
 
     vector<Ticket> danhSach;
     db.docDanhSachVe(danhSach);
-    bool found = false;
+    vector<Showtime> danhSachSuatChieu;
+    db.docDanhSachSuatChieu(danhSachSuatChieu);
 
-    for (size_t i = 0; i < danhSach.size(); ++i) {
-        if (danhSach[i].getMaVe() == maCheckIn || danhSach[i].getMaQRCode() == maCheckIn) {
-            found = true;
-            if (danhSach[i].getTrangThaiSuDung() == "DaCheckIn") {
-                cout << "[CANH BAO]: Ve nay DA DUOC SU DUNG truoc do! Tu choi vao phong chieu.\n";
-            } else {
-                danhSach[i].setTrangThaiSuDung("DaCheckIn");
-                if (!db.ghiDanhSachVe(danhSach)) {
-                    cerr << "[LOI]: Khong the luu trang thai check-in; vui long thu lai.\n";
-                } else {
-                    ActivityLog::ghiNhan(maNhanVien, "Staff", "CHECK_IN_VE",
-                                         "Ma ve: " + danhSach[i].getMaVe() +
-                                         ", ma suat chieu: " + danhSach[i].getMaSuatChieu() +
-                                         ", ma ghe: " + danhSach[i].getMaGhe());
-                    cout << "[THANH CONG]: Check-in hop le! Moi khach vao phong chieu ghe [" << danhSach[i].getMaGhe() << "].\n";
-                }
-            }
-            break;
-        }
+    int todayKey;
+    if (!DateFormat::todayDateKey(todayKey)) {
+        cerr << "[LOI]: Khong the xac dinh ngay hien tai; khong the soat ve.\n";
+        return;
     }
 
-    if (!found) {
-        cout << "[LOI]: Khong tim thay ma ve hoac ma QR hop le trong he thong!\n";
+    while (true) {
+        string maCheckIn;
+        cout << "Nhap Ma ve hoac quet Ma QR Code cua khach (nhap 0 de thoat): ";
+        if (!(cin >> maCheckIn)) {
+            if (cin.eof()) return;
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            cout << "[LOI]: Du lieu nhap khong hop le, vui long thu lai.\n";
+            continue;
+        }
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        if (maCheckIn == "0") return;
+
+        size_t ticketIndex = danhSach.size();
+        for (size_t i = 0; i < danhSach.size(); ++i) {
+            if (danhSach[i].getMaVe() == maCheckIn ||
+                danhSach[i].getMaQRCode() == maCheckIn) {
+                ticketIndex = i;
+                break;
+            }
+        }
+
+        if (ticketIndex == danhSach.size()) {
+            cout << "[LOI]: Khong tim thay ma ve hoac ma QR hop le trong he thong. "
+                    "Vui long nhap lai.\n";
+            continue;
+        }
+
+        Ticket& ve = danhSach[ticketIndex];
+        if (ve.getTrangThaiSuDung() == "DaCheckIn") {
+            cout << "[CANH BAO]: Ve nay DA DUOC SU DUNG truoc do. "
+                    "Vui long kiem tra va nhap ve khac.\n";
+            continue;
+        }
+
+        size_t showtimeIndex = danhSachSuatChieu.size();
+        for (size_t i = 0; i < danhSachSuatChieu.size(); ++i) {
+            if (danhSachSuatChieu[i].getMaSuatChieu() == ve.getMaSuatChieu()) {
+                showtimeIndex = i;
+                break;
+            }
+        }
+
+        if (showtimeIndex == danhSachSuatChieu.size()) {
+            cout << "[LOI]: Khong tim thay suat chieu cua ve. "
+                    "Vui long kiem tra thong tin va nhap lai.\n";
+            continue;
+        }
+
+        const int showDateKey =
+            DateFormat::dateKey(danhSachSuatChieu[showtimeIndex].getNgayChieu());
+        if (showDateKey == 0 || showDateKey != todayKey) {
+            cout << "[LOI]: Chi duoc soat ve trong ngay chieu. "
+                    "Ngay chieu cua ve: "
+                 << danhSachSuatChieu[showtimeIndex].getNgayChieu()
+                 << ". Vui long nhap lai.\n";
+            continue;
+        }
+
+        const string trangThaiCu = ve.getTrangThaiSuDung();
+        ve.setTrangThaiSuDung("DaCheckIn");
+        if (!db.ghiDanhSachVe(danhSach)) {
+            ve.setTrangThaiSuDung(trangThaiCu);
+            cerr << "[LOI]: Khong the luu trang thai check-in; vui long thu lai.\n";
+            continue;
+        }
+
+        ActivityLog::ghiNhan(maNhanVien, "Staff", "CHECK_IN_VE",
+                             "Ma ve: " + ve.getMaVe() +
+                             ", ma suat chieu: " + ve.getMaSuatChieu() +
+                             ", ma ghe: " + ve.getMaGhe());
+        cout << "[THANH CONG]: Check-in hop le! Moi khach vao phong chieu ghe ["
+             << ve.getMaGhe() << "].\n";
+        return;
     }
 }
