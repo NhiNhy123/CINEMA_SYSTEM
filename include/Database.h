@@ -20,14 +20,23 @@ class User;
 using namespace std;
 
 class Database {
+private:
+    bool giaoDichBanVeDangMo;
+    string banSaoLichVaVe;
+    string banSaoGiaoDichFnb;
+    string banSaoNhanSu;
+
 public:
     Database();
 
 	void docDanhSachUsers(vector<Customer>& danhSachKH);
 	string layTenNhanVienQuaMa(string maNhanVien);
-	void ghiDanhSachUsers(const vector<Customer>& danhSachKH);
+	bool ghiDanhSachUsers(const vector<Customer>& danhSachKH);
 	void docLichSuGiaoDichDiem(vector<GiaoDichDiem>& danhSachGD);
-	void ghiLichSuGiaoDichDiem(const vector<GiaoDichDiem>& danhSachGD);
+	bool ghiLichSuGiaoDichDiem(const vector<GiaoDichDiem>& danhSachGD);
+    bool batDauGiaoDichBanVe();
+    bool khoiPhucGiaoDichBanVe();
+    void hoanTatGiaoDichBanVe();
 	void docDanhSachTheLoai(vector<pair<string, string> >& danhSachTheLoai);
 	bool themLoaiTheLoai(const string& tenTheLoai);
 	bool suaLoaiTheLoai(const string& maTheLoai, const string& tenMoi);
@@ -55,13 +64,13 @@ public:
     void ghiDanhSachSuatChieu(const vector<Showtime>& danhSachSuatChieu);
     bool giuGheSuatChieu(const string& maSuatChieu, const string& maGhe, const string& maPhienGiu);
     bool kiemTraGiuGheSuatChieu(const string& maSuatChieu, const string& maGhe, const string& maPhienGiu);
-    void giaiPhongGheSuatChieu(const string& maSuatChieu, const string& maGhe, const string& maPhienGiu);
+    bool giaiPhongGheSuatChieu(const string& maSuatChieu, const string& maGhe, const string& maPhienGiu);
     bool chotGheSuatChieu(const string& maSuatChieu, const vector<string>& danhSachGhe, const string& maPhienGiu);
     bool capNhatTrangThaiGheSuatChieu(const string& maSuatChieu, const string& maGhe,
                                       const string& trangThaiMoi, const string& maPhienGiu = "");
 
     void docDanhSachVe(vector<Ticket>& danhSachVe);
-    void ghiDanhSachVe(const vector<Ticket>& danhSachVe);
+    bool ghiDanhSachVe(const vector<Ticket>& danhSachVe);
 
     void docDanhSachFAndB(vector<FoodAndBeverage>& danhSachFAndB);
     void ghiDanhSachFAndB(const vector<FoodAndBeverage>& danhSachFAndB);
@@ -70,7 +79,7 @@ public:
     void ghiDanhSachKhuyenMai(const vector<Promotion>& danhSachKhuyenMai);
 
     void docDanhSachHoaDon(vector<Invoice>& danhSachHoaDon);
-    void ghiDanhSachHoaDon(const vector<Invoice>& danhSachHoaDon);
+    bool ghiDanhSachHoaDon(const vector<Invoice>& danhSachHoaDon);
 
     void docDanhSachCa(vector<ShiftReport>& danhSachCa);
 	void ghiDanhSachCa(const vector<ShiftReport>& danhSachCa);

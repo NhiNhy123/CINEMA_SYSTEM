@@ -55,8 +55,21 @@ static bool laGiuBoiPhien(const string& trangThai, const string& maPhienGiu, lon
 static void giaiPhongGheCuaPhien(Database& db, const string& maSC,
                                   const vector<string>& danhSachGhe, const string& maPhienGiu) {
     for (size_t i = 0; i < danhSachGhe.size(); ++i) {
-        db.giaiPhongGheSuatChieu(maSC, danhSachGhe[i], maPhienGiu);
+        if (!db.giaiPhongGheSuatChieu(maSC, danhSachGhe[i], maPhienGiu)) {
+            cerr << "[CANH BAO]: Khong the giai phong ghe " << danhSachGhe[i]
+                 << " cua phien giao dich.\n";
+        }
     }
+}
+
+static bool khoiPhucGiaoDichBanVe(Database& db, const string& maSC,
+                                  const vector<string>& danhSachGhe, const string& maPhienGiu) {
+    if (!db.khoiPhucGiaoDichBanVe()) {
+        cerr << "[LOI NGHIEM TRONG]: Can kiem tra va khoi phuc thu cong du lieu giao dich.\n";
+        return false;
+    }
+    giaiPhongGheCuaPhien(db, maSC, danhSachGhe, maPhienGiu);
+    return true;
 }
 
 Ticket::Ticket() {
@@ -632,18 +645,34 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
 
     InvoiceManager invoiceMgr;
     invoiceMgr.taiDuLieu(db);
+    vector<Invoice> hoaDonTruocGiaoDich;
+    db.docDanhSachHoaDon(hoaDonTruocGiaoDich);
+    stringstream ssMaHoaDonDuKien;
+    ssMaHoaDonDuKien << "HD_" << (hoaDonTruocGiaoDich.size() + 1);
+    const string maHoaDonDuKien = ssMaHoaDonDuKien.str();
+    if (!db.batDauGiaoDichBanVe()) {
+        giaiPhongGheCuaPhien(db, selectedSC, dsGheChon, maPhienGiu);
+        return;
+    }
+
     if (!invoiceMgr.taoHoaDonMoi(db, maNV, maKH, tongTienHang, dsFBItems, selectedMovie,
                                  soTienDoiDiem, selectedSC, dsGheChon, maPhienGiu)) {
-        giaiPhongGheCuaPhien(db, selectedSC, dsGheChon, maPhienGiu);
+        khoiPhucGiaoDichBanVe(db, selectedSC, dsGheChon, maPhienGiu);
         return;
     }
 
     vector<Invoice> danhSachHD;
     db.docDanhSachHoaDon(danhSachHD);
-    string maHD = danhSachHD.empty() ? "HD_UNKNOWN" : danhSachHD.back().getMaHoaDon();
-    double soTienThanhToan = danhSachHD.empty()
-                           ? tongTienHang - soTienDoiDiem
-                           : danhSachHD.back().getTongTien();
+    if (danhSachHD.size() != hoaDonTruocGiaoDich.size() + 1 ||
+        danhSachHD.back().getMaHoaDon() != maHoaDonDuKien) {
+        cerr << "[LOI]: Khong doc duoc hoa don vua tao; dang khoi phuc giao dich.\n";
+        khoiPhucGiaoDichBanVe(db, selectedSC, dsGheChon, maPhienGiu);
+        return;
+    }
+    const Invoice& hoaDonMoi = danhSachHD.back();
+    string maHD = hoaDonMoi.getMaHoaDon();
+    double soTienThanhToan = hoaDonMoi.getTongTien();
+    string phuongThucThanhToan = hoaDonMoi.getHinhThucThanhToan();
     int soDiemThuong = static_cast<int>(soTienThanhToan / 10000.0);
 
     time_t thoiDiemThanhToan = time(0);
@@ -673,13 +702,11 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
         daCapNhatKhachHang = true;
         break;
     }
-
     if (!daCapNhatKhachHang) {
-        cerr << "[LOI]: Khong tim thay khach hang " << maKH
-             << " de cap nhat diem sau thanh toan.\n";
+        cerr << "[LOI]: Khong the cap nhat thong tin khach hang; giao dich dang duoc khoi phuc.\n";
+        khoiPhucGiaoDichBanVe(db, selectedSC, dsGheChon, maPhienGiu);
+        return;
     }
-
-    cout << "[THONG BAO]: Da luu trang thai dat ghe cho suat chieu " << selectedSC << " thanh cong!\n";
 
     vector<Ticket> dsVeHienTai;
     db.docDanhSachVe(dsVeHienTai);
@@ -692,11 +719,28 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
         Ticket veMoi(ssMaVe.str(), maHD, selectedSC, dsGheChon[i], dsGiaVeGheChon[i], ssQR.str(), "ChuaCheckIn");
         dsVeHienTai.push_back(veMoi);
     }
-    db.ghiDanhSachVe(dsVeHienTai);
-    db.ghiDanhSachUsers(danhSachKHCapNhat);
-    db.ghiLichSuGiaoDichDiem(danhSachGDCapNhat);
+    if (!db.ghiDanhSachVe(dsVeHienTai) ||
+        !db.ghiDanhSachUsers(danhSachKHCapNhat) ||
+        !db.ghiLichSuGiaoDichDiem(danhSachGDCapNhat)) {
+        cerr << "[LOI]: Khong the luu day du ve/CRM/lich su diem; giao dich dang duoc khoi phuc.\n";
+        khoiPhucGiaoDichBanVe(db, selectedSC, dsGheChon, maPhienGiu);
+        return;
+    }
+
+    db.hoanTatGiaoDichBanVe();
+    std::ostringstream chiTietNhatKy;
+    chiTietNhatKy << "Ma hoa don: " << maHD
+                  << ", ma khach hang: " << (maKH.empty() ? "KhachLe" : maKH)
+                  << ", tong tien: " << fixed << setprecision(0) << soTienThanhToan
+                  << " VND, phuong thuc: " << phuongThucThanhToan;
+    ActivityLog::ghiNhan(maNV, "Staff", "THANH_TOAN_HOA_DON", chiTietNhatKy.str());
 
     cout << "\n===================================================================\n";
+    cout << "                    GIAO DICH BAN VE THANH CONG                    \n";
+    cout << "===================================================================\n";
+    cout << "Ma hoa don: " << maHD << " | Phuong thuc: " << phuongThucThanhToan << "\n";
+    cout << "Tong thanh toan: " << fixed << setprecision(0) << soTienThanhToan << " VND\n";
+    cout << "===================================================================\n";
     cout << "                    XUAT THONG TIN VE XEM PHIM                     \n";
     cout << "===================================================================\n";
     cout << "Suat chieu: Phim [" << selectedMovie << "] luc " << selectedShowtime.getGioBatDau()
@@ -768,12 +812,15 @@ void TicketManager::checkInVe(Database& db, const string& maNhanVien) {
                 cout << "[CANH BAO]: Ve nay DA DUOC SU DUNG truoc do! Tu choi vao phong chieu.\n";
             } else {
                 danhSach[i].setTrangThaiSuDung("DaCheckIn");
-                db.ghiDanhSachVe(danhSach);
-                ActivityLog::ghiNhan(maNhanVien, "Staff", "CHECK_IN_VE",
-                                     "Ma ve: " + danhSach[i].getMaVe() +
-                                     ", ma suat chieu: " + danhSach[i].getMaSuatChieu() +
-                                     ", ma ghe: " + danhSach[i].getMaGhe());
-                cout << "[THANH CONG]: Check-in hop le! Moi khach vao phong chieu ghe [" << danhSach[i].getMaGhe() << "].\n";
+                if (!db.ghiDanhSachVe(danhSach)) {
+                    cerr << "[LOI]: Khong the luu trang thai check-in; vui long thu lai.\n";
+                } else {
+                    ActivityLog::ghiNhan(maNhanVien, "Staff", "CHECK_IN_VE",
+                                         "Ma ve: " + danhSach[i].getMaVe() +
+                                         ", ma suat chieu: " + danhSach[i].getMaSuatChieu() +
+                                         ", ma ghe: " + danhSach[i].getMaGhe());
+                    cout << "[THANH CONG]: Check-in hop le! Moi khach vao phong chieu ghe [" << danhSach[i].getMaGhe() << "].\n";
+                }
             }
             break;
         }

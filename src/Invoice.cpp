@@ -5,7 +5,6 @@
 #include "../include/Promotion.h"
 #include "../include/Showtime.h"
 #include "../include/DateFormat.h"
-#include "../include/ActivityLog.h"
 #include "../include/ShilftManagement.h"
 #include <iostream>
 #include <sstream>
@@ -376,36 +375,10 @@ bool InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
 
     danhSachHoaDon.push_back(newInvoice);
 
-    db.ghiDanhSachHoaDon(danhSachHoaDon);
-    std::ostringstream chiTietNhatKy;
-    chiTietNhatKy << "Ma hoa don: " << maHD
-                  << ", ma khach hang: " << (maKH.empty() ? "KhachLe" : maKH)
-                  << ", tong tien: " << fixed << setprecision(0) << tongThanhToan
-                  << " VND, phuong thuc: " << hinhThuc;
-    ActivityLog::ghiNhan(maNV, "Staff", "THANH_TOAN_HOA_DON", chiTietNhatKy.str());
-
-    cout << "\n==================================================================\n";
-    cout << "                    CINEMA TICKET INVOICE                         \n";
-    cout << "==================================================================\n";
-    cout << "Ma HD: " << maHD << " | Thu ngan: " << maNV << "\n";
-    cout << "Thoi gian: " << thoiGianLap << "\n";
-    cout << "Khach hang: " << (maKH.empty() ? "Khach vang lai" : maKH) << "\n";
-    cout << "------------------------------------------------------------------\n";
-    cout << "Tong tien ve: " << fixed << setprecision(0) << tongTienVe << " VND\n";
-    cout << "Tong tien F&B: " << tongTienFB << " VND\n";
-    cout << "Tong gia tri don hang: " << tongTienHang << " VND\n";
-    if (soTienDoiDiem > 0) {
-        cout << "Giam gia tu diem: -" << soTienDoiDiem << " VND\n";
+    if (!db.ghiDanhSachHoaDon(danhSachHoaDon)) {
+        cerr << "[LOI]: Khong the luu hoa don. Giao dich ban ve se duoc khoi phuc.\n";
+        return false;
     }
-    if (soTienGiamGia > 0) {
-        cout << "Giam gia voucher: -" << soTienGiamGia << " VND\n";
-    }
-    cout << "Phuong thuc: " << hinhThuc << " | Ma GD: " << maGD << "\n";
-    cout << "Trang thai: DA THANH TOAN (DaTra)\n";
-    cout << "TONG THANH TOAN SAU GIAM GIA: " << fixed << setprecision(0) << tongThanhToan << " VND\n";
-    cout << "==================================================================\n";
-    cout << "          Cam on quy khach va hen gap lai lan sau!                \n";
-    cout << "==================================================================\n";
     return true;
 }
 
