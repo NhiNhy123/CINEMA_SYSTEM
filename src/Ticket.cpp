@@ -8,6 +8,7 @@
 #include "../include/FAndB.h"
 #include "../include/Room.h"
 #include "../include/DateFormat.h"
+#include "../include/ActivityLog.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -707,7 +708,7 @@ void TicketManager::hienThiDanhSachVe(Database& db) {
     cout << "===========================================================================================\n";
 }
 
-void TicketManager::checkInVe(Database& db) {
+void TicketManager::checkInVe(Database& db, const string& maNhanVien) {
     string maCheckIn;
     cout << "\n--- SOAT VE / CHECK-IN TAI RAP ---\n";
     cout << "Nhap Ma ve hoac quet Ma QR Code cua khach: ";
@@ -725,6 +726,10 @@ void TicketManager::checkInVe(Database& db) {
             } else {
                 danhSach[i].setTrangThaiSuDung("DaCheckIn");
                 db.ghiDanhSachVe(danhSach);
+                ActivityLog::ghiNhan(maNhanVien, "Staff", "CHECK_IN_VE",
+                                     "Ma ve: " + danhSach[i].getMaVe() +
+                                     ", ma suat chieu: " + danhSach[i].getMaSuatChieu() +
+                                     ", ma ghe: " + danhSach[i].getMaGhe());
                 cout << "[THANH CONG]: Check-in hop le! Moi khach vao phong chieu ghe [" << danhSach[i].getMaGhe() << "].\n";
             }
             break;

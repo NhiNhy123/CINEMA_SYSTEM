@@ -2,6 +2,7 @@
 #include "../include/Database.h"
 #include "../include/User.h"
 #include "../include/DateFormat.h"
+#include "../include/ActivityLog.h"
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
@@ -121,6 +122,10 @@ void ShiftManagement::chotCa(string maCa, string maNhanVien, string gioBatDau, l
     ShiftReport ca(maCa, maNhanVien, tenNhanVien, ngayHienTai, gioBatDau, string(bufTime), doanhThuHeThong, tienThucTe, "ChoDuyet", false);
     danhSachCa.push_back(ca);
     luuDuLieu(db);
+    ActivityLog::ghiNhan(maNhanVien, "Staff", "CHOT_CA",
+                         "Ma ca: " + maCa + ", doanh thu he thong: " +
+                         std::to_string(doanhThuHeThong) + " VND, tien thuc te: " +
+                         std::to_string(tienThucTe) + " VND");
 
     cout << "\n==============================================\n";
     cout << "               CHOT CA THANH CONG             \n";

@@ -39,7 +39,7 @@ class TicketManager {
 public:
     void quyTrinhBanVe(Database& db, const string& maNV);
     void hienThiDanhSachVe(Database& db);
-    void checkInVe(Database& db);
+    void checkInVe(Database& db, const string& maNhanVien);
 };
 
 #endif

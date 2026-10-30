@@ -15,6 +15,7 @@
 #include "../include/Invoice.h"
 #include "../include/ShilftManagement.h"
 #include "../include/SysLog.h"
+#include "../include/ActivityLog.h"
 
 using namespace std;
 
@@ -119,7 +120,7 @@ void menuLoaiGhe(Database& db, SeatManager& seatMgr) {
     } while (choice != 0);
 }
 
-void menuAdmin(Database& db) {
+void menuAdmin(Database& db, const string& maAdmin) {
     RoomManager roomMgr;
     SeatManager seatMgr;
     FAndBManager fandbMgr;
@@ -149,6 +150,7 @@ void menuAdmin(Database& db) {
         cout << "9. Quan ly & Duyet bao cao ca lam viec (Shift Management)\n";
         cout << "10. Quan ly The loai phim\n";
         cout << "11. Quan ly Loai ghe\n";
+        cout << "12. Xem nhat ky hoat dong\n";
         cout << "0. Dang xuat (Quay lai man hinh dang nhap)\n";
         cout << "========================================================================================\n";
         cout << "Nhap lua chon cua ban: ";
@@ -420,13 +422,17 @@ void menuAdmin(Database& db) {
                         string maCaDuyet;
                         cout << "Nhap ma ca can duyet: ";
                         cin >> maCaDuyet;
-                        shiftMgr.duyetBaoCao(maCaDuyet, db);
+                        if (shiftMgr.duyetBaoCao(maCaDuyet, db)) {
+                            ActivityLog::ghiNhan(maAdmin, "Admin", "DUYET_CA", "Ma ca: " + maCaDuyet);
+                        }
                     }
                     else if (subShift == 3) {
                         string maCaKhoa;
                         cout << "Nhap ma ca can khoa bao cao: ";
                         cin >> maCaKhoa;
-                        shiftMgr.khoaBaoCao(maCaKhoa, db);
+                        if (shiftMgr.khoaBaoCao(maCaKhoa, db)) {
+                            ActivityLog::ghiNhan(maAdmin, "Admin", "KHOA_BAO_CAO_CA", "Ma ca: " + maCaKhoa);
+                        }
                     }
                     else if (subShift == 4) {
                     	shiftMgr.taiDuLieu(db);
@@ -453,6 +459,14 @@ void menuAdmin(Database& db) {
             case 11:
                 menuLoaiGhe(db, seatMgr);
                 break;
+            case 12: {
+                string maNguoiDung;
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cout << "Nhap ma nguoi dung de loc (Enter de xem tat ca): ";
+                getline(cin, maNguoiDung);
+                ActivityLog::hienThi(maNguoiDung);
+                break;
+            }
             case 0:
                 cout << "Dang xuat khoi tai khoan Admin...\n";
                 break;
@@ -484,6 +498,7 @@ void menuStaff(Database& db, const string& maNV) {
         cout << "3. Soat ve / Check-in tai cua phong chieu\n";
         cout << "4. Xem lich su giao dich hoa don\n";
         cout << "5. Chot ca lam viec & nop tien doanh thu\n";
+        cout << "6. Xem nhat ky hoat dong ca nhan\n";
         cout << "0. Dang xuat (Quay lai man hinh dang nhap)\n";
         cout << "====================================================================================\n";
         cout << "Nhap lua chon cua ban: ";
@@ -539,7 +554,7 @@ void menuStaff(Database& db, const string& maNV) {
                 break;
             case 3:
                 system("cls");
-                ticketMgr.checkInVe(db);
+                ticketMgr.checkInVe(db, maNV);
                 break;
             case 4:
                 system("cls");
@@ -564,6 +579,10 @@ void menuStaff(Database& db, const string& maNV) {
     			shiftMgr.chotCa(maCa, maNV, gioBD, doanhThuHT, tienTT, db);
     			break;
 			}
+            case 6:
+                system("cls");
+                ActivityLog::hienThi(maNV);
+                break;
             case 0:
                 cout << "Dang xuat khoi tai khoan Staff...\n";
                 break;
@@ -589,14 +608,16 @@ int main() {
         if (currentUser != NULL) {
             string vaiTro = currentUser->getVaiTro();
             string maNV = currentUser->getMaNguoiDung();
+            ActivityLog::ghiNhan(maNV, vaiTro, "DANG_NHAP", "Dang nhap thanh cong");
 
             system("cls");
             if (vaiTro == "Admin") {
-                menuAdmin(db);
+                menuAdmin(db, maNV);
             } else if (vaiTro == "Staff") {
                 menuStaff(db, maNV);
             }
 
+            ActivityLog::ghiNhan(maNV, vaiTro, "DANG_XUAT", "Dang xuat thanh cong");
             delete currentUser;
         } else {
             char thoat;

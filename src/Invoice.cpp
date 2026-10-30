@@ -4,6 +4,7 @@
 #include "../include/FAndB.h"
 #include "../include/Promotion.h"
 #include "../include/DateFormat.h"
+#include "../include/ActivityLog.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -248,6 +249,12 @@ bool InvoiceManager::taoHoaDonMoi(Database& db, const string& maNV, const string
     danhSachHoaDon.push_back(newInvoice);
 
     db.ghiDanhSachHoaDon(danhSachHoaDon);
+    std::ostringstream chiTietNhatKy;
+    chiTietNhatKy << "Ma hoa don: " << maHD
+                  << ", ma khach hang: " << (maKH.empty() ? "KhachLe" : maKH)
+                  << ", tong tien: " << fixed << setprecision(0) << tongThanhToan
+                  << " VND, phuong thuc: " << hinhThuc;
+    ActivityLog::ghiNhan(maNV, "Staff", "THANH_TOAN_HOA_DON", chiTietNhatKy.str());
 
     cout << "\n==================================================================\n";
     cout << "                    CINEMA TICKET INVOICE                         \n";
