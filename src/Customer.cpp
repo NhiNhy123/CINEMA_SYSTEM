@@ -1,12 +1,8 @@
 #include "../include/Customer.h"
+#include "../include/DateFormat.h"
 #include <sstream>
 #include <cstdlib>
 
-// =====================================================
-// GIAO DICH DIEM
-// =====================================================
-
-// Constructor mac dinh
 GiaoDichDiem::GiaoDichDiem()
 {
     maGiaoDich = "";
@@ -17,7 +13,6 @@ GiaoDichDiem::GiaoDichDiem()
     thoiGian = "";
 }
 
-// Constructor d?y d? kh?p 6 c?t c?a b?ng [CUSTOMER_POINTS_HISTORY]
 GiaoDichDiem::GiaoDichDiem(
     string maGiaoDich,
     string maKhachHang,
@@ -31,13 +26,8 @@ GiaoDichDiem::GiaoDichDiem(
     this->loaiGiaoDich = loaiGiaoDich;
     this->soDiem = soDiem;
     this->noiDung = noiDung;
-    this->thoiGian = thoiGian;
+    this->thoiGian = DateFormat::normalizeDateTime(thoiGian);
 }
-
-
-// =====================================================
-// GETTER GIAO DICH
-// =====================================================
 
 string GiaoDichDiem::getMaGiaoDich() const
 {
@@ -69,27 +59,25 @@ string GiaoDichDiem::getThoiGian() const
     return thoiGian;
 }
 
-// Chuy?n giao d?ch thành chu?i CSV d? ghi dúng vào b?ng [CUSTOMER_POINTS_HISTORY]
 string GiaoDichDiem::toCSV() const
 {
     stringstream ss;
-    ss << maGiaoDich << "," 
-       << maKhachHang << "," 
-       << loaiGiaoDich << "," 
-       << soDiem << "," 
-       << noiDung << "," 
+    ss << maGiaoDich << ","
+       << maKhachHang << ","
+       << loaiGiaoDich << ","
+       << soDiem << ","
+       << noiDung << ","
        << thoiGian;
     return ss.str();
 }
 
-// Ð?c m?t dòng CSV d? tái t?o d?i tu?ng GiaoDichDiem
 GiaoDichDiem GiaoDichDiem::fromCSV(const string& line)
 {
     stringstream ss(line);
     string maGD, maKH, loaiGD, strSoDiem, nd, tg;
 
     getline(ss, maGD, ',');
-    getline(ss, maKH, ',');      // Ð?c maKhachHang chính xác
+    getline(ss, maKH, ',');
     getline(ss, loaiGD, ',');
     getline(ss, strSoDiem, ',');
     getline(ss, nd, ',');
@@ -103,11 +91,6 @@ GiaoDichDiem GiaoDichDiem::fromCSV(const string& line)
     return GiaoDichDiem(maGD, maKH, loaiGD, soDiem, nd, tg);
 }
 
-
-// =====================================================
-// HIEN THI GIAO DICH
-// =====================================================
-
 void GiaoDichDiem::hienThi() const
 {
     cout << "Ma giao dich: " << maGiaoDich << endl;
@@ -118,28 +101,18 @@ void GiaoDichDiem::hienThi() const
     cout << "Thoi gian: " << thoiGian << endl;
 }
 
-
-// =====================================================
-// CUSTOMER
-// =====================================================
-
-// Constructor mac dinh
 Customer::Customer()
 {
     maKH = "";
     hoTen = "";
     soDienThoai = "";
     email = "";
+    cccd = "";
 
     diemTichLuy = 0;
     hangThanhVien = "Thuong";
     tongChiTieu = 0;
 }
-
-
-// =====================================================
-// CUSTOMER CONSTRUCTOR KHACH HANG MOI
-// =====================================================
 
 Customer::Customer(
     string maKH,
@@ -156,11 +129,6 @@ Customer::Customer(
     hangThanhVien = "Thuong";
     tongChiTieu = 0;
 }
-
-
-// =====================================================
-// CUSTOMER CONSTRUCTOR DAY DU
-// =====================================================
 
 Customer::Customer(
     string maKH,
@@ -180,11 +148,6 @@ Customer::Customer(
     this->hangThanhVien = hangThanhVien;
     this->tongChiTieu = tongChiTieu;
 }
-
-
-// =====================================================
-// GETTER CUSTOMER
-// =====================================================
 
 string Customer::getMaKH() const
 {
@@ -206,6 +169,11 @@ string Customer::getEmail() const
     return email;
 }
 
+string Customer::getCCCD() const
+{
+    return cccd;
+}
+
 int Customer::getDiemTichLuy() const
 {
     return diemTichLuy;
@@ -220,11 +188,6 @@ long long Customer::getTongChiTieu() const
 {
     return tongChiTieu;
 }
-
-
-// =====================================================
-// SETTER
-// =====================================================
 
 void Customer::setHoTen(string hoTen)
 {
@@ -241,17 +204,17 @@ void Customer::setEmail(string email)
     this->email = email;
 }
 
-
-// =====================================================
-// XU LY CSV CHO CUSTOMERS (Chi luu 4 c?t chính)
-// =====================================================
+void Customer::setCCCD(string cccd)
+{
+    this->cccd = cccd;
+}
 
 string Customer::toCSV() const
 {
     stringstream ss;
-    ss << maKH << "," 
-       << diemTichLuy << "," 
-       << hangThanhVien << "," 
+    ss << maKH << ","
+       << diemTichLuy << ","
+       << hangThanhVien << ","
        << tongChiTieu;
     return ss.str();
 }
@@ -272,14 +235,8 @@ Customer Customer::fromCSV(const string& line)
     if (!strDiem.empty()) diem = atoi(strDiem.c_str());
     if (!strChiTieu.empty()) chiTieu = atoll(strChiTieu.c_str());
 
-    // Tr? v? d?i tu?ng (H? tên, SÐT, Email s? du?c ghép n?i t? b?ng [USERS] qua Database)
     return Customer(ma, "", "", "", diem, hang, chiTieu);
 }
-
-
-// =====================================================
-// TICH DIEM
-// =====================================================
 
 void Customer::tichDiem(
     int soDiem,
@@ -297,7 +254,6 @@ void Customer::tichDiem(
     ss << "GD" << (lichSuDiem.size() + 1);
     string maGiaoDich = ss.str();
 
-    // S?a l?i dùng Constructor 6 tham s? dúng chu?n [CUSTOMER_POINTS_HISTORY]
     GiaoDichDiem giaoDich(
         maGiaoDich,
         maKH,
@@ -310,11 +266,6 @@ void Customer::tichDiem(
 
     capNhatHangThanhVien();
 }
-
-
-// =====================================================
-// DOI DIEM
-// =====================================================
 
 bool Customer::doiDiem(
     int soDiem,
@@ -337,7 +288,6 @@ bool Customer::doiDiem(
     ss << "GD" << (lichSuDiem.size() + 1);
     string maGiaoDich = ss.str();
 
-    // S?a l?i dùng Constructor 6 tham s? chu?n
     GiaoDichDiem giaoDich(
         maGiaoDich,
         maKH,
@@ -353,11 +303,6 @@ bool Customer::doiDiem(
     return true;
 }
 
-
-// =====================================================
-// THEM CHI TIEU
-// =====================================================
-
 void Customer::themChiTieu(long long soTien)
 {
     if (soTien <= 0)
@@ -369,11 +314,6 @@ void Customer::themChiTieu(long long soTien)
 
     capNhatHangThanhVien();
 }
-
-
-// =====================================================
-// CAP NHAT HANG THANH VIEN
-// =====================================================
 
 void Customer::capNhatHangThanhVien()
 {
@@ -390,11 +330,6 @@ void Customer::capNhatHangThanhVien()
         hangThanhVien = "Thuong";
     }
 }
-
-
-// =====================================================
-// THEM GIAO DICH & LICH SU
-// =====================================================
 
 void Customer::themGiaoDich(GiaoDichDiem giaoDich)
 {
@@ -422,11 +357,6 @@ void Customer::hienThiLichSuDiem() const
         cout << "---------------------------------------------" << endl;
     }
 }
-
-
-// =====================================================
-// HIEN THI THONG TIN CUSTOMER
-// =====================================================
 
 void Customer::hienThiThongTin() const
 {
