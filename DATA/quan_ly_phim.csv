@@ -8,6 +8,7 @@ TL05,Tam Ly
 TL06,Gia Dinh
 TL07,Hoat Hinh
 TL08,Kich Tinh
+TL09,Gay Can
 
 [MOVIE_GENRES]
 maPhim,maTheLoai
@@ -20,6 +21,7 @@ P05,TL04
 P07,TL09
 P07,TL03
 P06,TL08
+prf,TL01
 
 [MOVIES]
 maPhim,tenPhim,thoiLuong,nhanDoTuoi,ngayKhoiChieu,ngayKetThuc,moTa,poster

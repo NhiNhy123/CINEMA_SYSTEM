@@ -1,12 +1,14 @@
 [FOOD_AND_BEVERAGES]
 maMatHang,tenMatHang,loai,giaTien,trangThaiKinhDoanh
-FB01,Bap ngot lon,Bap,50000,NgungBan
+FB01,Bap ngot,Bap,45000,DangBan
 FB02,Coca-Cola lon,Nuoc,30000,DangBan
 FB03,Combo Solo (1 Bap + 1 Nuoc),Combo,70000,DangBan
+RB01,Bap Pho Mai,Bap,25000,DangBan
 
 [PROMOTIONS]
 maKhuyenMai,tenKhuyenMai,maCode,phanTramGiam,mucGiamToiDa,ngayBatDau,ngayKetThuc,phamViApDung
 KM01,Uu dai khai truong,HELLO2026,10,50000,01/01/2026,31/12/2026,All
+KM02,Halloween,HALLOWEEN12,20,15000,29/10/2026,30/12/2026,All
 
 [INVOICES]
 maHoaDon,maKhachHang,maNhanVien,thoiGianLap,tongTien,hinhThucThanhToan,maGiaoDich,trangThaiThanhToan
@@ -20,3 +22,8 @@ HD_7,U03,U002,24/10/2026 09:29:41,120000,QueQR,TXN_QR_HD_7,DaTra
 HD_8,U02,U002,25/10/2026 19:49:11,90000,TienMat,N/A,DaTra
 HD_9,U02,U002,25/10/2026 19:59:37,130000,TienMat,N/A,DaTra
 HD_10,U02,U002,26/10/2026 20:44:04,90000,TienMat,N/A,DaTra
+HD_11,U02,U002,30/10/2026 21:08:59,159000,TienMat,N/A,DaTra
+
+[INVOICE_FB_ITEMS]
+maHoaDon,maMatHang,tenMatHangTaiThoiDiem,soLuong,donGiaTaiThoiDiem,thanhTien
+HD_11,RB01,Bap Pho Mai,1,25000,25000
