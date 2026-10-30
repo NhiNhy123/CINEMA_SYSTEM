@@ -50,6 +50,8 @@ private:
     string hoTen;
     string soDienThoai;
     string email;
+    string ngaySinh;
+    string gioiTinh;
     string cccd;
 
     int diemTichLuy;
@@ -81,6 +83,8 @@ public:
     string getHoTen() const;
     string getSoDienThoai() const;
     string getEmail() const;
+    string getNgaySinh() const;
+    string getGioiTinh() const;
     string getCCCD() const;
 
     int getDiemTichLuy() const;
@@ -90,6 +94,8 @@ public:
     void setHoTen(string hoTen);
     void setSoDienThoai(string soDienThoai);
     void setEmail(string email);
+    void setNgaySinh(string ngaySinh);
+    void setGioiTinh(string gioiTinh);
     void setCCCD(string cccd);
 
     string toCSV() const;

@@ -38,6 +38,21 @@ static bool cccdHopLe(const string& cccd) {
     return cccd.length() == 12 && laChuoiChuSo(cccd);
 }
 
+static string taoMaKhachHangMoi(const vector<Customer>& danhSachKH) {
+    for (unsigned long long sequence = 1; ; ++sequence) {
+        stringstream candidate;
+        candidate << "U0" << sequence;
+        bool exists = false;
+        for (size_t i = 0; i < danhSachKH.size(); ++i) {
+            if (danhSachKH[i].getMaKH() == candidate.str()) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists) return candidate.str();
+    }
+}
+
 static bool laGiuBoiPhien(const string& trangThai, const string& maPhienGiu, long long* thoiGianConLai = NULL) {
     const string tienTo = "DangChon|";
     if (trangThai.find(tienTo) != 0) return false;
@@ -244,12 +259,12 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& s
         cout << "Nhap gioi tinh (Nam/Nu): ";
         getline(cin, gioiTinh);
 
-        stringstream ssMa;
-        ssMa << "U0" << (danhSachKH.size() + 1);
-        string maKHMoi = ssMa.str();
+        const string maKHMoi = taoMaKhachHangMoi(danhSachKH);
         maKHThaoTac = maKHMoi;
 
         Customer khachMoi(maKHMoi, hoTen, sdt, email, 0, "Thuong", 0);
+        khachMoi.setNgaySinh(ngaySinh);
+        khachMoi.setGioiTinh(gioiTinh);
         khachMoi.setCCCD(cccd);
 
         danhSachKH.push_back(khachMoi);

@@ -107,6 +107,8 @@ Customer::Customer()
     hoTen = "";
     soDienThoai = "";
     email = "";
+    ngaySinh = "";
+    gioiTinh = "";
     cccd = "";
 
     diemTichLuy = 0;
@@ -124,6 +126,9 @@ Customer::Customer(
     this->hoTen = hoTen;
     this->soDienThoai = soDienThoai;
     this->email = email;
+    ngaySinh = "";
+    gioiTinh = "";
+    cccd = "";
 
     diemTichLuy = 0;
     hangThanhVien = "Thuong";
@@ -143,6 +148,9 @@ Customer::Customer(
     this->hoTen = hoTen;
     this->soDienThoai = soDienThoai;
     this->email = email;
+    ngaySinh = "";
+    gioiTinh = "";
+    cccd = "";
 
     this->diemTichLuy = diemTichLuy;
     this->hangThanhVien = hangThanhVien;
@@ -167,6 +175,16 @@ string Customer::getSoDienThoai() const
 string Customer::getEmail() const
 {
     return email;
+}
+
+string Customer::getNgaySinh() const
+{
+    return ngaySinh;
+}
+
+string Customer::getGioiTinh() const
+{
+    return gioiTinh;
 }
 
 string Customer::getCCCD() const
@@ -202,6 +220,16 @@ void Customer::setSoDienThoai(string soDienThoai)
 void Customer::setEmail(string email)
 {
     this->email = email;
+}
+
+void Customer::setNgaySinh(string ngaySinh)
+{
+    this->ngaySinh = DateFormat::normalizeDate(ngaySinh);
+}
+
+void Customer::setGioiTinh(string gioiTinh)
+{
+    this->gioiTinh = gioiTinh;
 }
 
 void Customer::setCCCD(string cccd)
@@ -366,6 +394,8 @@ void Customer::hienThiThongTin() const
     cout << "Ho ten: " << hoTen << endl;
     cout << "So dien thoai: " << soDienThoai << endl;
     cout << "Email: " << email << endl;
+    cout << "Ngay sinh: " << ngaySinh << endl;
+    cout << "Gioi tinh: " << gioiTinh << endl;
     cout << "Diem tich luy: " << diemTichLuy << endl;
     cout << "Hang thanh vien: " << hangThanhVien << endl;
     cout << "Tong chi tieu: " << tongChiTieu << " VND" << endl;

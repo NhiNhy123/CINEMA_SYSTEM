@@ -19,6 +19,8 @@
 #include <ctime>
 #include <iomanip>
 #include <limits>
+#include <map>
+#include <set>
 #include <windows.h>
 
 using namespace std;
@@ -104,6 +106,15 @@ string quoteCSVField(const string& value) {
         }
     }
     return needsQuotes ? "\"" + field + "\"" : field;
+}
+
+string serializeCSVFields(const vector<string>& fields) {
+    ostringstream output;
+    for (size_t i = 0; i < fields.size(); ++i) {
+        if (i > 0) output << ",";
+        output << quoteCSVField(fields[i]);
+    }
+    return output.str();
 }
 
 bool parsePositiveInteger(const string& value, int& result) {
@@ -199,46 +210,59 @@ void Database::docDanhSachUsers(vector<Customer>& danhSachKH) {
     if (!inFile.is_open()) return;
 
     string line;
-    bool readingUsers = false, readingCustomers = false;
-    vector<string> maUsers, hoTens, soDienThoais, cccds;
+    int section = 0;
+    map<string, vector<string> > usersById;
+    set<string> customerIds;
 
     while (getline(inFile, line)) {
         if (line.empty()) continue;
-        if (line.find("[USERS]") != string::npos) { readingUsers = true; readingCustomers = false; continue; }
-        if (line.find("[CUSTOMERS]") != string::npos) { readingUsers = false; readingCustomers = true; continue; }
-        if (line[0] == '[') { readingUsers = readingCustomers = false; continue; }
+        if (line[0] == '[') {
+            if (line.find("[USERS]") == 0) section = 1;
+            else if (line.find("[CUSTOMERS]") == 0) section = 2;
+            else section = 0;
+            continue;
+        }
 
-        if (readingUsers && line.find("maNguoiDung") == string::npos) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 4) {
-                maUsers.push_back(p[0]);
-                hoTens.push_back(p[1]);
-                soDienThoais.push_back(p[2]);
-                cccds.push_back(p.size() > 6 ? p[6] : "");
-            }
-        } else if (readingCustomers && line.find("maKhachHang") == string::npos) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 4) {
-                string maKH = p[0];
-                int diem = atoi(p[1].c_str());
-                string hang = p[2];
-                long long chiTieu = atoll(p[3].c_str());
+        vector<string> fields;
+        if (!tachDongCSV(line, fields)) {
+            cerr << "[CANH BAO]: Bo qua dong CSV khong hop le trong du lieu CRM.\n";
+            continue;
+        }
 
-                string hoTen = "", sdt = "", email = "", cccd = "";
-                for (size_t i = 0; i < maUsers.size(); ++i) {
-                    if (maUsers[i] == maKH) {
-                        hoTen = hoTens[i];
-                        sdt = soDienThoais[i];
-                        cccd = cccds[i];
-                        break;
-                    }
-                }
-                Customer customer(maKH, hoTen, sdt, "", diem, hang, chiTieu);
-                customer.setCCCD(cccd);
-                danhSachKH.push_back(customer);
+        if (section == 1 && !fields.empty() && fields[0] != "maNguoiDung" &&
+            fields.size() >= 1 && !fields[0].empty()) {
+            if (usersById.find(fields[0]) != usersById.end()) {
+                cerr << "[CANH BAO]: Ma nguoi dung bi trung trong CSV: "
+                     << fields[0] << ". Su dung ho so xuat hien dau tien.\n";
+                continue;
             }
+            usersById[fields[0]] = fields;
+        } else if (section == 2 && fields.size() >= 4 &&
+                   fields[0] != "maKhachHang" && !fields[0].empty()) {
+            const string& maKH = fields[0];
+            if (!customerIds.insert(maKH).second) {
+                cerr << "[CANH BAO]: Ma khach hang bi trung trong CSV: "
+                     << maKH << ". Giu nguyen ban ghi de tranh mat du lieu.\n";
+            }
+
+            const map<string, vector<string> >::const_iterator user = usersById.find(maKH);
+            const vector<string>* profile = user == usersById.end() ? NULL : &user->second;
+            const string hoTen = profile != NULL && profile->size() > 1 ? (*profile)[1] : "";
+            const string soDienThoai = profile != NULL && profile->size() > 2 ? (*profile)[2] : "";
+            const string email = profile != NULL && profile->size() > 3 ? (*profile)[3] : "";
+            const string ngaySinh = profile != NULL && profile->size() > 4 ? (*profile)[4] : "";
+            const string gioiTinh = profile != NULL && profile->size() > 5 ? (*profile)[5] : "";
+            const string cccd = profile != NULL && profile->size() > 6 ? (*profile)[6] : "";
+
+            Customer customer(maKH, hoTen, soDienThoai, email,
+                              atoi(fields[1].c_str()), fields[2], atoll(fields[3].c_str()));
+            customer.setNgaySinh(ngaySinh);
+            customer.setGioiTinh(gioiTinh);
+            customer.setCCCD(cccd);
+            danhSachKH.push_back(customer);
         }
     }
+    if (inFile.bad()) cerr << "[LOI]: Khong doc duoc day du du lieu CRM.\n";
     inFile.close();
 }
 
@@ -298,21 +322,87 @@ bool Database::ghiDanhSachUsers(const vector<Customer>& danhSachKH) {
     if (inFile.bad()) return false;
     inFile.close();
 
+    map<string, const Customer*> customersById;
+    for (size_t i = 0; i < danhSachKH.size(); ++i) {
+        const string maKH = danhSachKH[i].getMaKH();
+        if (maKH.empty()) {
+            cerr << "[LOI]: Ma khach hang rong; khong ghi du lieu CRM.\n";
+            return false;
+        }
+        if (!customersById.insert(make_pair(maKH, &danhSachKH[i])).second)
+            cerr << "[CANH BAO]: Ma khach hang bi trung khi ghi CRM: "
+                 << maKH << ". Giu nguyen cac ban ghi thanh vien.\n";
+    }
+
     vector<string> finalCustomersLines;
     for (size_t i = 0; i < danhSachKH.size(); ++i) {
+        vector<string> customerFields;
         stringstream ssDiem, ssChiTieu;
         ssDiem << danhSachKH[i].getDiemTichLuy();
         ssChiTieu << danhSachKH[i].getTongChiTieu();
-        finalCustomersLines.push_back(danhSachKH[i].getMaKH() + "," + ssDiem.str() + "," + danhSachKH[i].getHangThanhVien() + "," + ssChiTieu.str());
+        customerFields.push_back(danhSachKH[i].getMaKH());
+        customerFields.push_back(ssDiem.str());
+        customerFields.push_back(danhSachKH[i].getHangThanhVien());
+        customerFields.push_back(ssChiTieu.str());
+        finalCustomersLines.push_back(serializeCSVFields(customerFields));
+    }
 
-        bool found = false;
-        for (size_t j = 0; j < rawUsersLines.size(); ++j) {
-            if (rawUsersLines[j].find(danhSachKH[i].getMaKH() + ",") == 0) { found = true; break; }
+    set<string> matchedUserIds;
+    set<string> existingUserIds;
+    for (size_t i = 0; i < rawUsersLines.size(); ++i) {
+        vector<string> userFields;
+        if (!tachDongCSV(rawUsersLines[i], userFields) || userFields.empty()) {
+            cerr << "[LOI]: Dong USERS khong hop le; khong ghi de du lieu CRM.\n";
+            return false;
         }
-        if (!found) {
-            rawUsersLines.push_back(danhSachKH[i].getMaKH() + "," + danhSachKH[i].getHoTen() + "," + danhSachKH[i].getSoDienThoai() + "," +
-                                danhSachKH[i].getEmail() + ",01/01/2000,Nam," + danhSachKH[i].getCCCD() + ",khach_" + danhSachKH[i].getSoDienThoai() + ",123456,Customer,DangLam,HoatDong");
+        if (userFields[0].empty() || !existingUserIds.insert(userFields[0]).second) {
+            cerr << "[LOI]: Ma nguoi dung rong hoac bi trung; khong ghi de du lieu CRM.\n";
+            return false;
         }
+
+        const map<string, const Customer*>::const_iterator customer = customersById.find(userFields[0]);
+        if (customer == customersById.end()) continue;
+        if (userFields.size() > 9 && !userFields[9].empty() &&
+            userFields[9] != "Customer") {
+            cerr << "[LOI]: Ma khach hang " << userFields[0]
+                 << " dang thuoc ve tai khoan khong phai Customer.\n";
+            return false;
+        }
+
+        const Customer& profile = *customer->second;
+        if (userFields.size() < 7) userFields.resize(7);
+        userFields[1] = profile.getHoTen();
+        userFields[2] = profile.getSoDienThoai();
+        userFields[3] = profile.getEmail();
+        userFields[4] = profile.getNgaySinh();
+        userFields[5] = profile.getGioiTinh();
+        userFields[6] = profile.getCCCD();
+        if (userFields.size() < 12) userFields.resize(12);
+        if (userFields[9].empty()) userFields[9] = "Customer";
+        if (userFields[10].empty()) userFields[10] = "DangLam";
+        if (userFields[11].empty()) userFields[11] = "HoatDong";
+        rawUsersLines[i] = serializeCSVFields(userFields);
+        matchedUserIds.insert(userFields[0]);
+    }
+
+    for (map<string, const Customer*>::const_iterator it = customersById.begin();
+         it != customersById.end(); ++it) {
+        if (matchedUserIds.find(it->first) != matchedUserIds.end()) continue;
+        const Customer& profile = *it->second;
+        vector<string> userFields;
+        userFields.push_back(profile.getMaKH());
+        userFields.push_back(profile.getHoTen());
+        userFields.push_back(profile.getSoDienThoai());
+        userFields.push_back(profile.getEmail());
+        userFields.push_back(profile.getNgaySinh());
+        userFields.push_back(profile.getGioiTinh());
+        userFields.push_back(profile.getCCCD());
+        userFields.push_back("khach_" + profile.getSoDienThoai());
+        userFields.push_back("123456");
+        userFields.push_back("Customer");
+        userFields.push_back("DangLam");
+        userFields.push_back("HoatDong");
+        rawUsersLines.push_back(serializeCSVFields(userFields));
     }
 
     ostringstream output;
