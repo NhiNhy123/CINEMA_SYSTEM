@@ -744,13 +744,6 @@ int main() {
 
             ActivityLog::ghiNhan(maNV, vaiTro, "DANG_XUAT", "Dang xuat thanh cong");
             delete currentUser;
-        } else {
-            char thoat;
-            cout << "\nBan co muon thoat chuong trinh khong? (y/n): ";
-            cin >> thoat;
-            if (thoat == 'y' || thoat == 'Y') {
-                break;
-            }
         }
     }
 

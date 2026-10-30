@@ -3,13 +3,9 @@
 #include <vector>
 
 
-// =====================================================
-// CONSTRUCTOR
-// =====================================================
-
 SysLog::SysLog()
 {
-    fileCSV = "DATA/quan_ly_nhan_su.csv"; // S?a l?i cho kh?p v?i tên file th?c t? c?a b?n
+    fileCSV = "DATA/quan_ly_nhan_su.csv";
 }
 
 SysLog::SysLog(string fileCSV)
@@ -17,10 +13,6 @@ SysLog::SysLog(string fileCSV)
     this->fileCSV = fileCSV;
 }
 
-
-// =====================================================
-// GOTOXY
-// =====================================================
 
 void SysLog::gotoxy(int x, int y)
 {
@@ -35,10 +27,6 @@ void SysLog::gotoxy(int x, int y)
 }
 
 
-// =====================================================
-// SET COLOR
-// =====================================================
-
 void SysLog::setColor(int color)
 {
     SetConsoleTextAttribute(
@@ -47,19 +35,11 @@ void SysLog::setColor(int color)
 }
 
 
-// =====================================================
-// CLEAR SCREEN
-// =====================================================
-
 void SysLog::clearScreen()
 {
     system("cls");
 }
 
-
-// =====================================================
-// GIAO DIEN DANG NHAP
-// =====================================================
 
 void SysLog::hienThiGiaoDien()
 {
@@ -95,10 +75,6 @@ void SysLog::hienThiGiaoDien()
 }
 
 
-// =====================================================
-// NHAP TAI KHOAN
-// =====================================================
-
 string SysLog::nhapTaiKhoan()
 {
     string taiKhoan;
@@ -110,10 +86,6 @@ string SysLog::nhapTaiKhoan()
 }
 
 
-// =====================================================
-// NHAP MAT KHAU
-// =====================================================
-
 string SysLog::nhapMatKhau()
 {
     string matKhau;
@@ -124,25 +96,6 @@ string SysLog::nhapMatKhau()
     return matKhau;
 }
 
-
-// =====================================================
-// TIM TAI KHOAN
-//
-// CSV:
-// maNguoiDung,
-// hoTen,
-// soDienThoai,
-// ngaySinh,
-// gioiTinh,
-// email,
-// cccd,
-// taiKhoan,
-// matKhau,
-// vaiTro,
-// trangThaiLamViec,
-// trangThaiTaiKhoan,
-// coTaiKhoan
-// =====================================================
 
 User* SysLog::timTaiKhoan(
     string taiKhoan,
@@ -163,7 +116,6 @@ User* SysLog::timTaiKhoan(
 
     while (getline(file, line))
     {
-        // Bo qua dong rong hoac dong tieu de [USERS] / header
         if (line.empty() || line.find("[USERS]") != string::npos || line.find("maNguoiDung") != string::npos)
         {
             continue;
@@ -186,10 +138,6 @@ User* SysLog::timTaiKhoan(
         string trangThaiLamViec;
         string trangThaiTaiKhoan;
 
-        // =========================
-        // DOC DU LICH CHINH XAC 12 COT
-        // =========================
-
         getline(ss, maNguoiDung, ',');
         getline(ss, hoTen, ',');
         getline(ss, soDienThoai, ',');
@@ -205,24 +153,15 @@ User* SysLog::timTaiKhoan(
         getline(ss, trangThaiLamViec, ',');
         getline(ss, trangThaiTaiKhoan, ',');
 
-        // =========================
-        // KIEM TRA TAI KHOAN
-        // =========================
-
         if (tk != taiKhoan)
         {
             continue;
         }
 
-        // Sai mat khau
         if (mk != matKhau)
         {
             continue;
         }
-
-        // =================================================
-        // ADMIN
-        // =================================================
 
         if (vaiTro == "Admin")
         {
@@ -242,16 +181,8 @@ User* SysLog::timTaiKhoan(
             return admin;
         }
 
-        // =================================================
-        // STAFF
-        // =================================================
-
         if (vaiTro == "Staff")
         {
-            // -------------------------
-            // Tai khoan bi khoa
-            // -------------------------
-
             if (trangThaiTaiKhoan == "BiKhoa")
             {
                 file.close();
@@ -262,10 +193,6 @@ User* SysLog::timTaiKhoan(
                 return NULL;
             }
 
-            // -------------------------
-            // Nhan vien da nghi viec
-            // -------------------------
-
             if (trangThaiLamViec == "DaNghiViec")
             {
                 file.close();
@@ -275,10 +202,6 @@ User* SysLog::timTaiKhoan(
                 setColor(7);
                 return NULL;
             }
-
-            // -------------------------
-            // Tao Staff (mac dinh co tai khoan la true vi da co trong file)
-            // -------------------------
 
             Staff* staff = new Staff(
                 maNguoiDung,
@@ -306,29 +229,18 @@ User* SysLog::timTaiKhoan(
 }
 
 
-// =====================================================
-// DANG NHAP
-// =====================================================
-
 User* SysLog::dangNhap()
 {
     hienThiGiaoDien();
 
-    // Nhap tai khoan
     string taiKhoan = nhapTaiKhoan();
 
-    // Nhap mat khau
     string matKhau = nhapMatKhau();
 
-    // Tim tai khoan
     User* user = timTaiKhoan(
         taiKhoan,
         matKhau);
 
-
-    // =================================================
-    // DANG NHAP THAT BAI
-    // =================================================
 
     if (user == NULL)
     {
@@ -348,10 +260,6 @@ User* SysLog::dangNhap()
     }
 
 
-    // =================================================
-    // DANG NHAP THANH CONG
-    // =================================================
-
     clearScreen();
 
     setColor(10);
@@ -369,11 +277,6 @@ User* SysLog::dangNhap()
     cout << "========================================";
 
     gotoxy(35, 13);
-
-    cout << "Xin chao: "
-         << user->getHoTen();
-
-    gotoxy(35, 15);
 
     cout << "Vai tro: "
          << user->getVaiTro();
