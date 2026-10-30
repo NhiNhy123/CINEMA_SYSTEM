@@ -1,6 +1,7 @@
 #include "../include/Movie.h"
 #include "../include/Database.h"
 #include "../include/Showtime.h"
+#include "../include/DateFormat.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -153,17 +154,43 @@ void Movie::themPhim(Database& db) {
     cout << "Nhap nhan do tuoi (13, 16, 18...): ";
     cin >> nhanDoTuoi;
     
-    // ÐÃ Ð?I SANG Ð?NH D?NG DD/MM/YYYY (00/00/0000)
-    cout << "Nhap ngay khoi chieu (DD/MM/YYYY, VD: 06/05/2026): ";
-    cin >> ngayKC;
-    
-    if (ngayKC.empty()) {
-        cout << "Loi: Ngay phat hanh khong hop le!\n";
+    int todayKey;
+    if (!DateFormat::todayDateKey(todayKey)) {
+        cout << "Loi: Khong the xac dinh ngay hien tai!\n";
         return;
     }
 
-    cout << "Nhap ngay ket thuc (DD/MM/YYYY, VD: 06/06/2026): ";
-    cin >> ngayKT;
+    while (true) {
+        cout << "Nhap ngay khoi chieu (DD/MM/YYYY, VD: 06/05/2026): ";
+        cin >> ngayKC;
+        if (!DateFormat::isValidDate(ngayKC)) {
+            cout << "Loi: Ngay khoi chieu khong hop le!\n";
+            continue;
+        }
+        ngayKC = DateFormat::normalizeDate(ngayKC);
+        if (DateFormat::dateKey(ngayKC) < todayKey) {
+            cout << "Loi: Ngay khoi chieu khong duoc nam trong qua khu!\n";
+            continue;
+        }
+        break;
+    }
+
+    while (true) {
+        cout << "Nhap ngay ket thuc (DD/MM/YYYY, VD: 06/06/2026): ";
+        cin >> ngayKT;
+        if (!DateFormat::isValidDate(ngayKT)) {
+            cout << "Loi: Ngay ket thuc khong hop le!\n";
+            continue;
+        }
+        ngayKT = DateFormat::normalizeDate(ngayKT);
+        if (DateFormat::dateKey(ngayKT) < todayKey) {
+            cout << "Loi: Ngay ket thuc khong duoc nam trong qua khu!\n";
+        } else if (DateFormat::dateKey(ngayKT) < DateFormat::dateKey(ngayKC)) {
+            cout << "Loi: Ngay ket thuc khong the truoc ngay khoi chieu!\n";
+        } else {
+            break;
+        }
+    }
 
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
     cout << "Nhap mo ta phim: ";
@@ -306,20 +333,44 @@ void Movie::suaPhim(Database& db) {
                     }
                     case 5: {
                         string ngayKCMoi;
-                        // ÐÃ Ð?I SANG Ð?NH D?NG DD/MM/YYYY
                         cout << "Nhap ngay khoi chieu moi (DD/MM/YYYY) (" << danhSach[i].getNgayKhoiChieu() << "): ";
                         getline(cin, ngayKCMoi);
-                        if (!ngayKCMoi.empty()) danhSach[i].setNgayKhoiChieu(ngayKCMoi);
-                        cout << "-> Da cap nhat ngay khoi chieu!\n";
+                        if (ngayKCMoi.empty()) {
+                            cout << "-> Giu nguyen ngay khoi chieu.\n";
+                        } else {
+                            int todayKey;
+                            const string ngayChuanHoa = DateFormat::normalizeDate(ngayKCMoi);
+                            if (!DateFormat::isValidDate(ngayKCMoi) ||
+                                !DateFormat::todayDateKey(todayKey) ||
+                                DateFormat::dateKey(ngayChuanHoa) < todayKey ||
+                                DateFormat::dateKey(ngayChuanHoa) > DateFormat::dateKey(danhSach[i].getNgayKetThuc())) {
+                                cout << "Loi: Ngay khoi chieu phai hop le, tu hom nay tro di va khong sau ngay ket thuc!\n";
+                            } else {
+                                danhSach[i].setNgayKhoiChieu(ngayChuanHoa);
+                                cout << "-> Da cap nhat ngay khoi chieu!\n";
+                            }
+                        }
                         break;
                     }
                     case 6: {
                         string ngayKTMoi;
-                        // ÐÃ Ð?I SANG Ð?NH D?NG DD/MM/YYYY
                         cout << "Nhap ngay ket thuc moi (DD/MM/YYYY) (" << danhSach[i].getNgayKetThuc() << "): ";
                         getline(cin, ngayKTMoi);
-                        if (!ngayKTMoi.empty()) danhSach[i].setNgayKetThuc(ngayKTMoi);
-                        cout << "-> Da cap nhat ngay ket thuc!\n";
+                        if (ngayKTMoi.empty()) {
+                            cout << "-> Giu nguyen ngay ket thuc.\n";
+                        } else {
+                            int todayKey;
+                            const string ngayChuanHoa = DateFormat::normalizeDate(ngayKTMoi);
+                            if (!DateFormat::isValidDate(ngayKTMoi) ||
+                                !DateFormat::todayDateKey(todayKey) ||
+                                DateFormat::dateKey(ngayChuanHoa) < todayKey ||
+                                DateFormat::dateKey(ngayChuanHoa) < DateFormat::dateKey(danhSach[i].getNgayKhoiChieu())) {
+                                cout << "Loi: Ngay ket thuc phai hop le, tu hom nay tro di va khong truoc ngay khoi chieu!\n";
+                            } else {
+                                danhSach[i].setNgayKetThuc(ngayChuanHoa);
+                                cout << "-> Da cap nhat ngay ket thuc!\n";
+                            }
+                        }
                         break;
                     }
                     case 7: {

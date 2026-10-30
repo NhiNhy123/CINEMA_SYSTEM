@@ -1,0 +1,44 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "cppbuild",
+            "label": "C/C++: g++ build project",
+            "command": "C:\\msys64\\ucrt64\\bin\\g++.exe",
+            "args": [
+                "-fdiagnostics-color=always",
+                "-g",
+                "-std=c++11",
+                "-I",
+                "${workspaceFolder}\\include",
+                "${workspaceFolder}\\src\\ActivityLog.cpp",
+                "${workspaceFolder}\\src\\Cinema_main.cpp",
+                "${workspaceFolder}\\src\\Customer.cpp",
+                "${workspaceFolder}\\src\\Database.cpp",
+                "${workspaceFolder}\\src\\FAndB.cpp",
+                "${workspaceFolder}\\src\\Invoice.cpp",
+                "${workspaceFolder}\\src\\Movie.cpp",
+                "${workspaceFolder}\\src\\Promotion.cpp",
+                "${workspaceFolder}\\src\\Room.cpp",
+                "${workspaceFolder}\\src\\Seat.cpp",
+                "${workspaceFolder}\\src\\ShilftManagement.cpp",
+                "${workspaceFolder}\\src\\Showtime.cpp",
+                "${workspaceFolder}\\src\\SysLog.cpp",
+                "${workspaceFolder}\\src\\Ticket.cpp",
+                "${workspaceFolder}\\src\\User.cpp",
+                "-o",
+                "${workspaceFolder}\\cinema.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
