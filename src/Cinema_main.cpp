@@ -720,7 +720,7 @@ void menuStaff(Database& db, const string& maNV, SysLog& sysLog, User& user) {
 
 int main() {
     Database db;
-    SysLog sysLog("DATA/quan_ly_nhan_su.csv");
+    SysLog sysLog("DATA/cinema.db");
 
     while (true) {
         system("cls");

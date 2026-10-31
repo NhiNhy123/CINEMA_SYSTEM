@@ -21,38 +21,159 @@
 #include <limits>
 #include <map>
 #include <set>
+#include <cctype>
 #include <windows.h>
+#include <sqlite3.h>
 
 using namespace std;
 
 namespace {
-bool docToanBoFile(const string& path, string& content) {
-    ifstream input(path.c_str(), ios::binary);
-    if (!input.is_open()) return false;
-    ostringstream buffer;
-    buffer << input.rdbuf();
-    if (input.bad()) return false;
-    content = buffer.str();
+sqlite3* databaseHandle = NULL;
+
+struct CsvTableMapping {
+    const char* path;
+    const char* section;
+    const char* table;
+    const char* columns;
+};
+
+const CsvTableMapping csvTableMappings[] = {
+    {"DATA/giao_dich_fnb.csv", "FOOD_AND_BEVERAGES", "food_and_beverages", "maMatHang,tenMatHang,loai,giaTien,trangThaiKinhDoanh"},
+    {"DATA/giao_dich_fnb.csv", "PROMOTIONS", "promotions", "maKhuyenMai,tenKhuyenMai,maCode,phanTramGiam,mucGiamToiDa,ngayBatDau,ngayKetThuc,phamViApDung"},
+    {"DATA/giao_dich_fnb.csv", "INVOICES", "invoices", "maHoaDon,maKhachHang,maNhanVien,thoiGianLap,tongTien,hinhThucThanhToan,maGiaoDich,trangThaiThanhToan"},
+    {"DATA/giao_dich_fnb.csv", "INVOICE_FB_ITEMS", "invoice_fb_items", "maHoaDon,maMatHang,tenMatHangTaiThoiDiem,soLuong,donGiaTaiThoiDiem,thanhTien"},
+    {"DATA/lich_va_ve.csv", "SHOWTIMES", "showtimes", "maSuatChieu,maPhim,maPhong,ngayChieu,gioBatDau,gioKetThuc,giaVeCoBan"},
+    {"DATA/lich_va_ve.csv", "TICKETS", "tickets", "maVe,maHoaDon,maSuatChieu,maGhe,giaVeThucTe,maQRCode,trangThaiSuDung"},
+    {"DATA/lich_va_ve.csv", "SEAT_STATUS", "seat_status", "maSuatChieu,maGhe,trangThai"},
+    {"DATA/nhat_ky_hoat_dong.csv", "", "nhat_ky_hoat_dong", "thoiGian,maNguoiDung,vaiTro,hanhDong,chiTiet"},
+    {"DATA/quan_ly_nhan_su.csv", "USERS", "users", "maNguoiDung,hoTen,soDienThoai,email,ngaySinh,gioiTinh,cccd,taiKhoan,matKhau,vaiTro,trangThaiLamViec,trangThaiTaiKhoan"},
+    {"DATA/quan_ly_nhan_su.csv", "CUSTOMERS", "customers", "maKhachHang,diemTichLuy,hangThanhVien,tongChiTieu"},
+    {"DATA/quan_ly_nhan_su.csv", "CUSTOMER_POINTS_HISTORY", "customer_points_history", "maGiaoDichDiem,maKhachHang,loaiGiaoDich,soDiem,noiDung,thoiGian"},
+    {"DATA/quan_ly_phim.csv", "GENRES", "genres", "maTheLoai,tenTheLoai"},
+    {"DATA/quan_ly_phim.csv", "MOVIE_GENRES", "movie_genres", "maPhim,maTheLoai"},
+    {"DATA/quan_ly_phim.csv", "MOVIES", "movies", "maPhim,tenPhim,thoiLuong,nhanDoTuoi,ngayKhoiChieu,ngayKetThuc,moTa,poster"},
+    {"DATA/quan_ly_phong_ghe.csv", "ROOMS", "rooms", "maPhong,tenPhong,loaiPhong,sucChua,trangThaiPhong"},
+    {"DATA/quan_ly_phong_ghe.csv", "SEATS", "seats", "maGhe,maPhong,loaiGhe,donGiaGhe"},
+    {"DATA/quan_ly_phong_ghe.csv", "SEAT_TYPES", "seat_types", "tenLoaiGhe,donGia"},
+    {"DATA/van_hanh_he_thong.csv", "SHIFT_MANAGEMENTS", "shift_managements", "maCa,maNhanVien,tenNhanVien,ngayLam,gioBatDau,gioKetThuc,doanhThuHeThong,tienThucTe,chenhLech,trangThai,daKhoaBaoCao"}
+};
+
+const size_t csvTableMappingCount =
+    sizeof(csvTableMappings) / sizeof(csvTableMappings[0]);
+
+string normalizedPath(const string& path) {
+    string result = path;
+    for (size_t i = 0; i < result.size(); ++i) {
+        if (result[i] == '\\') result[i] = '/';
+        result[i] = static_cast<char>(tolower(static_cast<unsigned char>(result[i])));
+    }
+    return result;
+}
+
+string quoteSqlIdentifier(const string& value) {
+    string result = "\"";
+    for (size_t i = 0; i < value.size(); ++i) {
+        if (value[i] == '"') result += '"';
+        result += value[i];
+    }
+    return result + "\"";
+}
+
+bool executeSql(const string& sql) {
+    if (databaseHandle == NULL) return false;
+    char* errorMessage = NULL;
+    const int result = sqlite3_exec(databaseHandle, sql.c_str(), NULL, NULL, &errorMessage);
+    if (result != SQLITE_OK) {
+        cerr << "[LOI SQLite]: " << (errorMessage != NULL ? errorMessage : sqlite3_errmsg(databaseHandle)) << "\n";
+        sqlite3_free(errorMessage);
+        return false;
+    }
     return true;
 }
 
-bool ghiToanBoFile(const string& path, const string& content) {
-    const string tempPath = path + ".tmp";
-    ofstream output(tempPath.c_str(), ios::binary | ios::trunc);
-    if (!output.is_open()) return false;
-    output.write(content.data(), static_cast<streamsize>(content.size()));
-    output.close();
-    if (!output) {
-        DeleteFileA(tempPath.c_str());
+vector<string> splitCsvHeader(const string& header) {
+    vector<string> columns;
+    stringstream stream(header);
+    string column;
+    while (getline(stream, column, ',')) columns.push_back(column);
+    return columns;
+}
+
+string serializeCSVFields(const vector<string>& fields);
+
+string joinCsvFields(const vector<string>& fields) {
+    return serializeCSVFields(fields);
+}
+
+bool importCsvContent(const string& path, const string& content);
+bool renderCsvContent(const string& path, string& content);
+
+bool openDatabase() {
+    if (databaseHandle != NULL) return true;
+    const int result = sqlite3_open("DATA/cinema.db", &databaseHandle);
+    if (result != SQLITE_OK) {
+        cerr << "[LOI SQLite]: Khong the mo DATA/cinema.db: "
+             << (databaseHandle != NULL ? sqlite3_errmsg(databaseHandle) : "khong du bo nho") << "\n";
+        if (databaseHandle != NULL) sqlite3_close(databaseHandle);
+        databaseHandle = NULL;
         return false;
     }
+    sqlite3_busy_timeout(databaseHandle, 5000);
+    if (!executeSql("PRAGMA journal_mode=WAL;")) return false;
 
-    if (!MoveFileExA(tempPath.c_str(), path.c_str(),
-                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-        DeleteFileA(tempPath.c_str());
+    bool hasMappedTable = false;
+    sqlite3_stmt* statement = NULL;
+    if (sqlite3_prepare_v2(databaseHandle,
+                           "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+                           -1, &statement, NULL) != SQLITE_OK) {
+        cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
         return false;
+    }
+    for (size_t i = 0; i < csvTableMappingCount && !hasMappedTable; ++i) {
+        sqlite3_reset(statement);
+        sqlite3_clear_bindings(statement);
+        sqlite3_bind_text(statement, 1, csvTableMappings[i].table, -1, SQLITE_STATIC);
+        hasMappedTable = sqlite3_step(statement) == SQLITE_ROW;
+    }
+    sqlite3_finalize(statement);
+
+    if (!hasMappedTable) {
+        for (size_t i = 0; i < csvTableMappingCount; ++i) {
+            const CsvTableMapping& mapping = csvTableMappings[i];
+            const vector<string> columns = splitCsvHeader(mapping.columns);
+            ostringstream create;
+            create << "CREATE TABLE IF NOT EXISTS " << quoteSqlIdentifier(mapping.table) << " (";
+            for (size_t j = 0; j < columns.size(); ++j) {
+                if (j > 0) create << ",";
+                create << quoteSqlIdentifier(columns[j]) << " TEXT";
+            }
+            create << ")";
+            if (!executeSql(create.str())) return false;
+        }
+
+        set<string> importedPaths;
+        for (size_t i = 0; i < csvTableMappingCount; ++i) {
+            const string sourcePath = csvTableMappings[i].path;
+            if (!importedPaths.insert(sourcePath).second) continue;
+            std::ifstream source(sourcePath.c_str(), ios::binary);
+            if (!source.is_open()) {
+                cerr << "[LOI]: Khong mo duoc CSV de khoi tao SQLite: " << sourcePath << "\n";
+                return false;
+            }
+            ostringstream sourceContent;
+            sourceContent << source.rdbuf();
+            if (source.bad() || !importCsvContent(sourcePath, sourceContent.str())) return false;
+        }
     }
     return true;
+}
+
+bool docToanBoFile(const string& path, string& content) {
+    return renderCsvContent(path, content);
+}
+
+bool ghiToanBoFile(const string& path, const string& content) {
+    return importCsvContent(path, content);
 }
 
 bool tachDongCSV(const string& line, vector<string>& fields) {
@@ -117,6 +238,199 @@ string serializeCSVFields(const vector<string>& fields) {
     return output.str();
 }
 
+bool importCsvContent(const string& path, const string& content) {
+    if (!openDatabase()) return false;
+    const string wantedPath = normalizedPath(path);
+    if (!executeSql("SAVEPOINT csv_import")) return false;
+
+    map<string, vector<vector<string> > > rowsBySection;
+    map<string, vector<string> > headersBySection;
+    string currentSection;
+    string line;
+    stringstream input(content);
+    while (getline(input, line)) {
+        if (!line.empty() && line[line.size() - 1] == '\r') line.erase(line.size() - 1);
+        if (line.empty()) continue;
+        if (line[0] == '[' && line[line.size() - 1] == ']') {
+            currentSection = line.substr(1, line.size() - 2);
+            continue;
+        }
+        vector<string> fields;
+        if (!tachDongCSV(line, fields)) {
+            cerr << "[LOI]: Dong CSV khong hop le trong du lieu dua vao SQLite.\n";
+            executeSql("ROLLBACK TO csv_import");
+            executeSql("RELEASE csv_import");
+            return false;
+        }
+        if (currentSection.empty()) {
+            if (headersBySection.find("") == headersBySection.end()) {
+                headersBySection[""] = fields;
+                continue;
+            }
+            rowsBySection[""].push_back(fields);
+        } else if (headersBySection.find(currentSection) == headersBySection.end()) {
+            headersBySection[currentSection] = fields;
+        } else {
+            rowsBySection[currentSection].push_back(fields);
+        }
+    }
+
+    bool anyMapped = false;
+    for (size_t i = 0; i < csvTableMappingCount; ++i) {
+        const CsvTableMapping& mapping = csvTableMappings[i];
+        if (normalizedPath(mapping.path) != wantedPath) continue;
+        const string section = mapping.section;
+        if (headersBySection.find(section) == headersBySection.end()) continue;
+        anyMapped = true;
+        const vector<string> expectedColumns = splitCsvHeader(mapping.columns);
+        if (headersBySection[section] != expectedColumns) {
+            cerr << "[LOI]: Cot CSV khong khop schema SQLite cho bang "
+                 << mapping.table << ".\n";
+            executeSql("ROLLBACK TO csv_import");
+            executeSql("RELEASE csv_import");
+            return false;
+        }
+
+        const string table = quoteSqlIdentifier(mapping.table);
+        if (!executeSql("DELETE FROM " + table)) {
+            executeSql("ROLLBACK TO csv_import");
+            executeSql("RELEASE csv_import");
+            return false;
+        }
+        ostringstream insertSql;
+        insertSql << "INSERT INTO " << table << " (";
+        for (size_t c = 0; c < expectedColumns.size(); ++c) {
+            if (c > 0) insertSql << ",";
+            insertSql << quoteSqlIdentifier(expectedColumns[c]);
+        }
+        insertSql << ") VALUES (";
+        for (size_t c = 0; c < expectedColumns.size(); ++c) {
+            if (c > 0) insertSql << ",";
+            insertSql << "?";
+        }
+        insertSql << ")";
+
+        sqlite3_stmt* statement = NULL;
+        if (sqlite3_prepare_v2(databaseHandle, insertSql.str().c_str(), -1,
+                               &statement, NULL) != SQLITE_OK) {
+            cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
+            executeSql("ROLLBACK TO csv_import");
+            executeSql("RELEASE csv_import");
+            return false;
+        }
+        const vector<vector<string> >& rows = rowsBySection[section];
+        for (size_t r = 0; r < rows.size(); ++r) {
+            if (rows[r].size() != expectedColumns.size()) {
+                cerr << "[LOI]: So cot trong dong CSV khong hop le cho bang "
+                     << mapping.table << ".\n";
+                sqlite3_finalize(statement);
+                executeSql("ROLLBACK TO csv_import");
+                executeSql("RELEASE csv_import");
+                return false;
+            }
+            sqlite3_reset(statement);
+            sqlite3_clear_bindings(statement);
+            for (size_t c = 0; c < rows[r].size(); ++c) {
+                sqlite3_bind_text(statement, static_cast<int>(c + 1),
+                                  rows[r][c].c_str(), -1, SQLITE_TRANSIENT);
+            }
+            if (sqlite3_step(statement) != SQLITE_DONE) {
+                cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
+                sqlite3_finalize(statement);
+                executeSql("ROLLBACK TO csv_import");
+                executeSql("RELEASE csv_import");
+                return false;
+            }
+        }
+        sqlite3_finalize(statement);
+    }
+    if (!anyMapped) {
+        cerr << "[LOI]: Khong co bang SQLite tuong ung voi duong dan " << path << ".\n";
+        executeSql("ROLLBACK TO csv_import");
+        executeSql("RELEASE csv_import");
+        return false;
+    }
+    return executeSql("RELEASE csv_import");
+}
+
+bool renderCsvContent(const string& path, string& content) {
+    if (!openDatabase()) return false;
+    const string wantedPath = normalizedPath(path);
+    ostringstream output;
+    bool foundMapping = false;
+    for (size_t i = 0; i < csvTableMappingCount; ++i) {
+        const CsvTableMapping& mapping = csvTableMappings[i];
+        if (normalizedPath(mapping.path) != wantedPath) continue;
+        foundMapping = true;
+        if (mapping.section[0] != '\0') output << "[" << mapping.section << "]\n";
+        output << mapping.columns << "\n";
+
+        const string sql = "SELECT * FROM " + quoteSqlIdentifier(mapping.table) + " ORDER BY rowid";
+        sqlite3_stmt* statement = NULL;
+        if (sqlite3_prepare_v2(databaseHandle, sql.c_str(), -1, &statement, NULL) != SQLITE_OK) {
+            cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
+            return false;
+        }
+        int stepResult = SQLITE_OK;
+        while ((stepResult = sqlite3_step(statement)) == SQLITE_ROW) {
+            vector<string> fields;
+            for (int c = 0; c < sqlite3_column_count(statement); ++c) {
+                const unsigned char* text = sqlite3_column_text(statement, c);
+                fields.push_back(text != NULL ? reinterpret_cast<const char*>(text) : "");
+            }
+            output << joinCsvFields(fields) << "\n";
+        }
+        if (stepResult != SQLITE_DONE) {
+            sqlite3_finalize(statement);
+            cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
+            return false;
+        }
+        sqlite3_finalize(statement);
+        output << "\n";
+    }
+    if (!foundMapping) {
+        cerr << "[LOI]: Khong co bang SQLite tuong ung voi duong dan " << path << ".\n";
+        return false;
+    }
+    content = output.str();
+    return true;
+}
+
+class SqliteInputStream : public istringstream {
+public:
+    SqliteInputStream(const char* path, ios::openmode = ios::in) : istringstream() {
+        string content;
+        if (renderCsvContent(path, content)) str(content);
+        else setstate(ios::badbit);
+    }
+    bool is_open() const { return !bad(); }
+    void close() {}
+};
+
+class SqliteOutputStream : public ostringstream {
+private:
+    string filePath;
+    bool closed;
+public:
+    SqliteOutputStream(const char* path, ios::openmode = ios::out) :
+        ostringstream(), filePath(path), closed(false) {}
+    ~SqliteOutputStream() { close(); }
+    bool is_open() const { return !bad(); }
+    void close() {
+        if (closed) return;
+        closed = true;
+        if (!importCsvContent(filePath, str())) {
+            cerr << "[LOI]: Khong the luu du lieu vao SQLite tu thao tac ghi "
+                 << filePath << ".\n";
+            setstate(ios::badbit);
+        }
+    }
+};
+
+// Keep existing CSV parsing logic while storing every read/write in SQLite.
+#define ifstream SqliteInputStream
+#define ofstream SqliteOutputStream
+
 bool parsePositiveInteger(const string& value, int& result) {
     stringstream stream(value);
     if (!(stream >> result)) return false;
@@ -133,13 +447,18 @@ bool parseNonNegativeDouble(const string& value, double& result) {
 }
 }
 
-Database::Database() : giaoDichBanVeDangMo(false) {}
+Database::Database() : giaoDichBanVeDangMo(false) {
+    if (!openDatabase()) {
+        cerr << "[LOI]: Khong the khoi tao co so du lieu SQLite.\n";
+    }
+}
 
 bool Database::batDauGiaoDichBanVe() {
     if (giaoDichBanVeDangMo ||
         !docToanBoFile("DATA/lich_va_ve.csv", banSaoLichVaVe) ||
         !docToanBoFile("DATA/giao_dich_fnb.csv", banSaoGiaoDichFnb) ||
-        !docToanBoFile("DATA/quan_ly_nhan_su.csv", banSaoNhanSu)) {
+        !docToanBoFile("DATA/quan_ly_nhan_su.csv", banSaoNhanSu) ||
+        !executeSql("SAVEPOINT sale_transaction")) {
         cerr << "[LOI]: Khong the tao ban sao du lieu de bat dau giao dich ban ve.\n";
         return false;
     }
@@ -163,6 +482,7 @@ bool Database::khoiPhucGiaoDichBanVe() {
 }
 
 void Database::hoanTatGiaoDichBanVe() {
+    executeSql("RELEASE sale_transaction");
     giaoDichBanVeDangMo = false;
     banSaoLichVaVe.clear();
     banSaoGiaoDichFnb.clear();

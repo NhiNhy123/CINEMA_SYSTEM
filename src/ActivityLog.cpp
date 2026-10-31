@@ -1,70 +1,12 @@
 #include "../include/ActivityLog.h"
 
 #include <ctime>
-#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <vector>
+#include <sqlite3.h>
 
 namespace {
-const char* const activityLogPath = "DATA/nhat_ky_hoat_dong.csv";
-
-std::string csvField(const std::string& value) {
-    std::string field;
-    bool needsQuotes = false;
-    for (std::size_t i = 0; i < value.size(); ++i) {
-        if (value[i] == '\r' || value[i] == '\n') {
-            field += ' ';
-        } else {
-            if (value[i] == ',' || value[i] == '"') needsQuotes = true;
-            if (value[i] == '"') field += '"';
-            field += value[i];
-        }
-    }
-
-    if (!needsQuotes) return field;
-    return "\"" + field + "\"";
-}
-
-bool parseCsvRow(const std::string& line, std::vector<std::string>& fields) {
-    fields.clear();
-    std::string field;
-    bool inQuotes = false;
-    bool closedQuote = false;
-
-    for (std::size_t i = 0; i < line.size(); ++i) {
-        const char ch = line[i];
-        if (inQuotes) {
-            if (ch == '"') {
-                if (i + 1 < line.size() && line[i + 1] == '"') {
-                    field += '"';
-                    ++i;
-                } else {
-                    inQuotes = false;
-                    closedQuote = true;
-                }
-            } else {
-                field += ch;
-            }
-        } else if (ch == ',') {
-            fields.push_back(field);
-            field.clear();
-            closedQuote = false;
-        } else if (ch == '"' && field.empty() && !closedQuote) {
-            inQuotes = true;
-        } else if (closedQuote) {
-            return false;
-        } else {
-            field += ch;
-        }
-    }
-
-    if (inQuotes) return false;
-    fields.push_back(field);
-    return true;
-}
-
 bool currentTimestamp(std::string& timestamp) {
     const std::time_t now = std::time(0);
     const std::tm* local = std::localtime(&now);
@@ -87,38 +29,55 @@ void ActivityLog::ghiNhan(const std::string& maNguoiDung,
         return;
     }
 
-    std::ifstream existing(activityLogPath);
-    const bool needsHeader = !existing.good() || existing.peek() == std::ifstream::traits_type::eof();
-    existing.close();
-
-    std::ofstream output(activityLogPath, std::ios::app);
-    if (!output.is_open()) {
-        std::cerr << "Khong the ghi nhat ky hoat dong vao "
-                  << activityLogPath << ".\n";
+    sqlite3* database = NULL;
+    if (sqlite3_open("DATA/cinema.db", &database) != SQLITE_OK) {
+        std::cerr << "Khong the mo SQLite de ghi nhat ky hoat dong: "
+                  << (database != NULL ? sqlite3_errmsg(database) : "khong du bo nho") << "\n";
+        if (database != NULL) sqlite3_close(database);
         return;
     }
 
-    if (needsHeader) {
-        output << "thoiGian,maNguoiDung,vaiTro,hanhDong,chiTiet\n";
+    sqlite3_stmt* statement = NULL;
+    const char* sql = "INSERT INTO nhat_ky_hoat_dong "
+                      "(thoiGian,maNguoiDung,vaiTro,hanhDong,chiTiet) VALUES (?,?,?,?,?)";
+    if (sqlite3_prepare_v2(database, sql, -1, &statement, NULL) != SQLITE_OK) {
+        std::cerr << "Khong the chuan bi ghi nhat ky hoat dong: "
+                  << sqlite3_errmsg(database) << "\n";
+        sqlite3_close(database);
+        return;
     }
-    output << csvField(timestamp) << ","
-           << csvField(maNguoiDung) << ","
-           << csvField(vaiTro) << ","
-           << csvField(hanhDong) << ","
-           << csvField(chiTiet) << "\n";
-    output.close();
-    if (!output) {
-        std::cerr << "Loi khi ghi nhat ky hoat dong vao "
-                  << activityLogPath << ".\n";
+    sqlite3_bind_text(statement, 1, timestamp.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, maNguoiDung.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 3, vaiTro.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 4, hanhDong.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 5, chiTiet.c_str(), -1, SQLITE_TRANSIENT);
+    if (sqlite3_step(statement) != SQLITE_DONE) {
+        std::cerr << "Loi khi ghi nhat ky hoat dong: " << sqlite3_errmsg(database) << "\n";
     }
+    sqlite3_finalize(statement);
+    sqlite3_close(database);
 }
 
 void ActivityLog::hienThi(const std::string& maNguoiDung) {
-    std::ifstream input(activityLogPath);
-    if (!input.is_open()) {
-        std::cout << "Chua co nhat ky hoat dong hoac khong the mo "
-                  << activityLogPath << ".\n";
+    sqlite3* database = NULL;
+    if (sqlite3_open("DATA/cinema.db", &database) != SQLITE_OK) {
+        std::cerr << "Khong the mo SQLite de doc nhat ky hoat dong: "
+                  << (database != NULL ? sqlite3_errmsg(database) : "khong du bo nho") << "\n";
+        if (database != NULL) sqlite3_close(database);
         return;
+    }
+
+    sqlite3_stmt* statement = NULL;
+    const char* sql = maNguoiDung.empty()
+        ? "SELECT thoiGian,maNguoiDung,vaiTro,hanhDong,chiTiet FROM nhat_ky_hoat_dong ORDER BY rowid"
+        : "SELECT thoiGian,maNguoiDung,vaiTro,hanhDong,chiTiet FROM nhat_ky_hoat_dong WHERE maNguoiDung=? ORDER BY rowid";
+    if (sqlite3_prepare_v2(database, sql, -1, &statement, NULL) != SQLITE_OK) {
+        std::cerr << "Khong the doc nhat ky hoat dong: " << sqlite3_errmsg(database) << "\n";
+        sqlite3_close(database);
+        return;
+    }
+    if (!maNguoiDung.empty()) {
+        sqlite3_bind_text(statement, 1, maNguoiDung.c_str(), -1, SQLITE_TRANSIENT);
     }
 
     std::cout << "\n====================== NHAT KY HOAT DONG ======================\n";
@@ -130,15 +89,13 @@ void ActivityLog::hienThi(const std::string& maNguoiDung) {
     std::cout << "---------------------------------------------------------------\n";
 
     bool found = false;
-    std::string line;
-    std::vector<std::string> fields;
-    while (std::getline(input, line)) {
-        if (!parseCsvRow(line, fields) || fields.size() != 5 ||
-            fields[0] == "thoiGian") {
-            continue;
+    int stepResult = SQLITE_OK;
+    while ((stepResult = sqlite3_step(statement)) == SQLITE_ROW) {
+        const char* fields[5];
+        for (int i = 0; i < 5; ++i) {
+            const unsigned char* text = sqlite3_column_text(statement, i);
+            fields[i] = text != NULL ? reinterpret_cast<const char*>(text) : "";
         }
-        if (!maNguoiDung.empty() && fields[1] != maNguoiDung) continue;
-
         std::cout << std::left << std::setw(22) << fields[0]
                   << std::setw(14) << fields[1]
                   << std::setw(10) << fields[2]
@@ -146,9 +103,14 @@ void ActivityLog::hienThi(const std::string& maNguoiDung) {
                   << fields[4] << "\n";
         found = true;
     }
+    if (stepResult != SQLITE_DONE) {
+        std::cerr << "Loi khi truy van nhat ky hoat dong: " << sqlite3_errmsg(database) << "\n";
+    }
 
     if (!found) {
         std::cout << "Khong co hoat dong nao phu hop.\n";
     }
     std::cout << "===============================================================\n";
+    sqlite3_finalize(statement);
+    sqlite3_close(database);
 }

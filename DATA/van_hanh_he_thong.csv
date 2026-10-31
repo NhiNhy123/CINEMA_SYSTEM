@@ -1,8 +1,0 @@
-[SHIFT_MANAGEMENTS]
-maCa,maNhanVien,tenNhanVien,ngayLam,gioBatDau,gioKetThuc,doanhThuHeThong,tienThucTe,chenhLech,trangThai,daKhoaBaoCao
-CA01,U002,Nhan Vien A,05/06/2026,08:00,22:00,1000000,1500000,500000,DaDuyet,true
-CA02,U002,Nhan Vien A,05/06/2026,07:30,22:00,180000,180000,0,DaDuyet,true
-CA03,U002,Nhan Vien A,05/06/2026,08:00,22:00,120000,100000,-20000,DaDuyet,true
-CA04,U002,Nhan Vien Thuc Te,05/06/2026,13:00,20:45:06,90000,90000,0,ChoDuyet,false
-CA05,U002,Pham Nhu Anh Thu,26/10/2026,19:00,21:35:43,0,0,0,ChoDuyet,false
-CA02,U002,Pham Nhu Anh Thu,30/10/2026,13:00,21:13:31,159000,159000,0,ChoDuyet,false

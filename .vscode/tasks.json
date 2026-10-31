@@ -26,6 +26,7 @@
                 "${workspaceFolder}\\src\\SysLog.cpp",
                 "${workspaceFolder}\\src\\Ticket.cpp",
                 "${workspaceFolder}\\src\\User.cpp",
+                "-Wl,-Bstatic,-lsqlite3,-Bdynamic",
                 "-o",
                 "${workspaceFolder}\\cinema.exe"
             ],

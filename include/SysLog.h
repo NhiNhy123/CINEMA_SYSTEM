@@ -17,7 +17,7 @@ class SysLog
 {
 private:
 
-    string fileCSV;
+    string databaseFile;
 
     void gotoxy(int x, int y);
 
@@ -38,7 +38,7 @@ private:
 public:
     SysLog();
 
-    SysLog(string fileCSV);
+    SysLog(string databaseFile);
 
     User* dangNhap();
     bool doiMatKhau(User& user, const string& matKhauHienTai, const string& matKhauMoi);

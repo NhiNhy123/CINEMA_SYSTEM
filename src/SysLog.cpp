@@ -1,16 +1,15 @@
 #include "../include/SysLog.h"
-#include <fstream>
-#include <vector>
+#include <sqlite3.h>
 
 
 SysLog::SysLog()
 {
-    fileCSV = "DATA/quan_ly_nhan_su.csv";
+    databaseFile = "DATA/cinema.db";
 }
 
-SysLog::SysLog(string fileCSV)
+SysLog::SysLog(string databaseFile)
 {
-    this->fileCSV = fileCSV;
+    this->databaseFile = databaseFile;
 }
 
 
@@ -101,131 +100,82 @@ User* SysLog::timTaiKhoan(
     string taiKhoan,
     string matKhau)
 {
-    ifstream file(fileCSV.c_str());
-
-    if (!file.is_open())
-    {
+    sqlite3* database = NULL;
+    if (sqlite3_open(databaseFile.c_str(), &database) != SQLITE_OK) {
         gotoxy(35, 20);
         setColor(12);
-        cout << "Khong the mo file CSV!";
+        cout << "Khong the mo co so du lieu SQLite!";
         setColor(7);
+        if (database != NULL) {
+            cerr << "SQLite: " << sqlite3_errmsg(database) << "\n";
+            sqlite3_close(database);
+        }
         return NULL;
     }
 
-    string line;
+    sqlite3_stmt* statement = NULL;
+    const char* sql = "SELECT maNguoiDung,hoTen,soDienThoai,email,ngaySinh,gioiTinh,cccd,"
+                      "taiKhoan,matKhau,vaiTro,trangThaiLamViec,trangThaiTaiKhoan "
+                      "FROM users WHERE taiKhoan=? AND matKhau=? ORDER BY rowid LIMIT 1";
+    if (sqlite3_prepare_v2(database, sql, -1, &statement, NULL) != SQLITE_OK) {
+        gotoxy(35, 20);
+        setColor(12);
+        cout << "Khong the truy van tai khoan!";
+        setColor(7);
+        cerr << "SQLite: " << sqlite3_errmsg(database) << "\n";
+        sqlite3_close(database);
+        return NULL;
+    }
+    sqlite3_bind_text(statement, 1, taiKhoan.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, matKhau.c_str(), -1, SQLITE_TRANSIENT);
 
-    while (getline(file, line))
-    {
-        if (line.empty() || line.find("[USERS]") != string::npos || line.find("maNguoiDung") != string::npos)
-        {
-            continue;
+    User* result = NULL;
+    const int step = sqlite3_step(statement);
+    if (step == SQLITE_ROW) {
+        const char* fields[12];
+        for (int i = 0; i < 12; ++i) {
+            const unsigned char* text = sqlite3_column_text(statement, i);
+            fields[i] = text != NULL ? reinterpret_cast<const char*>(text) : "";
         }
+        const string maNguoiDung(fields[0]);
+        const string hoTen(fields[1]);
+        const string soDienThoai(fields[2]);
+        const string email(fields[3]);
+        const string ngaySinh(fields[4]);
+        const string gioiTinh(fields[5]);
+        const string cccd(fields[6]);
+        const string tk(fields[7]);
+        const string mk(fields[8]);
+        const string vaiTro(fields[9]);
+        const string trangThaiLamViec(fields[10]);
+        const string trangThaiTaiKhoan(fields[11]);
 
-        stringstream ss(line);
-
-        string maNguoiDung;
-        string hoTen;
-        string soDienThoai;
-        string email;
-        string ngaySinh;
-        string gioiTinh;
-        string cccd;
-
-        string tk;
-        string mk;
-        string vaiTro;
-
-        string trangThaiLamViec;
-        string trangThaiTaiKhoan;
-
-        getline(ss, maNguoiDung, ',');
-        getline(ss, hoTen, ',');
-        getline(ss, soDienThoai, ',');
-        getline(ss, email, ',');
-        getline(ss, ngaySinh, ',');
-        getline(ss, gioiTinh, ',');
-        getline(ss, cccd, ',');
-
-        getline(ss, tk, ',');
-        getline(ss, mk, ',');
-        getline(ss, vaiTro, ',');
-
-        getline(ss, trangThaiLamViec, ',');
-        getline(ss, trangThaiTaiKhoan, ',');
-
-        if (tk != taiKhoan)
-        {
-            continue;
-        }
-
-        if (mk != matKhau)
-        {
-            continue;
-        }
-
-        if (vaiTro == "Admin")
-        {
-            file.close();
-
-            Admin* admin = new Admin(
-                maNguoiDung,
-                hoTen,
-                soDienThoai,
-                ngaySinh,
-                gioiTinh,
-                email,
-                cccd,
-                tk,
-                mk);
-
-            return admin;
-        }
-
-        if (vaiTro == "Staff")
-        {
-            if (trangThaiTaiKhoan == "BiKhoa")
-            {
-                file.close();
+        if (vaiTro == "Admin") {
+            result = new Admin(maNguoiDung, hoTen, soDienThoai, ngaySinh,
+                               gioiTinh, email, cccd, tk, mk);
+        } else if (vaiTro == "Staff") {
+            if (trangThaiTaiKhoan == "BiKhoa") {
                 gotoxy(35, 20);
                 setColor(12);
                 cout << "Tai khoan da bi khoa!";
                 setColor(7);
-                return NULL;
-            }
-
-            if (trangThaiLamViec == "DaNghiViec")
-            {
-                file.close();
+            } else if (trangThaiLamViec == "DaNghiViec") {
                 gotoxy(35, 20);
                 setColor(12);
                 cout << "Nhan vien da nghi viec!";
                 setColor(7);
-                return NULL;
+            } else {
+                result = new Staff(maNguoiDung, hoTen, soDienThoai, ngaySinh,
+                                   gioiTinh, email, cccd, tk, mk,
+                                   trangThaiLamViec, trangThaiTaiKhoan, true);
             }
-
-            Staff* staff = new Staff(
-                maNguoiDung,
-                hoTen,
-                soDienThoai,
-                ngaySinh,
-                gioiTinh,
-                email,
-                cccd,
-                tk,
-                mk,
-                trangThaiLamViec,
-                trangThaiTaiKhoan,
-                true);
-
-            file.close();
-
-            return staff;
         }
+    } else if (step != SQLITE_DONE) {
+        cerr << "Loi khi truy van tai khoan: " << sqlite3_errmsg(database) << "\n";
     }
-
-    file.close();
-
-    return NULL;
+    sqlite3_finalize(statement);
+    sqlite3_close(database);
+    return result;
 }
 
 
@@ -306,97 +256,68 @@ bool SysLog::doiMatKhau(User& user, const string& matKhauHienTai, const string& 
         return false;
     }
 
-    ifstream input(fileCSV.c_str());
-    if (!input.is_open())
-    {
-        cerr << "Khong the mo file tai khoan: " << fileCSV << "\n";
+    sqlite3* database = NULL;
+    if (sqlite3_open(databaseFile.c_str(), &database) != SQLITE_OK) {
+        cerr << "Khong the mo co so du lieu tai khoan: "
+             << (database != NULL ? sqlite3_errmsg(database) : "khong du bo nho") << "\n";
+        if (database != NULL) sqlite3_close(database);
         return false;
     }
 
-    vector<string> lines;
-    string line;
-    bool readingUsers = false;
-    bool found = false;
-    while (getline(input, line))
-    {
-        if (!line.empty() && line[0] == '[')
-        {
-            readingUsers = line == "[USERS]";
-            lines.push_back(line);
-            continue;
+    sqlite3_stmt* lookup = NULL;
+    const char* lookupSql = "SELECT rowid FROM users WHERE maNguoiDung=? AND taiKhoan=? "
+                            "AND vaiTro=? AND matKhau=? ORDER BY rowid";
+    if (sqlite3_prepare_v2(database, lookupSql, -1, &lookup, NULL) != SQLITE_OK) {
+        cerr << "Khong the truy van tai khoan: " << sqlite3_errmsg(database) << "\n";
+        sqlite3_close(database);
+        return false;
+    }
+    sqlite3_bind_text(lookup, 1, user.getMaNguoiDung().c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(lookup, 2, user.getTaiKhoan().c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(lookup, 3, user.getVaiTro().c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(lookup, 4, matKhauHienTai.c_str(), -1, SQLITE_TRANSIENT);
+
+    sqlite3_int64 rowId = 0;
+    int step = sqlite3_step(lookup);
+    if (step == SQLITE_ROW) {
+        rowId = sqlite3_column_int64(lookup, 0);
+        step = sqlite3_step(lookup);
+        if (step == SQLITE_ROW) {
+            cerr << "Tim thay tai khoan bi trung lap: " << user.getMaNguoiDung() << "\n";
+            sqlite3_finalize(lookup);
+            sqlite3_close(database);
+            return false;
         }
-
-        if (readingUsers && line.find("maNguoiDung") != 0)
-        {
-            stringstream row(line);
-            string fields[10];
-            int fieldCount = 0;
-            while (fieldCount < 10 && getline(row, fields[fieldCount], ','))
-            {
-                ++fieldCount;
-            }
-
-            if (fieldCount >= 10 &&
-                fields[0] == user.getMaNguoiDung() &&
-                fields[7] == user.getTaiKhoan() &&
-                fields[9] == user.getVaiTro())
-            {
-                if (found)
-                {
-                    cerr << "Tim thay tai khoan bi trung lap: " << user.getMaNguoiDung() << "\n";
-                    return false;
-                }
-
-                size_t fieldStart = 0;
-                for (int i = 0; i < 8; ++i)
-                {
-                    fieldStart = line.find(',', fieldStart);
-                    if (fieldStart == string::npos)
-                    {
-                        cerr << "Dong tai khoan khong dung dinh dang CSV.\n";
-                        return false;
-                    }
-                    ++fieldStart;
-                }
-                const size_t passwordEnd = line.find(',', fieldStart);
-                line = line.substr(0, fieldStart) + matKhauMoi +
-                       (passwordEnd == string::npos ? "" : line.substr(passwordEnd));
-                found = true;
-            }
+    }
+    sqlite3_finalize(lookup);
+    if (rowId == 0) {
+        if (step != SQLITE_DONE) {
+            cerr << "Loi khi tim tai khoan: " << sqlite3_errmsg(database) << "\n";
+        } else {
+            cerr << "Khong tim thay tai khoan trong SQLite: " << user.getMaNguoiDung() << "\n";
         }
-        lines.push_back(line);
-    }
-    if (input.bad())
-    {
-        cerr << "Loi khi doc file tai khoan: " << fileCSV << "\n";
-        return false;
-    }
-    input.close();
-
-    if (!found)
-    {
-        cerr << "Khong tim thay tai khoan trong muc [USERS]: "
-             << user.getMaNguoiDung() << "\n";
+        sqlite3_close(database);
         return false;
     }
 
-    ofstream output(fileCSV.c_str(), ios::trunc);
-    if (!output.is_open())
-    {
-        cerr << "Khong the ghi file tai khoan: " << fileCSV << "\n";
+    sqlite3_stmt* update = NULL;
+    if (sqlite3_prepare_v2(database, "UPDATE users SET matKhau=? WHERE rowid=?",
+                           -1, &update, NULL) != SQLITE_OK) {
+        cerr << "Khong the chuan bi cap nhat mat khau: " << sqlite3_errmsg(database) << "\n";
+        sqlite3_close(database);
         return false;
     }
-    for (size_t i = 0; i < lines.size(); ++i)
-    {
-        output << lines[i] << "\n";
+    sqlite3_bind_text(update, 1, matKhauMoi.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(update, 2, rowId);
+    const int updateResult = sqlite3_step(update);
+    const bool updated = updateResult == SQLITE_DONE && sqlite3_changes(database) == 1;
+    if (!updated) {
+        cerr << "Loi khi cap nhat mat khau: " << sqlite3_errmsg(database) << "\n";
     }
-    output.close();
-    if (!output)
-    {
-        cerr << "Loi khi luu file tai khoan: " << fileCSV << "\n";
-        return false;
-    }
+    sqlite3_finalize(update);
+    sqlite3_close(database);
 
+    if (!updated) return false;
     user.setMatKhau(matKhauMoi);
     return true;
 }
