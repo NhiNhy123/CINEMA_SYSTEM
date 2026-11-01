@@ -22,9 +22,6 @@ using namespace std;
 class Database {
 private:
     bool giaoDichBanVeDangMo;
-    string banSaoLichVaVe;
-    string banSaoGiaoDichFnb;
-    string banSaoNhanSu;
 
 public:
     Database();

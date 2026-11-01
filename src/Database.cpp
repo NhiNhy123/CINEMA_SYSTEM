@@ -11,7 +11,6 @@
 #include "../include/User.h"
 #include "../include/DateFormat.h"
 
-#include <fstream>
 #include <sstream>
 #include <iostream>
 #include <cstdlib>
@@ -21,7 +20,7 @@
 #include <limits>
 #include <map>
 #include <set>
-#include <cctype>
+#include <algorithm>
 #include <windows.h>
 #include <sqlite3.h>
 
@@ -30,45 +29,36 @@ using namespace std;
 namespace {
 sqlite3* databaseHandle = NULL;
 
-struct CsvTableMapping {
-    const char* path;
-    const char* section;
-    const char* table;
-    const char* columns;
+struct TableDefinition {
+    const char* name;
+    const char* createSql;
+    int columnCount;
 };
 
-const CsvTableMapping csvTableMappings[] = {
-    {"DATA/giao_dich_fnb.csv", "FOOD_AND_BEVERAGES", "food_and_beverages", "maMatHang,tenMatHang,loai,giaTien,trangThaiKinhDoanh"},
-    {"DATA/giao_dich_fnb.csv", "PROMOTIONS", "promotions", "maKhuyenMai,tenKhuyenMai,maCode,phanTramGiam,mucGiamToiDa,ngayBatDau,ngayKetThuc,phamViApDung"},
-    {"DATA/giao_dich_fnb.csv", "INVOICES", "invoices", "maHoaDon,maKhachHang,maNhanVien,thoiGianLap,tongTien,hinhThucThanhToan,maGiaoDich,trangThaiThanhToan"},
-    {"DATA/giao_dich_fnb.csv", "INVOICE_FB_ITEMS", "invoice_fb_items", "maHoaDon,maMatHang,tenMatHangTaiThoiDiem,soLuong,donGiaTaiThoiDiem,thanhTien"},
-    {"DATA/lich_va_ve.csv", "SHOWTIMES", "showtimes", "maSuatChieu,maPhim,maPhong,ngayChieu,gioBatDau,gioKetThuc,giaVeCoBan"},
-    {"DATA/lich_va_ve.csv", "TICKETS", "tickets", "maVe,maHoaDon,maSuatChieu,maGhe,giaVeThucTe,maQRCode,trangThaiSuDung"},
-    {"DATA/lich_va_ve.csv", "SEAT_STATUS", "seat_status", "maSuatChieu,maGhe,trangThai"},
-    {"DATA/nhat_ky_hoat_dong.csv", "", "nhat_ky_hoat_dong", "thoiGian,maNguoiDung,vaiTro,hanhDong,chiTiet"},
-    {"DATA/quan_ly_nhan_su.csv", "USERS", "users", "maNguoiDung,hoTen,soDienThoai,email,ngaySinh,gioiTinh,cccd,taiKhoan,matKhau,vaiTro,trangThaiLamViec,trangThaiTaiKhoan"},
-    {"DATA/quan_ly_nhan_su.csv", "CUSTOMERS", "customers", "maKhachHang,diemTichLuy,hangThanhVien,tongChiTieu"},
-    {"DATA/quan_ly_nhan_su.csv", "CUSTOMER_POINTS_HISTORY", "customer_points_history", "maGiaoDichDiem,maKhachHang,loaiGiaoDich,soDiem,noiDung,thoiGian"},
-    {"DATA/quan_ly_phim.csv", "GENRES", "genres", "maTheLoai,tenTheLoai"},
-    {"DATA/quan_ly_phim.csv", "MOVIE_GENRES", "movie_genres", "maPhim,maTheLoai"},
-    {"DATA/quan_ly_phim.csv", "MOVIES", "movies", "maPhim,tenPhim,thoiLuong,nhanDoTuoi,ngayKhoiChieu,ngayKetThuc,moTa,poster"},
-    {"DATA/quan_ly_phong_ghe.csv", "ROOMS", "rooms", "maPhong,tenPhong,loaiPhong,sucChua,trangThaiPhong"},
-    {"DATA/quan_ly_phong_ghe.csv", "SEATS", "seats", "maGhe,maPhong,loaiGhe,donGiaGhe"},
-    {"DATA/quan_ly_phong_ghe.csv", "SEAT_TYPES", "seat_types", "tenLoaiGhe,donGia"},
-    {"DATA/van_hanh_he_thong.csv", "SHIFT_MANAGEMENTS", "shift_managements", "maCa,maNhanVien,tenNhanVien,ngayLam,gioBatDau,gioKetThuc,doanhThuHeThong,tienThucTe,chenhLech,trangThai,daKhoaBaoCao"}
+const TableDefinition tables[] = {
+    {"food_and_beverages", "CREATE TABLE IF NOT EXISTS food_and_beverages (maMatHang TEXT,tenMatHang TEXT,loai TEXT,giaTien TEXT,trangThaiKinhDoanh TEXT)", 5},
+    {"promotions", "CREATE TABLE IF NOT EXISTS promotions (maKhuyenMai TEXT,tenKhuyenMai TEXT,maCode TEXT,phanTramGiam TEXT,mucGiamToiDa TEXT,ngayBatDau TEXT,ngayKetThuc TEXT,phamViApDung TEXT)", 8},
+    {"invoices", "CREATE TABLE IF NOT EXISTS invoices (maHoaDon TEXT,maKhachHang TEXT,maNhanVien TEXT,thoiGianLap TEXT,tongTien TEXT,hinhThucThanhToan TEXT,maGiaoDich TEXT,trangThaiThanhToan TEXT)", 8},
+    {"invoice_fb_items", "CREATE TABLE IF NOT EXISTS invoice_fb_items (maHoaDon TEXT,maMatHang TEXT,tenMatHangTaiThoiDiem TEXT,soLuong TEXT,donGiaTaiThoiDiem TEXT,thanhTien TEXT)", 6},
+    {"showtimes", "CREATE TABLE IF NOT EXISTS showtimes (maSuatChieu TEXT,maPhim TEXT,maPhong TEXT,ngayChieu TEXT,gioBatDau TEXT,gioKetThuc TEXT,giaVeCoBan TEXT)", 7},
+    {"tickets", "CREATE TABLE IF NOT EXISTS tickets (maVe TEXT,maHoaDon TEXT,maSuatChieu TEXT,maGhe TEXT,giaVeThucTe TEXT,maQRCode TEXT,trangThaiSuDung TEXT)", 7},
+    {"seat_status", "CREATE TABLE IF NOT EXISTS seat_status (maSuatChieu TEXT,maGhe TEXT,trangThai TEXT)", 3},
+    {"nhat_ky_hoat_dong", "CREATE TABLE IF NOT EXISTS nhat_ky_hoat_dong (thoiGian TEXT,maNguoiDung TEXT,vaiTro TEXT,hanhDong TEXT,chiTiet TEXT)", 5},
+    {"users", "CREATE TABLE IF NOT EXISTS users (maNguoiDung TEXT,hoTen TEXT,soDienThoai TEXT,email TEXT,ngaySinh TEXT,gioiTinh TEXT,cccd TEXT,taiKhoan TEXT,matKhau TEXT,vaiTro TEXT,trangThaiLamViec TEXT,trangThaiTaiKhoan TEXT)", 12},
+    {"customers", "CREATE TABLE IF NOT EXISTS customers (maKhachHang TEXT,diemTichLuy TEXT,hangThanhVien TEXT,tongChiTieu TEXT)", 4},
+    {"customer_points_history", "CREATE TABLE IF NOT EXISTS customer_points_history (maGiaoDichDiem TEXT,maKhachHang TEXT,loaiGiaoDich TEXT,soDiem TEXT,noiDung TEXT,thoiGian TEXT)", 6},
+    {"genres", "CREATE TABLE IF NOT EXISTS genres (maTheLoai TEXT,tenTheLoai TEXT)", 2},
+    {"movie_genres", "CREATE TABLE IF NOT EXISTS movie_genres (maPhim TEXT,maTheLoai TEXT)", 2},
+    {"movies", "CREATE TABLE IF NOT EXISTS movies (maPhim TEXT,tenPhim TEXT,thoiLuong TEXT,nhanDoTuoi TEXT,ngayKhoiChieu TEXT,ngayKetThuc TEXT,moTa TEXT,poster TEXT)", 8},
+    {"rooms", "CREATE TABLE IF NOT EXISTS rooms (maPhong TEXT,tenPhong TEXT,loaiPhong TEXT,sucChua TEXT,trangThaiPhong TEXT)", 5},
+    {"seats", "CREATE TABLE IF NOT EXISTS seats (maGhe TEXT,maPhong TEXT,loaiGhe TEXT,donGiaGhe TEXT)", 4},
+    {"seat_types", "CREATE TABLE IF NOT EXISTS seat_types (tenLoaiGhe TEXT,donGia TEXT)", 2},
+    {"shift_managements", "CREATE TABLE IF NOT EXISTS shift_managements (maCa TEXT,maNhanVien TEXT,tenNhanVien TEXT,ngayLam TEXT,gioBatDau TEXT,gioKetThuc TEXT,doanhThuHeThong TEXT,tienThucTe TEXT,chenhLech TEXT,trangThai TEXT,daKhoaBaoCao TEXT)", 11}
 };
 
-const size_t csvTableMappingCount =
-    sizeof(csvTableMappings) / sizeof(csvTableMappings[0]);
+const size_t tableCount = sizeof(tables) / sizeof(tables[0]);
 
-string normalizedPath(const string& path) {
-    string result = path;
-    for (size_t i = 0; i < result.size(); ++i) {
-        if (result[i] == '\\') result[i] = '/';
-        result[i] = static_cast<char>(tolower(static_cast<unsigned char>(result[i])));
-    }
-    return result;
-}
+bool openDatabase();
 
 string quoteSqlIdentifier(const string& value) {
     string result = "\"";
@@ -91,22 +81,141 @@ bool executeSql(const string& sql) {
     return true;
 }
 
-vector<string> splitCsvHeader(const string& header) {
-    vector<string> columns;
-    stringstream stream(header);
-    string column;
-    while (getline(stream, column, ',')) columns.push_back(column);
-    return columns;
+const TableDefinition* tableDefinition(const string& name) {
+    for (size_t i = 0; i < tableCount; ++i) {
+        if (name == tables[i].name) return &tables[i];
+    }
+    return NULL;
 }
 
-string serializeCSVFields(const vector<string>& fields);
-
-string joinCsvFields(const vector<string>& fields) {
-    return serializeCSVFields(fields);
+bool readTable(const string& table, vector<vector<string> >& rows) {
+    rows.clear();
+    const TableDefinition* definition = tableDefinition(table);
+    if (definition == NULL || !openDatabase()) return false;
+    const string sql = "SELECT * FROM " + quoteSqlIdentifier(table) + " ORDER BY rowid";
+    sqlite3_stmt* statement = NULL;
+    if (sqlite3_prepare_v2(databaseHandle, sql.c_str(), -1, &statement, NULL) != SQLITE_OK) {
+        cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
+        return false;
+    }
+    int result;
+    while ((result = sqlite3_step(statement)) == SQLITE_ROW) {
+        vector<string> row;
+        for (int column = 0; column < definition->columnCount; ++column) {
+            const unsigned char* text = sqlite3_column_text(statement, column);
+            row.push_back(text != NULL ? reinterpret_cast<const char*>(text) : "");
+        }
+        rows.push_back(row);
+    }
+    sqlite3_finalize(statement);
+    if (result != SQLITE_DONE) {
+        cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
+        return false;
+    }
+    return true;
 }
 
-bool importCsvContent(const string& path, const string& content);
-bool renderCsvContent(const string& path, string& content);
+bool writeTable(const string& table, const vector<vector<string> >& rows) {
+    const TableDefinition* definition = tableDefinition(table);
+    if (definition == NULL || !openDatabase()) return false;
+    if (!executeSql("SAVEPOINT single_table_write")) return false;
+    if (!executeSql("DELETE FROM " + quoteSqlIdentifier(table))) {
+        executeSql("ROLLBACK TO single_table_write");
+        executeSql("RELEASE single_table_write");
+        return false;
+    }
+
+    ostringstream sql;
+    sql << "INSERT INTO " << quoteSqlIdentifier(table) << " VALUES (";
+    for (int i = 0; i < definition->columnCount; ++i) {
+        if (i > 0) sql << ",";
+        sql << "?";
+    }
+    sql << ")";
+    sqlite3_stmt* statement = NULL;
+    if (sqlite3_prepare_v2(databaseHandle, sql.str().c_str(), -1, &statement, NULL) != SQLITE_OK) {
+        cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
+        executeSql("ROLLBACK TO single_table_write");
+        executeSql("RELEASE single_table_write");
+        return false;
+    }
+    for (size_t row = 0; row < rows.size(); ++row) {
+        if (static_cast<int>(rows[row].size()) != definition->columnCount) {
+            sqlite3_finalize(statement);
+            cerr << "[LOI SQLite]: So cot du lieu khong hop le cho bang " << table << ".\n";
+            executeSql("ROLLBACK TO single_table_write");
+            executeSql("RELEASE single_table_write");
+            return false;
+        }
+        sqlite3_reset(statement);
+        sqlite3_clear_bindings(statement);
+        for (int column = 0; column < definition->columnCount; ++column) {
+            sqlite3_bind_text(statement, column + 1, rows[row][column].c_str(),
+                              -1, SQLITE_TRANSIENT);
+        }
+        if (sqlite3_step(statement) != SQLITE_DONE) {
+            cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
+            sqlite3_finalize(statement);
+            executeSql("ROLLBACK TO single_table_write");
+            executeSql("RELEASE single_table_write");
+            return false;
+        }
+    }
+    sqlite3_finalize(statement);
+    return executeSql("RELEASE single_table_write");
+}
+
+bool writeTables(const vector<pair<string, vector<vector<string> > > >& updates) {
+    if (!executeSql("SAVEPOINT data_write")) return false;
+    for (size_t i = 0; i < updates.size(); ++i) {
+        if (!writeTable(updates[i].first, updates[i].second)) {
+            executeSql("ROLLBACK TO data_write");
+            executeSql("RELEASE data_write");
+            return false;
+        }
+    }
+    return executeSql("RELEASE data_write");
+}
+
+template <typename T>
+string toText(const T& value) {
+    ostringstream output;
+    output << value;
+    return output.str();
+}
+
+string toPreciseText(double value) {
+    ostringstream output;
+    output << setprecision(numeric_limits<double>::max_digits10) << value;
+    return output.str();
+}
+
+vector<string> makeRow(const string& a, const string& b) {
+    vector<string> row;
+    row.push_back(a);
+    row.push_back(b);
+    return row;
+}
+
+vector<string> makeRow(const string& a, const string& b, const string& c) {
+    vector<string> row = makeRow(a, b);
+    row.push_back(c);
+    return row;
+}
+
+vector<string> makeRow(const string& a, const string& b, const string& c,
+                       const string& d) {
+    vector<string> row = makeRow(a, b, c);
+    row.push_back(d);
+    return row;
+}
+
+vector<string> makeRow(const string& a, const string& b, const string& c,
+                       const string& d, const string& e) {
+    vector<string> row = makeRow(a, b, c, d);
+    row.push_back(e);
+    return row;
+}
 
 bool openDatabase() {
     if (databaseHandle != NULL) return true;
@@ -121,315 +230,11 @@ bool openDatabase() {
     sqlite3_busy_timeout(databaseHandle, 5000);
     if (!executeSql("PRAGMA journal_mode=WAL;")) return false;
 
-    bool hasMappedTable = false;
-    sqlite3_stmt* statement = NULL;
-    if (sqlite3_prepare_v2(databaseHandle,
-                           "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
-                           -1, &statement, NULL) != SQLITE_OK) {
-        cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
-        return false;
-    }
-    for (size_t i = 0; i < csvTableMappingCount && !hasMappedTable; ++i) {
-        sqlite3_reset(statement);
-        sqlite3_clear_bindings(statement);
-        sqlite3_bind_text(statement, 1, csvTableMappings[i].table, -1, SQLITE_STATIC);
-        hasMappedTable = sqlite3_step(statement) == SQLITE_ROW;
-    }
-    sqlite3_finalize(statement);
-
-    if (!hasMappedTable) {
-        for (size_t i = 0; i < csvTableMappingCount; ++i) {
-            const CsvTableMapping& mapping = csvTableMappings[i];
-            const vector<string> columns = splitCsvHeader(mapping.columns);
-            ostringstream create;
-            create << "CREATE TABLE IF NOT EXISTS " << quoteSqlIdentifier(mapping.table) << " (";
-            for (size_t j = 0; j < columns.size(); ++j) {
-                if (j > 0) create << ",";
-                create << quoteSqlIdentifier(columns[j]) << " TEXT";
-            }
-            create << ")";
-            if (!executeSql(create.str())) return false;
-        }
-
-        set<string> importedPaths;
-        for (size_t i = 0; i < csvTableMappingCount; ++i) {
-            const string sourcePath = csvTableMappings[i].path;
-            if (!importedPaths.insert(sourcePath).second) continue;
-            std::ifstream source(sourcePath.c_str(), ios::binary);
-            if (!source.is_open()) {
-                cerr << "[LOI]: Khong mo duoc CSV de khoi tao SQLite: " << sourcePath << "\n";
-                return false;
-            }
-            ostringstream sourceContent;
-            sourceContent << source.rdbuf();
-            if (source.bad() || !importCsvContent(sourcePath, sourceContent.str())) return false;
-        }
+    for (size_t i = 0; i < tableCount; ++i) {
+        if (!executeSql(tables[i].createSql)) return false;
     }
     return true;
 }
-
-bool docToanBoFile(const string& path, string& content) {
-    return renderCsvContent(path, content);
-}
-
-bool ghiToanBoFile(const string& path, const string& content) {
-    return importCsvContent(path, content);
-}
-
-bool tachDongCSV(const string& line, vector<string>& fields) {
-    fields.clear();
-    string field;
-    bool inQuotes = false;
-    bool closedQuote = false;
-    for (size_t i = 0; i < line.size(); ++i) {
-        const char ch = line[i];
-        if (inQuotes) {
-            if (ch == '"') {
-                if (i + 1 < line.size() && line[i + 1] == '"') {
-                    field += '"';
-                    ++i;
-                } else {
-                    inQuotes = false;
-                    closedQuote = true;
-                }
-            } else {
-                field += ch;
-            }
-        } else if (ch == ',') {
-            fields.push_back(field);
-            field.clear();
-            closedQuote = false;
-        } else if (ch == '"' && field.empty() && !closedQuote) {
-            inQuotes = true;
-        } else if (closedQuote) {
-            return false;
-        } else {
-            field += ch;
-        }
-    }
-    if (inQuotes) return false;
-    if (!field.empty() && field[field.size() - 1] == '\r') field.erase(field.size() - 1);
-    fields.push_back(field);
-    return true;
-}
-
-string quoteCSVField(const string& value) {
-    string field;
-    bool needsQuotes = false;
-    for (size_t i = 0; i < value.size(); ++i) {
-        const char ch = value[i];
-        if (ch == ',' || ch == '"') needsQuotes = true;
-        if (ch == '\r' || ch == '\n') {
-            field += ' ';
-        } else {
-            if (ch == '"') field += '"';
-            field += ch;
-        }
-    }
-    return needsQuotes ? "\"" + field + "\"" : field;
-}
-
-string serializeCSVFields(const vector<string>& fields) {
-    ostringstream output;
-    for (size_t i = 0; i < fields.size(); ++i) {
-        if (i > 0) output << ",";
-        output << quoteCSVField(fields[i]);
-    }
-    return output.str();
-}
-
-bool importCsvContent(const string& path, const string& content) {
-    if (!openDatabase()) return false;
-    const string wantedPath = normalizedPath(path);
-    if (!executeSql("SAVEPOINT csv_import")) return false;
-
-    map<string, vector<vector<string> > > rowsBySection;
-    map<string, vector<string> > headersBySection;
-    string currentSection;
-    string line;
-    stringstream input(content);
-    while (getline(input, line)) {
-        if (!line.empty() && line[line.size() - 1] == '\r') line.erase(line.size() - 1);
-        if (line.empty()) continue;
-        if (line[0] == '[' && line[line.size() - 1] == ']') {
-            currentSection = line.substr(1, line.size() - 2);
-            continue;
-        }
-        vector<string> fields;
-        if (!tachDongCSV(line, fields)) {
-            cerr << "[LOI]: Dong CSV khong hop le trong du lieu dua vao SQLite.\n";
-            executeSql("ROLLBACK TO csv_import");
-            executeSql("RELEASE csv_import");
-            return false;
-        }
-        if (currentSection.empty()) {
-            if (headersBySection.find("") == headersBySection.end()) {
-                headersBySection[""] = fields;
-                continue;
-            }
-            rowsBySection[""].push_back(fields);
-        } else if (headersBySection.find(currentSection) == headersBySection.end()) {
-            headersBySection[currentSection] = fields;
-        } else {
-            rowsBySection[currentSection].push_back(fields);
-        }
-    }
-
-    bool anyMapped = false;
-    for (size_t i = 0; i < csvTableMappingCount; ++i) {
-        const CsvTableMapping& mapping = csvTableMappings[i];
-        if (normalizedPath(mapping.path) != wantedPath) continue;
-        const string section = mapping.section;
-        if (headersBySection.find(section) == headersBySection.end()) continue;
-        anyMapped = true;
-        const vector<string> expectedColumns = splitCsvHeader(mapping.columns);
-        if (headersBySection[section] != expectedColumns) {
-            cerr << "[LOI]: Cot CSV khong khop schema SQLite cho bang "
-                 << mapping.table << ".\n";
-            executeSql("ROLLBACK TO csv_import");
-            executeSql("RELEASE csv_import");
-            return false;
-        }
-
-        const string table = quoteSqlIdentifier(mapping.table);
-        if (!executeSql("DELETE FROM " + table)) {
-            executeSql("ROLLBACK TO csv_import");
-            executeSql("RELEASE csv_import");
-            return false;
-        }
-        ostringstream insertSql;
-        insertSql << "INSERT INTO " << table << " (";
-        for (size_t c = 0; c < expectedColumns.size(); ++c) {
-            if (c > 0) insertSql << ",";
-            insertSql << quoteSqlIdentifier(expectedColumns[c]);
-        }
-        insertSql << ") VALUES (";
-        for (size_t c = 0; c < expectedColumns.size(); ++c) {
-            if (c > 0) insertSql << ",";
-            insertSql << "?";
-        }
-        insertSql << ")";
-
-        sqlite3_stmt* statement = NULL;
-        if (sqlite3_prepare_v2(databaseHandle, insertSql.str().c_str(), -1,
-                               &statement, NULL) != SQLITE_OK) {
-            cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
-            executeSql("ROLLBACK TO csv_import");
-            executeSql("RELEASE csv_import");
-            return false;
-        }
-        const vector<vector<string> >& rows = rowsBySection[section];
-        for (size_t r = 0; r < rows.size(); ++r) {
-            if (rows[r].size() != expectedColumns.size()) {
-                cerr << "[LOI]: So cot trong dong CSV khong hop le cho bang "
-                     << mapping.table << ".\n";
-                sqlite3_finalize(statement);
-                executeSql("ROLLBACK TO csv_import");
-                executeSql("RELEASE csv_import");
-                return false;
-            }
-            sqlite3_reset(statement);
-            sqlite3_clear_bindings(statement);
-            for (size_t c = 0; c < rows[r].size(); ++c) {
-                sqlite3_bind_text(statement, static_cast<int>(c + 1),
-                                  rows[r][c].c_str(), -1, SQLITE_TRANSIENT);
-            }
-            if (sqlite3_step(statement) != SQLITE_DONE) {
-                cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
-                sqlite3_finalize(statement);
-                executeSql("ROLLBACK TO csv_import");
-                executeSql("RELEASE csv_import");
-                return false;
-            }
-        }
-        sqlite3_finalize(statement);
-    }
-    if (!anyMapped) {
-        cerr << "[LOI]: Khong co bang SQLite tuong ung voi duong dan " << path << ".\n";
-        executeSql("ROLLBACK TO csv_import");
-        executeSql("RELEASE csv_import");
-        return false;
-    }
-    return executeSql("RELEASE csv_import");
-}
-
-bool renderCsvContent(const string& path, string& content) {
-    if (!openDatabase()) return false;
-    const string wantedPath = normalizedPath(path);
-    ostringstream output;
-    bool foundMapping = false;
-    for (size_t i = 0; i < csvTableMappingCount; ++i) {
-        const CsvTableMapping& mapping = csvTableMappings[i];
-        if (normalizedPath(mapping.path) != wantedPath) continue;
-        foundMapping = true;
-        if (mapping.section[0] != '\0') output << "[" << mapping.section << "]\n";
-        output << mapping.columns << "\n";
-
-        const string sql = "SELECT * FROM " + quoteSqlIdentifier(mapping.table) + " ORDER BY rowid";
-        sqlite3_stmt* statement = NULL;
-        if (sqlite3_prepare_v2(databaseHandle, sql.c_str(), -1, &statement, NULL) != SQLITE_OK) {
-            cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
-            return false;
-        }
-        int stepResult = SQLITE_OK;
-        while ((stepResult = sqlite3_step(statement)) == SQLITE_ROW) {
-            vector<string> fields;
-            for (int c = 0; c < sqlite3_column_count(statement); ++c) {
-                const unsigned char* text = sqlite3_column_text(statement, c);
-                fields.push_back(text != NULL ? reinterpret_cast<const char*>(text) : "");
-            }
-            output << joinCsvFields(fields) << "\n";
-        }
-        if (stepResult != SQLITE_DONE) {
-            sqlite3_finalize(statement);
-            cerr << "[LOI SQLite]: " << sqlite3_errmsg(databaseHandle) << "\n";
-            return false;
-        }
-        sqlite3_finalize(statement);
-        output << "\n";
-    }
-    if (!foundMapping) {
-        cerr << "[LOI]: Khong co bang SQLite tuong ung voi duong dan " << path << ".\n";
-        return false;
-    }
-    content = output.str();
-    return true;
-}
-
-class SqliteInputStream : public istringstream {
-public:
-    SqliteInputStream(const char* path, ios::openmode = ios::in) : istringstream() {
-        string content;
-        if (renderCsvContent(path, content)) str(content);
-        else setstate(ios::badbit);
-    }
-    bool is_open() const { return !bad(); }
-    void close() {}
-};
-
-class SqliteOutputStream : public ostringstream {
-private:
-    string filePath;
-    bool closed;
-public:
-    SqliteOutputStream(const char* path, ios::openmode = ios::out) :
-        ostringstream(), filePath(path), closed(false) {}
-    ~SqliteOutputStream() { close(); }
-    bool is_open() const { return !bad(); }
-    void close() {
-        if (closed) return;
-        closed = true;
-        if (!importCsvContent(filePath, str())) {
-            cerr << "[LOI]: Khong the luu du lieu vao SQLite tu thao tac ghi "
-                 << filePath << ".\n";
-            setstate(ios::badbit);
-        }
-    }
-};
-
-// Keep existing CSV parsing logic while storing every read/write in SQLite.
-#define ifstream SqliteInputStream
-#define ofstream SqliteOutputStream
 
 bool parsePositiveInteger(const string& value, int& result) {
     stringstream stream(value);
@@ -454,12 +259,8 @@ Database::Database() : giaoDichBanVeDangMo(false) {
 }
 
 bool Database::batDauGiaoDichBanVe() {
-    if (giaoDichBanVeDangMo ||
-        !docToanBoFile("DATA/lich_va_ve.csv", banSaoLichVaVe) ||
-        !docToanBoFile("DATA/giao_dich_fnb.csv", banSaoGiaoDichFnb) ||
-        !docToanBoFile("DATA/quan_ly_nhan_su.csv", banSaoNhanSu) ||
-        !executeSql("SAVEPOINT sale_transaction")) {
-        cerr << "[LOI]: Khong the tao ban sao du lieu de bat dau giao dich ban ve.\n";
+    if (giaoDichBanVeDangMo || !executeSql("SAVEPOINT sale_transaction")) {
+        cerr << "[LOI]: Khong the bat dau giao dich ban ve.\n";
         return false;
     }
     giaoDichBanVeDangMo = true;
@@ -468,38 +269,15 @@ bool Database::batDauGiaoDichBanVe() {
 
 bool Database::khoiPhucGiaoDichBanVe() {
     if (!giaoDichBanVeDangMo) return false;
-
-    const bool restoredLichVaVe = ghiToanBoFile("DATA/lich_va_ve.csv", banSaoLichVaVe);
-    const bool restoredFnb = ghiToanBoFile("DATA/giao_dich_fnb.csv", banSaoGiaoDichFnb);
-    const bool restoredNhanSu = ghiToanBoFile("DATA/quan_ly_nhan_su.csv", banSaoNhanSu);
-    if (!restoredLichVaVe || !restoredFnb || !restoredNhanSu) {
-        cerr << "[LOI NGHIEM TRONG]: Khong the khoi phuc day du du lieu giao dich ban ve.\n";
-        return false;
-    }
-
-    hoanTatGiaoDichBanVe();
+    if (!executeSql("ROLLBACK TO sale_transaction")) return false;
+    if (!executeSql("RELEASE sale_transaction")) return false;
+    giaoDichBanVeDangMo = false;
     return true;
 }
 
 void Database::hoanTatGiaoDichBanVe() {
-    executeSql("RELEASE sale_transaction");
+    if (!giaoDichBanVeDangMo || !executeSql("RELEASE sale_transaction")) return;
     giaoDichBanVeDangMo = false;
-    banSaoLichVaVe.clear();
-    banSaoGiaoDichFnb.clear();
-    banSaoNhanSu.clear();
-}
-
-static vector<string> tachChuoiCSV(const string& line) {
-    vector<string> tokens;
-    stringstream ss(line);
-    string item;
-    while (getline(ss, item, ',')) {
-        if (!item.empty() && item[item.length() - 1] == '\r') {
-            item.erase(item.length() - 1);
-        }
-        tokens.push_back(item);
-    }
-    return tokens;
 }
 
 static bool phanTichGiuGhe(const string& trangThai, time_t& hetHan, string& maPhienGiu) {
@@ -526,122 +304,54 @@ static bool giuGheConHan(const string& trangThai, time_t hienTai, string* maPhie
 
 void Database::docDanhSachUsers(vector<Customer>& danhSachKH) {
     danhSachKH.clear();
-    ifstream inFile("DATA/quan_ly_nhan_su.csv");
-    if (!inFile.is_open()) return;
-
-    string line;
-    int section = 0;
+    vector<vector<string> > users, customers;
+    if (!readTable("users", users) || !readTable("customers", customers)) return;
     map<string, vector<string> > usersById;
     set<string> customerIds;
-
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line[0] == '[') {
-            if (line.find("[USERS]") == 0) section = 1;
-            else if (line.find("[CUSTOMERS]") == 0) section = 2;
-            else section = 0;
-            continue;
-        }
-
-        vector<string> fields;
-        if (!tachDongCSV(line, fields)) {
-            cerr << "[CANH BAO]: Bo qua dong CSV khong hop le trong du lieu CRM.\n";
-            continue;
-        }
-
-        if (section == 1 && !fields.empty() && fields[0] != "maNguoiDung" &&
-            fields.size() >= 1 && !fields[0].empty()) {
-            if (usersById.find(fields[0]) != usersById.end()) {
-                cerr << "[CANH BAO]: Ma nguoi dung bi trung trong CSV: "
-                     << fields[0] << ". Su dung ho so xuat hien dau tien.\n";
-                continue;
-            }
-            usersById[fields[0]] = fields;
-        } else if (section == 2 && fields.size() >= 4 &&
-                   fields[0] != "maKhachHang" && !fields[0].empty()) {
-            const string& maKH = fields[0];
-            if (!customerIds.insert(maKH).second) {
-                cerr << "[CANH BAO]: Ma khach hang bi trung trong CSV: "
-                     << maKH << ". Giu nguyen ban ghi de tranh mat du lieu.\n";
-            }
-
-            const map<string, vector<string> >::const_iterator user = usersById.find(maKH);
-            const vector<string>* profile = user == usersById.end() ? NULL : &user->second;
-            const string hoTen = profile != NULL && profile->size() > 1 ? (*profile)[1] : "";
-            const string soDienThoai = profile != NULL && profile->size() > 2 ? (*profile)[2] : "";
-            const string email = profile != NULL && profile->size() > 3 ? (*profile)[3] : "";
-            const string ngaySinh = profile != NULL && profile->size() > 4 ? (*profile)[4] : "";
-            const string gioiTinh = profile != NULL && profile->size() > 5 ? (*profile)[5] : "";
-            const string cccd = profile != NULL && profile->size() > 6 ? (*profile)[6] : "";
-
-            Customer customer(maKH, hoTen, soDienThoai, email,
-                              atoi(fields[1].c_str()), fields[2], atoll(fields[3].c_str()));
-            customer.setNgaySinh(ngaySinh);
-            customer.setGioiTinh(gioiTinh);
-            customer.setCCCD(cccd);
-            danhSachKH.push_back(customer);
+    for (size_t i = 0; i < users.size(); ++i) {
+        if (users[i].empty() || users[i][0].empty()) continue;
+        if (!usersById.insert(make_pair(users[i][0], users[i])).second) {
+            cerr << "[CANH BAO]: Ma nguoi dung bi trung trong SQLite: "
+                 << users[i][0] << ". Su dung ho so xuat hien dau tien.\n";
         }
     }
-    if (inFile.bad()) cerr << "[LOI]: Khong doc duoc day du du lieu CRM.\n";
-    inFile.close();
+    for (size_t i = 0; i < customers.size(); ++i) {
+        const vector<string>& row = customers[i];
+        if (row.size() < 4 || row[0].empty()) continue;
+        const string& maKH = row[0];
+        if (!customerIds.insert(maKH).second) {
+            cerr << "[CANH BAO]: Ma khach hang bi trung trong SQLite: "
+                 << maKH << ". Giu nguyen ban ghi de tranh mat du lieu.\n";
+        }
+        map<string, vector<string> >::const_iterator user = usersById.find(maKH);
+        const vector<string>* profile = user == usersById.end() ? NULL : &user->second;
+        Customer customer(maKH,
+            profile != NULL && profile->size() > 1 ? (*profile)[1] : "",
+            profile != NULL && profile->size() > 2 ? (*profile)[2] : "",
+            profile != NULL && profile->size() > 3 ? (*profile)[3] : "",
+            atoi(row[1].c_str()), row[2], atoll(row[3].c_str()));
+        customer.setNgaySinh(profile != NULL && profile->size() > 4 ? (*profile)[4] : "");
+        customer.setGioiTinh(profile != NULL && profile->size() > 5 ? (*profile)[5] : "");
+        customer.setCCCD(profile != NULL && profile->size() > 6 ? (*profile)[6] : "");
+        danhSachKH.push_back(customer);
+    }
 }
 
 string Database::layTenNhanVienQuaMa(string maNhanVien) {
-    ifstream inFile("DATA/quan_ly_nhan_su.csv");
-    if (!inFile.is_open()) return "Nhan vien chua ro";
-
-    string line;
-    bool readingUsers = false;
-
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line.find("[USERS]") != string::npos) { readingUsers = true; continue; }
-        if (readingUsers && line[0] == '[') break;
-
-        if (readingUsers && line.find("maNguoiDung") == string::npos) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 12) {
-
-                if (p[0] == maNhanVien || p[7] == maNhanVien) {
-                    inFile.close();
-                    return p[1];
-                }
-            }
+    vector<vector<string> > users;
+    if (!readTable("users", users)) return "Nhan vien chua ro";
+    for (size_t i = 0; i < users.size(); ++i) {
+        const vector<string>& row = users[i];
+        if (row.size() >= 8 && (row[0] == maNhanVien || row[7] == maNhanVien)) {
+            return row[1];
         }
     }
-    inFile.close();
     return "Nhan vien chua ro";
 }
 
 bool Database::ghiDanhSachUsers(const vector<Customer>& danhSachKH) {
-    string originalContent;
-    if (!docToanBoFile("DATA/quan_ly_nhan_su.csv", originalContent) ||
-        originalContent.find("[USERS]") == string::npos ||
-        originalContent.find("[CUSTOMERS]") == string::npos ||
-        originalContent.find("[CUSTOMER_POINTS_HISTORY]") == string::npos) {
-        return false;
-    }
-
-    ifstream inFile("DATA/quan_ly_nhan_su.csv");
-    if (!inFile.is_open()) return false;
-    vector<string> rawUsersLines, historyLines;
-    string currentSection = "", line;
-
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line[0] == '[') {
-            if (line.find("[USERS]") != string::npos) currentSection = "USERS";
-            else if (line.find("[CUSTOMERS]") != string::npos) currentSection = "CUSTOMERS";
-            else if (line.find("[CUSTOMER_POINTS_HISTORY]") != string::npos) currentSection = "HISTORY";
-            else currentSection = "";
-            continue;
-        }
-        if (currentSection == "USERS" && line.find("maNguoiDung") == string::npos) rawUsersLines.push_back(line);
-        else if (currentSection == "HISTORY" && line.find("maGiaoDichDiem") == string::npos) historyLines.push_back(line);
-    }
-    if (inFile.bad()) return false;
-    inFile.close();
-
+    vector<vector<string> > users, customers;
+    if (!readTable("users", users)) return false;
     map<string, const Customer*> customersById;
     for (size_t i = 0; i < danhSachKH.size(); ++i) {
         const string maKH = danhSachKH[i].getMaKH();
@@ -654,28 +364,12 @@ bool Database::ghiDanhSachUsers(const vector<Customer>& danhSachKH) {
                  << maKH << ". Giu nguyen cac ban ghi thanh vien.\n";
     }
 
-    vector<string> finalCustomersLines;
-    for (size_t i = 0; i < danhSachKH.size(); ++i) {
-        vector<string> customerFields;
-        stringstream ssDiem, ssChiTieu;
-        ssDiem << danhSachKH[i].getDiemTichLuy();
-        ssChiTieu << danhSachKH[i].getTongChiTieu();
-        customerFields.push_back(danhSachKH[i].getMaKH());
-        customerFields.push_back(ssDiem.str());
-        customerFields.push_back(danhSachKH[i].getHangThanhVien());
-        customerFields.push_back(ssChiTieu.str());
-        finalCustomersLines.push_back(serializeCSVFields(customerFields));
-    }
-
     set<string> matchedUserIds;
     set<string> existingUserIds;
-    for (size_t i = 0; i < rawUsersLines.size(); ++i) {
-        vector<string> userFields;
-        if (!tachDongCSV(rawUsersLines[i], userFields) || userFields.empty()) {
-            cerr << "[LOI]: Dong USERS khong hop le; khong ghi de du lieu CRM.\n";
-            return false;
-        }
-        if (userFields[0].empty() || !existingUserIds.insert(userFields[0]).second) {
+    for (size_t i = 0; i < users.size(); ++i) {
+        vector<string>& userFields = users[i];
+        if (userFields.empty() || userFields[0].empty() ||
+            !existingUserIds.insert(userFields[0]).second) {
             cerr << "[LOI]: Ma nguoi dung rong hoac bi trung; khong ghi de du lieu CRM.\n";
             return false;
         }
@@ -701,7 +395,6 @@ bool Database::ghiDanhSachUsers(const vector<Customer>& danhSachKH) {
         if (userFields[9].empty()) userFields[9] = "Customer";
         if (userFields[10].empty()) userFields[10] = "DangLam";
         if (userFields[11].empty()) userFields[11] = "HoatDong";
-        rawUsersLines[i] = serializeCSVFields(userFields);
         matchedUserIds.insert(userFields[0]);
     }
 
@@ -709,135 +402,99 @@ bool Database::ghiDanhSachUsers(const vector<Customer>& danhSachKH) {
          it != customersById.end(); ++it) {
         if (matchedUserIds.find(it->first) != matchedUserIds.end()) continue;
         const Customer& profile = *it->second;
-        vector<string> userFields;
-        userFields.push_back(profile.getMaKH());
-        userFields.push_back(profile.getHoTen());
-        userFields.push_back(profile.getSoDienThoai());
-        userFields.push_back(profile.getEmail());
-        userFields.push_back(profile.getNgaySinh());
-        userFields.push_back(profile.getGioiTinh());
-        userFields.push_back(profile.getCCCD());
-        userFields.push_back("khach_" + profile.getSoDienThoai());
-        userFields.push_back("123456");
-        userFields.push_back("Customer");
-        userFields.push_back("DangLam");
-        userFields.push_back("HoatDong");
-        rawUsersLines.push_back(serializeCSVFields(userFields));
+        vector<string> row;
+        row.push_back(profile.getMaKH());
+        row.push_back(profile.getHoTen());
+        row.push_back(profile.getSoDienThoai());
+        row.push_back(profile.getEmail());
+        row.push_back(profile.getNgaySinh());
+        row.push_back(profile.getGioiTinh());
+        row.push_back(profile.getCCCD());
+        row.push_back("khach_" + profile.getSoDienThoai());
+        row.push_back("123456");
+        row.push_back("Customer");
+        row.push_back("DangLam");
+        row.push_back("HoatDong");
+        users.push_back(row);
     }
-
-    ostringstream output;
-    output << "[USERS]\nmaNguoiDung,hoTen,soDienThoai,email,ngaySinh,gioiTinh,cccd,taiKhoan,matKhau,vaiTro,trangThaiLamViec,trangThaiTaiKhoan\n";
-    for (size_t i = 0; i < rawUsersLines.size(); ++i) output << rawUsersLines[i] << "\n";
-
-    output << "\n[CUSTOMERS]\nmaKhachHang,diemTichLuy,hangThanhVien,tongChiTieu\n";
-    for (size_t i = 0; i < finalCustomersLines.size(); ++i) output << finalCustomersLines[i] << "\n";
-
-    output << "\n[CUSTOMER_POINTS_HISTORY]\nmaGiaoDichDiem,maKhachHang,loaiGiaoDich,soDiem,noiDung,thoiGian\n";
-    for (size_t i = 0; i < historyLines.size(); ++i) output << historyLines[i] << "\n";
-    return ghiToanBoFile("DATA/quan_ly_nhan_su.csv", output.str());
+    for (size_t i = 0; i < danhSachKH.size(); ++i) {
+        const Customer& customer = danhSachKH[i];
+        customers.push_back(makeRow(customer.getMaKH(),
+                                    toText(customer.getDiemTichLuy()),
+                                    customer.getHangThanhVien(),
+                                    toText(customer.getTongChiTieu())));
+    }
+    return writeTables(vector<pair<string, vector<vector<string> > > >{
+        make_pair("users", users), make_pair("customers", customers)
+    });
 }
 
 void Database::docLichSuGiaoDichDiem(vector<GiaoDichDiem>& danhSachGD) {
     danhSachGD.clear();
-    ifstream inFile("DATA/quan_ly_nhan_su.csv");
-    if (!inFile.is_open()) return;
-
-    string line;
-    bool reading = false;
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line.find("[CUSTOMER_POINTS_HISTORY]") != string::npos) { reading = true; continue; }
-        if (reading && line[0] == '[') { reading = false; break; }
-
-        if (reading && line.find("maGiaoDichDiem") == string::npos) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 6) danhSachGD.push_back(GiaoDichDiem(p[0], p[1], p[2], atoi(p[3].c_str()), p[4], p[5]));
+    vector<vector<string> > rows;
+    if (!readTable("customer_points_history", rows)) return;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const vector<string>& row = rows[i];
+        if (row.size() >= 6) {
+            danhSachGD.push_back(GiaoDichDiem(row[0], row[1], row[2],
+                                              atoi(row[3].c_str()), row[4], row[5]));
         }
     }
-    inFile.close();
 }
 
 bool Database::ghiLichSuGiaoDichDiem(const vector<GiaoDichDiem>& danhSachGD) {
-    string originalContent;
-    if (!docToanBoFile("DATA/quan_ly_nhan_su.csv", originalContent) ||
-        originalContent.find("[USERS]") == string::npos ||
-        originalContent.find("[CUSTOMERS]") == string::npos ||
-        originalContent.find("[CUSTOMER_POINTS_HISTORY]") == string::npos) {
-        return false;
-    }
-
-    ifstream inFile("DATA/quan_ly_nhan_su.csv");
-    if (!inFile.is_open()) return false;
-    vector<string> rawUsersLines, customersLines;
-    string currentSection = "", line;
-
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line[0] == '[') {
-            if (line.find("[USERS]") != string::npos) currentSection = "USERS";
-            else if (line.find("[CUSTOMERS]") != string::npos) currentSection = "CUSTOMERS";
-            else currentSection = "";
-            continue;
-        }
-        if (currentSection == "USERS" && line.find("maNguoiDung") == string::npos) rawUsersLines.push_back(line);
-        else if (currentSection == "CUSTOMERS" && line.find("maKhachHang") == string::npos) customersLines.push_back(line);
-    }
-    if (inFile.bad()) return false;
-    inFile.close();
-
-    ostringstream output;
-    output << "[USERS]\nmaNguoiDung,hoTen,soDienThoai,email,ngaySinh,gioiTinh,cccd,taiKhoan,matKhau,vaiTro,trangThaiLamViec,trangThaiTaiKhoan\n";
-    for (size_t i = 0; i < rawUsersLines.size(); ++i) output << rawUsersLines[i] << "\n";
-
-    output << "\n[CUSTOMERS]\nmaKhachHang,diemTichLuy,hangThanhVien,tongChiTieu\n";
-    for (size_t i = 0; i < customersLines.size(); ++i) output << customersLines[i] << "\n";
-
-    output << "\n[CUSTOMER_POINTS_HISTORY]\nmaGiaoDichDiem,maKhachHang,loaiGiaoDich,soDiem,noiDung,thoiGian\n";
+    vector<vector<string> > rows;
     for (size_t i = 0; i < danhSachGD.size(); ++i) {
-        output << danhSachGD[i].getMaGiaoDich() << "," << danhSachGD[i].getMaKhachHang() << "," << danhSachGD[i].getLoaiGiaoDich() << ","
-               << danhSachGD[i].getSoDiem() << "," << danhSachGD[i].getNoiDung() << "," << danhSachGD[i].getThoiGian() << "\n";
+        const GiaoDichDiem& item = danhSachGD[i];
+        vector<string> row;
+        row.push_back(item.getMaGiaoDich());
+        row.push_back(item.getMaKhachHang());
+        row.push_back(item.getLoaiGiaoDich());
+        row.push_back(toText(item.getSoDiem()));
+        row.push_back(item.getNoiDung());
+        row.push_back(item.getThoiGian());
+        rows.push_back(row);
     }
-    return ghiToanBoFile("DATA/quan_ly_nhan_su.csv", output.str());
+    return writeTable("customer_points_history", rows);
 }
 
 static bool ghiDuLieuPhim(const vector<pair<string, string> >& dsTheLoai,
                           const vector<pair<string, string> >& movieGenres,
                           const vector<Movie>& danhSachPhim) {
-    ofstream outFile("DATA/quan_ly_phim.csv", ios::trunc);
-    if (!outFile.is_open()) return false;
-    outFile << "[GENRES]\nmaTheLoai,tenTheLoai\n";
+    vector<vector<string> > genresRows, movieGenreRows, movieRows;
     for (size_t i = 0; i < dsTheLoai.size(); ++i) {
-        outFile << dsTheLoai[i].first << "," << dsTheLoai[i].second << "\n";
+        genresRows.push_back(makeRow(dsTheLoai[i].first, dsTheLoai[i].second));
     }
-    outFile << "\n[MOVIE_GENRES]\nmaPhim,maTheLoai\n";
     for (size_t i = 0; i < movieGenres.size(); ++i) {
-        outFile << movieGenres[i].first << "," << movieGenres[i].second << "\n";
+        movieGenreRows.push_back(makeRow(movieGenres[i].first, movieGenres[i].second));
     }
-    outFile << "\n[MOVIES]\nmaPhim,tenPhim,thoiLuong,nhanDoTuoi,ngayKhoiChieu,ngayKetThuc,moTa,poster\n";
     for (size_t i = 0; i < danhSachPhim.size(); ++i) {
-        outFile << danhSachPhim[i].getMaPhim() << "," << danhSachPhim[i].getTenPhim() << ","
-                << danhSachPhim[i].getThoiLuong() << "," << danhSachPhim[i].getNhanDoTuoi() << ","
-                << danhSachPhim[i].getNgayKhoiChieu() << "," << danhSachPhim[i].getNgayKetThuc() << ","
-                << danhSachPhim[i].getMoTa() << "," << danhSachPhim[i].getPoster() << "\n";
+        const Movie& movie = danhSachPhim[i];
+        vector<string> row;
+        row.push_back(movie.getMaPhim());
+        row.push_back(movie.getTenPhim());
+        row.push_back(toText(movie.getThoiLuong()));
+        row.push_back(toText(movie.getNhanDoTuoi()));
+        row.push_back(movie.getNgayKhoiChieu());
+        row.push_back(movie.getNgayKetThuc());
+        row.push_back(movie.getMoTa());
+        row.push_back(movie.getPoster());
+        movieRows.push_back(row);
     }
-    return true;
+    return writeTables(vector<pair<string, vector<vector<string> > > >{
+        make_pair("genres", genresRows),
+        make_pair("movie_genres", movieGenreRows),
+        make_pair("movies", movieRows)
+    });
 }
 
 void Database::docDanhSachTheLoai(vector<pair<string, string> >& ds) {
     ds.clear();
-    ifstream inFile("DATA/quan_ly_phim.csv");
-    if (!inFile.is_open()) return;
-    string line; bool reading = false;
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line.find("[GENRES]") != string::npos) { reading = true; continue; }
-        if (reading && line[0] == '[') { reading = false; break; }
-        if (reading && line.find("maTheLoai") == string::npos && !line.empty()) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 2) ds.push_back(make_pair(p[0], p[1]));
-        }
+    vector<vector<string> > rows;
+    if (!readTable("genres", rows)) return;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (rows[i].size() >= 2) ds.push_back(make_pair(rows[i][0], rows[i][1]));
     }
-    inFile.close();
 }
 
 bool Database::themLoaiTheLoai(const string& tenTheLoai) {
@@ -912,19 +569,11 @@ bool Database::xoaLoaiTheLoai(const string& maTheLoai) {
 
 void Database::docMovieGenres(vector<pair<string, string> >& mg) {
     mg.clear();
-    ifstream inFile("DATA/quan_ly_phim.csv");
-    if (!inFile.is_open()) return;
-    string line; bool reading = false;
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line.find("[MOVIE_GENRES]") != string::npos) { reading = true; continue; }
-        if (reading && line[0] == '[') { reading = false; break; }
-        if (reading && line.find("maPhim") == string::npos && !line.empty()) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 2) mg.push_back(make_pair(p[0], p[1]));
-        }
+    vector<vector<string> > rows;
+    if (!readTable("movie_genres", rows)) return;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (rows[i].size() >= 2) mg.push_back(make_pair(rows[i][0], rows[i][1]));
     }
-    inFile.close();
 }
 
 string Database::layTheLoaiCuaPhim(string maPhimToFind) {
@@ -1023,40 +672,38 @@ bool Database::capNhatTheLoaiChoPhim(string maPhim, string tenTheLoaiMoi) {
 static bool ghiDuLieuPhongGhe(const vector<Room>& danhSachPhong,
                               const vector<Seat>& danhSachGhe,
                               const vector<pair<string, double> >& danhSachLoaiGhe) {
-    ofstream outFile("DATA/quan_ly_phong_ghe.csv", ios::trunc);
-    if (!outFile.is_open()) return false;
-    outFile << "[ROOMS]\nmaPhong,tenPhong,loaiPhong,sucChua,trangThaiPhong\n";
+    vector<vector<string> > roomRows, seatRows, typeRows;
     for (size_t i = 0; i < danhSachPhong.size(); ++i) {
-        outFile << danhSachPhong[i].getMaPhong() << "," << danhSachPhong[i].getTenPhong() << ","
-                << danhSachPhong[i].getLoaiPhong() << "," << danhSachPhong[i].getSucChua() << ","
-                << danhSachPhong[i].getTrangThaiPhong() << "\n";
+        const Room& room = danhSachPhong[i];
+        vector<string> row = makeRow(room.getMaPhong(), room.getTenPhong(),
+                                     room.getLoaiPhong(),
+                                     toText(room.getSucChua()),
+                                     room.getTrangThaiPhong());
+        roomRows.push_back(row);
     }
-    outFile << "\n[SEATS]\nmaGhe,maPhong,loaiGhe,donGiaGhe\n";
     for (size_t i = 0; i < danhSachGhe.size(); ++i) {
-        outFile << danhSachGhe[i].getMaGhe() << "," << danhSachGhe[i].getMaPhong() << ","
-                << danhSachGhe[i].getLoaiGhe() << "," << danhSachGhe[i].getDonGiaGhe() << "\n";
+        const Seat& seat = danhSachGhe[i];
+        seatRows.push_back(makeRow(seat.getMaGhe(), seat.getMaPhong(),
+                                   seat.getLoaiGhe(), toText(seat.getDonGiaGhe())));
     }
-    outFile << "\n[SEAT_TYPES]\ntenLoaiGhe,donGia\n";
     for (size_t i = 0; i < danhSachLoaiGhe.size(); ++i) {
-        outFile << danhSachLoaiGhe[i].first << "," << danhSachLoaiGhe[i].second << "\n";
+        typeRows.push_back(makeRow(danhSachLoaiGhe[i].first,
+                                   toText(danhSachLoaiGhe[i].second)));
     }
-    outFile.close();
-    return outFile.good();
+    return writeTables(vector<pair<string, vector<vector<string> > > >{
+        make_pair("rooms", roomRows), make_pair("seats", seatRows),
+        make_pair("seat_types", typeRows)
+    });
 }
 
 void Database::docDanhSachPhong(vector<Room>& ds) {
-    ds.clear(); ifstream inFile("DATA/quan_ly_phong_ghe.csv");
-    if (!inFile.is_open()) return; string line; bool reading = false;
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line.find("[ROOMS]") != string::npos) { reading = true; continue; }
-        if (reading && line[0] == '[') { reading = false; break; }
-        if (reading && line.find("maPhong") == string::npos && !line.empty()) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 5) ds.push_back(Room(p[0], p[1], p[2], atoi(p[3].c_str()), p[4]));
-        }
+    ds.clear();
+    vector<vector<string> > rows;
+    if (!readTable("rooms", rows)) return;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const vector<string>& p = rows[i];
+        if (p.size() >= 5) ds.push_back(Room(p[0], p[1], p[2], atoi(p[3].c_str()), p[4]));
     }
-    inFile.close();
 }
 
 void Database::ghiDanhSachPhong(const vector<Room>& danhSachPhong) {
@@ -1070,18 +717,13 @@ void Database::ghiDanhSachPhong(const vector<Room>& danhSachPhong) {
 }
 
 void Database::docDanhSachGhe(vector<Seat>& ds) {
-    ds.clear(); ifstream inFile("DATA/quan_ly_phong_ghe.csv");
-    if (!inFile.is_open()) return; string line; bool reading = false;
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line.find("[SEATS]") != string::npos) { reading = true; continue; }
-        if (reading && line[0] == '[') { reading = false; break; }
-        if (reading && line.find("maGhe") == string::npos && !line.empty()) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 4) ds.push_back(Seat(p[0], p[1], p[2], atof(p[3].c_str()), "Trong"));
-        }
+    ds.clear();
+    vector<vector<string> > rows;
+    if (!readTable("seats", rows)) return;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const vector<string>& p = rows[i];
+        if (p.size() >= 4) ds.push_back(Seat(p[0], p[1], p[2], atof(p[3].c_str()), "Trong"));
     }
-    inFile.close();
 }
 
 void Database::ghiDanhSachGhe(const vector<Seat>& danhSachGhe) {
@@ -1103,25 +745,13 @@ bool Database::ghiSoDoGhe(const vector<Seat>& danhSachGhe,
 
 void Database::docDanhSachLoaiGhe(vector<pair<string, double> >& ds) {
     ds.clear();
-    ifstream inFile("DATA/quan_ly_phong_ghe.csv");
-    if (!inFile.is_open()) return;
-    string line;
-    bool reading = false;
-    while (getline(inFile, line)) {
-        if (line.find("[SEAT_TYPES]") != string::npos) {
-            reading = true;
-            continue;
-        }
-        if (!line.empty() && line[0] == '[') {
-            reading = false;
-            continue;
-        }
-        if (reading && !line.empty() && line.find("tenLoaiGhe") == string::npos) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 2) ds.push_back(make_pair(p[0], atof(p[1].c_str())));
+    vector<vector<string> > rows;
+    if (!readTable("seat_types", rows)) return;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (rows[i].size() >= 2) {
+            ds.push_back(make_pair(rows[i][0], atof(rows[i][1].c_str())));
         }
     }
-    inFile.close();
 }
 
 bool Database::themLoaiGhe(const string& tenLoaiGhe, double donGia) {
@@ -1188,123 +818,71 @@ bool Database::xoaLoaiGhe(const string& tenLoaiGhe) {
 }
 
 void Database::docDanhSachPhim(vector<Movie>& ds) {
-    ds.clear(); ifstream inFile("DATA/quan_ly_phim.csv");
-    if (!inFile.is_open()) return; string line; bool reading = false;
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line.find("[MOVIES]") != string::npos) { reading = true; continue; }
-        if (reading && line[0] == '[') { reading = false; break; }
-        if (reading && line.find("maPhim") == string::npos && !line.empty()) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 8) ds.push_back(Movie(p[0], p[1], atoi(p[2].c_str()), atoi(p[3].c_str()), p[4], p[5], p[6], p[7]));
+    ds.clear();
+    vector<vector<string> > rows;
+    if (!readTable("movies", rows)) return;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const vector<string>& p = rows[i];
+        if (p.size() >= 8) {
+            ds.push_back(Movie(p[0], p[1], atoi(p[2].c_str()), atoi(p[3].c_str()),
+                               p[4], p[5], p[6], p[7]));
         }
     }
-    inFile.close();
 }
 
 void Database::ghiDanhSachPhim(const vector<Movie>& danhSachPhim) {
     vector<pair<string, string> > dsTheLoai; vector<pair<string, string> > movieGenres;
     docDanhSachTheLoai(dsTheLoai); docMovieGenres(movieGenres);
-    ofstream outFile("DATA/quan_ly_phim.csv", ios::trunc);
-    if (!outFile.is_open()) return;
-    outFile << "[GENRES]\nmaTheLoai,tenTheLoai\n";
-    for (size_t i = 0; i < dsTheLoai.size(); ++i) outFile << dsTheLoai[i].first << "," << dsTheLoai[i].second << "\n";
-    outFile << "\n[MOVIE_GENRES]\nmaPhim,maTheLoai\n";
-    for (size_t i = 0; i < movieGenres.size(); ++i) outFile << movieGenres[i].first << "," << movieGenres[i].second << "\n";
-    outFile << "\n[MOVIES]\nmaPhim,tenPhim,thoiLuong,nhanDoTuoi,ngayKhoiChieu,ngayKetThuc,moTa,poster\n";
-    for (size_t i = 0; i < danhSachPhim.size(); ++i) {
-        outFile << danhSachPhim[i].getMaPhim() << "," << danhSachPhim[i].getTenPhim() << "," << danhSachPhim[i].getThoiLuong() << ","
-                << danhSachPhim[i].getNhanDoTuoi() << "," << danhSachPhim[i].getNgayKhoiChieu() << "," << danhSachPhim[i].getNgayKetThuc() << ","
-                << danhSachPhim[i].getMoTa() << "," << danhSachPhim[i].getPoster() << "\n";
-    }
-    outFile.close();
+    ghiDuLieuPhim(dsTheLoai, movieGenres, danhSachPhim);
 }
 
 void Database::docDanhSachSuatChieu(vector<Showtime>& ds) {
-    ds.clear(); ifstream inFile("DATA/lich_va_ve.csv");
-    if (!inFile.is_open()) return; string line; bool reading = false;
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line[0] == '[') { reading = (line.find("[SHOWTIMES]") != string::npos); continue; }
-        if (reading && line.find("maSuatChieu") == string::npos) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 7) ds.push_back(Showtime(p[0], p[1], p[2], p[3], p[4], p[5], atof(p[6].c_str())));
+    ds.clear();
+    vector<vector<string> > rows;
+    if (!readTable("showtimes", rows)) return;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const vector<string>& p = rows[i];
+        if (p.size() >= 7) {
+            ds.push_back(Showtime(p[0], p[1], p[2], p[3], p[4], p[5],
+                                  atof(p[6].c_str())));
         }
     }
-    inFile.close();
 }
 
 void Database::ghiDanhSachSuatChieu(const vector<Showtime>& danhSachSuatChieu) {
-    vector<string> ticketLines, seatStatusLines;
-    ifstream inFile("DATA/lich_va_ve.csv");
-    if (inFile.is_open()) {
-        string line; int sec = 0;
-        while (getline(inFile, line)) {
-            if (line.empty()) continue;
-            if (line[0] == '[') {
-                if (line.find("[TICKETS]") != string::npos) sec = 2;
-                else if (line.find("[SEAT_STATUS]") != string::npos) sec = 3;
-                else sec = 0;
-                continue;
-            }
-            if (sec == 2 && line.find("maVe") == string::npos) ticketLines.push_back(line);
-            else if (sec == 3 && line.find("maSuatChieu") == string::npos) seatStatusLines.push_back(line);
-        }
-        inFile.close();
-    }
-
-    ofstream outFile("DATA/lich_va_ve.csv", ios::trunc);
-    if (!outFile.is_open()) return;
-    outFile << "[SHOWTIMES]\nmaSuatChieu,maPhim,maPhong,ngayChieu,gioBatDau,gioKetThuc,giaVeCoBan\n";
+    vector<vector<string> > rows;
     for (size_t i = 0; i < danhSachSuatChieu.size(); ++i) {
-        outFile << danhSachSuatChieu[i].getMaSuatChieu() << "," << danhSachSuatChieu[i].getMaPhim() << "," << danhSachSuatChieu[i].getMaPhong() << ","
-                << danhSachSuatChieu[i].getNgayChieu() << "," << danhSachSuatChieu[i].getGioBatDau() << "," << danhSachSuatChieu[i].getGioKetThuc() << ","
-                << danhSachSuatChieu[i].getGiaVeCoBan() << "\n";
+        const Showtime& item = danhSachSuatChieu[i];
+        vector<string> row;
+        row.push_back(item.getMaSuatChieu());
+        row.push_back(item.getMaPhim());
+        row.push_back(item.getMaPhong());
+        row.push_back(item.getNgayChieu());
+        row.push_back(item.getGioBatDau());
+        row.push_back(item.getGioKetThuc());
+        row.push_back(toText(item.getGiaVeCoBan()));
+        rows.push_back(row);
     }
-    outFile << "\n[TICKETS]\nmaVe,maHoaDon,maSuatChieu,maGhe,giaVeThucTe,maQRCode,trangThaiSuDung\n";
-    for (size_t i = 0; i < ticketLines.size(); ++i) outFile << ticketLines[i] << "\n";
-    outFile << "\n[SEAT_STATUS]\nmaSuatChieu,maGhe,trangThai\n";
-    for (size_t i = 0; i < seatStatusLines.size(); ++i) outFile << seatStatusLines[i] << "\n";
-    outFile.close();
+    writeTable("showtimes", rows);
 }
 
 void Database::docTrangThaiGheSuatChieu(const string& maSC, vector<pair<string, string> >& list) {
     list.clear();
-    ifstream inFile("DATA/lich_va_ve.csv");
-    if (!inFile.is_open()) return;
-
-    vector<string> lines;
-    string line;
-    bool reading = false, changed = false;
+    vector<vector<string> > rows;
+    if (!readTable("seat_status", rows)) return;
+    bool changed = false;
     const time_t hienTai = time(NULL);
-    while (getline(inFile, line)) {
-        if (!line.empty() && line[0] == '[') {
-            reading = (line.find("[SEAT_STATUS]") != string::npos);
-            lines.push_back(line);
-            continue;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        vector<string>& row = rows[i];
+        if (row.size() < 3 || row[0] != maSC) continue;
+        if (row[2] == "DangChon" ||
+            (row[2].find("DangChon|") == 0 && !giuGheConHan(row[2], hienTai))) {
+            row[2] = "Trong";
+            changed = true;
         }
-        if (reading && line.find("maSuatChieu") == string::npos && !line.empty()) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 3 && p[0] == maSC) {
-                string trangThai = p[2];
-                if (trangThai == "DangChon" || (trangThai.find("DangChon|") == 0 && !giuGheConHan(trangThai, hienTai))) {
-                    trangThai = "Trong";
-                    line = p[0] + "," + p[1] + "," + trangThai;
-                    changed = true;
-                }
-                list.push_back(make_pair(p[1], trangThai));
-            }
-        }
-        lines.push_back(line);
+        list.push_back(make_pair(row[1], row[2]));
     }
-    inFile.close();
-
-    if (changed) {
-        ofstream outFile("DATA/lich_va_ve.csv", ios::trunc);
-        if (outFile.is_open()) {
-            for (size_t i = 0; i < lines.size(); ++i) outFile << lines[i] << "\n";
-        }
-    }
+    if (changed) writeTable("seat_status", rows);
 }
 
 bool Database::giuGheSuatChieu(const string& maSC, const string& maGhe, const string& maPhienGiu) {
@@ -1358,189 +936,137 @@ bool Database::chotGheSuatChieu(const string& maSC, const vector<string>& danhSa
         if (!hopLe) return false;
     }
 
-    ifstream inFile("DATA/lich_va_ve.csv");
-    if (!inFile.is_open()) return false;
-    vector<string> lines;
-    string line;
-    bool inSec = false;
-    while (getline(inFile, line)) {
-        if (!line.empty() && line[0] == '[') {
-            inSec = (line.find("[SEAT_STATUS]") != string::npos);
-            lines.push_back(line);
-            continue;
+    vector<vector<string> > rows;
+    if (!readTable("seat_status", rows)) return false;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (rows[i].size() < 3 || rows[i][0] != maSC) continue;
+        if (find(danhSachGhe.begin(), danhSachGhe.end(), rows[i][1]) != danhSachGhe.end()) {
+            rows[i][2] = "DaDat";
         }
-        if (inSec && !line.empty() && line.find("maSuatChieu") == string::npos) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 3 && p[0] == maSC) {
-                for (size_t i = 0; i < danhSachGhe.size(); ++i) {
-                    if (p[1] == danhSachGhe[i]) {
-                        line = maSC + "," + p[1] + ",DaDat";
-                        break;
-                    }
-                }
-            }
-        }
-        lines.push_back(line);
     }
-    if (inFile.bad()) return false;
-    inFile.close();
-
-    ostringstream output;
-    for (size_t i = 0; i < lines.size(); ++i) output << lines[i] << "\n";
-    return ghiToanBoFile("DATA/lich_va_ve.csv", output.str());
+    return writeTable("seat_status", rows);
 }
 
 bool Database::capNhatTrangThaiGheSuatChieu(const string& maSC, const string& maGhe,
                                              const string& trangThaiMoi, const string& maPhienGiu) {
-    ifstream inFile("DATA/lich_va_ve.csv");
-    if (!inFile.is_open()) return false;
-    vector<string> lines;
-    string line;
-    bool inSec = false, found = false, daCapNhat = false;
+    vector<vector<string> > rows;
+    if (!readTable("seat_status", rows)) return false;
+    bool found = false, daCapNhat = false;
     const time_t hienTai = time(NULL);
-    while (getline(inFile, line)) {
-        if (!line.empty() && line[0] == '[') { inSec = (line.find("[SEAT_STATUS]") != string::npos); lines.push_back(line); continue; }
-        if (inSec && !line.empty() && line.find("maSuatChieu") == string::npos) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 3 && p[0] == maSC && p[1] == maGhe) {
-                found = true;
-                bool duocCapNhat = maPhienGiu.empty();
-                if (!duocCapNhat) {
-                    string maPhienDangGiu;
-                    duocCapNhat = giuGheConHan(p[2], hienTai, &maPhienDangGiu) && maPhienDangGiu == maPhienGiu;
-                }
-                if (duocCapNhat && !daCapNhat) {
-                    lines.push_back(maSC + "," + maGhe + "," + trangThaiMoi);
-                    daCapNhat = true;
-                } else {
-                    lines.push_back(line);
-                }
-                continue;
-            }
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (rows[i].size() < 3 || rows[i][0] != maSC || rows[i][1] != maGhe) continue;
+        found = true;
+        bool duocCapNhat = maPhienGiu.empty();
+        if (!duocCapNhat) {
+            string maPhienDangGiu;
+            duocCapNhat = giuGheConHan(rows[i][2], hienTai, &maPhienDangGiu) &&
+                          maPhienDangGiu == maPhienGiu;
         }
-        lines.push_back(line);
+        if (duocCapNhat && !daCapNhat) {
+            rows[i][2] = trangThaiMoi;
+            daCapNhat = true;
+        }
     }
-    if (inFile.bad()) return false;
-    inFile.close();
-
     if (!found && maPhienGiu.empty()) {
-        bool hasSec = false; vector<string> newLines;
-        for (size_t i = 0; i < lines.size(); ++i) {
-            newLines.push_back(lines[i]);
-            if (lines[i].find("[SEAT_STATUS]") != string::npos) hasSec = true;
-        }
-        if (!hasSec) { newLines.push_back("\n[SEAT_STATUS]"); newLines.push_back("maSuatChieu,maGhe,trangThai"); }
-        newLines.push_back(maSC + "," + maGhe + "," + trangThaiMoi);
-        lines = newLines;
+        rows.push_back(makeRow(maSC, maGhe, trangThaiMoi));
         daCapNhat = true;
     }
-
-    if (!daCapNhat) return false;
-    ostringstream output;
-    for (size_t i = 0; i < lines.size(); ++i) output << lines[i] << "\n";
-    return ghiToanBoFile("DATA/lich_va_ve.csv", output.str());
+    return daCapNhat && writeTable("seat_status", rows);
 }
 
 void Database::docDanhSachVe(vector<Ticket>& ds) {
-    ds.clear(); ifstream inFile("DATA/lich_va_ve.csv");
-    if (!inFile.is_open()) return; string line; bool reading = false;
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line[0] == '[') { reading = (line.find("[TICKETS]") != string::npos); continue; }
-        if (reading && line.find("maVe") == string::npos) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 7) ds.push_back(Ticket(p[0], p[1], p[2], p[3], atof(p[4].c_str()), p[5], p[6]));
+    ds.clear();
+    vector<vector<string> > rows;
+    if (!readTable("tickets", rows)) return;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const vector<string>& p = rows[i];
+        if (p.size() >= 7) {
+            ds.push_back(Ticket(p[0], p[1], p[2], p[3], atof(p[4].c_str()),
+                                p[5], p[6]));
         }
     }
-    inFile.close();
 }
 
 bool Database::ghiDanhSachVe(const vector<Ticket>& danhSachVe) {
-    string originalContent;
-    if (!docToanBoFile("DATA/lich_va_ve.csv", originalContent) ||
-        originalContent.find("[SHOWTIMES]") == string::npos ||
-        originalContent.find("[TICKETS]") == string::npos ||
-        originalContent.find("[SEAT_STATUS]") == string::npos) {
-        return false;
-    }
-
-    vector<string> showtimeLines, seatStatusLines;
-    ifstream inFile("DATA/lich_va_ve.csv");
-    if (!inFile.is_open()) return false;
-    string line; int sec = 0;
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line[0] == '[') {
-            if (line.find("[SHOWTIMES]") != string::npos) sec = 1;
-            else if (line.find("[SEAT_STATUS]") != string::npos) sec = 3;
-            else sec = 0;
-            continue;
-        }
-        if (sec == 1 && line.find("maSuatChieu") == string::npos) showtimeLines.push_back(line);
-        else if (sec == 3 && line.find("maSuatChieu") == string::npos) seatStatusLines.push_back(line);
-    }
-    if (inFile.bad()) return false;
-    inFile.close();
-
-    ostringstream output;
-    output << "[SHOWTIMES]\nmaSuatChieu,maPhim,maPhong,ngayChieu,gioBatDau,gioKetThuc,giaVeCoBan\n";
-    for (size_t i = 0; i < showtimeLines.size(); ++i) output << showtimeLines[i] << "\n";
-
-    output << "\n[TICKETS]\nmaVe,maHoaDon,maSuatChieu,maGhe,giaVeThucTe,maQRCode,trangThaiSuDung\n";
+    vector<vector<string> > showtimeRows, seatStatusRows, ticketRows;
+    if (!readTable("showtimes", showtimeRows) ||
+        !readTable("seat_status", seatStatusRows)) return false;
     for (size_t i = 0; i < danhSachVe.size(); ++i) {
-        output << danhSachVe[i].getMaVe() << "," << danhSachVe[i].getMaHoaDon() << "," << danhSachVe[i].getMaSuatChieu() << ","
-               << danhSachVe[i].getMaGhe() << "," << danhSachVe[i].getGiaVeThucTe() << "," << danhSachVe[i].getMaQRCode() << ","
-               << danhSachVe[i].getTrangThaiSuDung() << "\n";
+        const Ticket& item = danhSachVe[i];
+        vector<string> row;
+        row.push_back(item.getMaVe());
+        row.push_back(item.getMaHoaDon());
+        row.push_back(item.getMaSuatChieu());
+        row.push_back(item.getMaGhe());
+        row.push_back(toText(item.getGiaVeThucTe()));
+        row.push_back(item.getMaQRCode());
+        row.push_back(item.getTrangThaiSuDung());
+        ticketRows.push_back(row);
     }
-
-    output << "\n[SEAT_STATUS]\nmaSuatChieu,maGhe,trangThai\n";
-    for (size_t i = 0; i < seatStatusLines.size(); ++i) output << seatStatusLines[i] << "\n";
-    return ghiToanBoFile("DATA/lich_va_ve.csv", output.str());
+    return writeTable("tickets", ticketRows);
 }
 
 static bool ghiFileGiaoDichFNB(const vector<FoodAndBeverage>& fnb, const vector<Promotion>& km, const vector<Invoice>& hd) {
-    ostringstream output;
-
-    output << "[FOOD_AND_BEVERAGES]\nmaMatHang,tenMatHang,loai,giaTien,trangThaiKinhDoanh\n";
-    for (size_t i = 0; i < fnb.size(); ++i)
-        output << fnb[i].getMaMatHang() << "," << fnb[i].getTenMatHang() << "," << fnb[i].getLoai() << "," << fnb[i].getGiaTien() << "," << fnb[i].getTrangThaiKinhDoanh() << "\n";
-
-    output << "\n[PROMOTIONS]\nmaKhuyenMai,tenKhuyenMai,maCode,phanTramGiam,mucGiamToiDa,ngayBatDau,ngayKetThuc,phamViApDung\n";
-    for (size_t i = 0; i < km.size(); ++i)
-        output << km[i].getMaKhuyenMai() << "," << km[i].getTenKhuyenMai() << "," << km[i].getMaCode() << "," << km[i].getPhanTramGiam() << "," << km[i].getMucGiamToiDa() << "," << DateFormat::normalizeDate(km[i].getNgayBatDau()) << "," << DateFormat::normalizeDate(km[i].getNgayKetThuc()) << "," << km[i].getPhamViApDung() << "\n";
-
-    output << "\n[INVOICES]\nmaHoaDon,maKhachHang,maNhanVien,thoiGianLap,tongTien,hinhThucThanhToan,maGiaoDich,trangThaiThanhToan\n";
-    for (size_t i = 0; i < hd.size(); ++i)
-        output << hd[i].getMaHoaDon() << "," << hd[i].getMaKhachHang() << "," << hd[i].getMaNhanVien() << "," << DateFormat::normalizeDateTime(hd[i].getThoiGianLap()) << "," << hd[i].getTongTien() << "," << hd[i].getHinhThucThanhToan() << "," << hd[i].getMaGiaoDich() << "," << hd[i].getTrangThaiThanhToan() << "\n";
-
-    output << "\n[INVOICE_FB_ITEMS]\nmaHoaDon,maMatHang,tenMatHangTaiThoiDiem,soLuong,donGiaTaiThoiDiem,thanhTien\n";
-    output << setprecision(numeric_limits<double>::max_digits10);
+    vector<vector<string> > foodRows, promotionRows, invoiceRows, itemRows;
+    for (size_t i = 0; i < fnb.size(); ++i) {
+        foodRows.push_back(makeRow(fnb[i].getMaMatHang(), fnb[i].getTenMatHang(),
+            fnb[i].getLoai(), toText(fnb[i].getGiaTien()),
+            fnb[i].getTrangThaiKinhDoanh()));
+    }
+    for (size_t i = 0; i < km.size(); ++i) {
+        vector<string> row;
+        row.push_back(km[i].getMaKhuyenMai());
+        row.push_back(km[i].getTenKhuyenMai());
+        row.push_back(km[i].getMaCode());
+        row.push_back(toText(km[i].getPhanTramGiam()));
+        row.push_back(toText(km[i].getMucGiamToiDa()));
+        row.push_back(DateFormat::normalizeDate(km[i].getNgayBatDau()));
+        row.push_back(DateFormat::normalizeDate(km[i].getNgayKetThuc()));
+        row.push_back(km[i].getPhamViApDung());
+        promotionRows.push_back(row);
+    }
     for (size_t i = 0; i < hd.size(); ++i) {
+        const Invoice& invoice = hd[i];
+        vector<string> row;
+        row.push_back(invoice.getMaHoaDon());
+        row.push_back(invoice.getMaKhachHang());
+        row.push_back(invoice.getMaNhanVien());
+        row.push_back(DateFormat::normalizeDateTime(invoice.getThoiGianLap()));
+        row.push_back(toText(invoice.getTongTien()));
+        row.push_back(invoice.getHinhThucThanhToan());
+        row.push_back(invoice.getMaGiaoDich());
+        row.push_back(invoice.getTrangThaiThanhToan());
+        invoiceRows.push_back(row);
         const vector<InvoiceFBItem>& items = hd[i].getChiTietFB();
         for (size_t j = 0; j < items.size(); ++j) {
-            output << quoteCSVField(hd[i].getMaHoaDon()) << ","
-                   << quoteCSVField(items[j].maMatHang) << ","
-                   << quoteCSVField(items[j].tenMatHangTaiThoiDiem) << ","
-                   << items[j].soLuong << ","
-                   << items[j].donGiaTaiThoiDiem << ","
-                   << items[j].thanhTien << "\n";
+            vector<string> itemRow;
+            itemRow.push_back(invoice.getMaHoaDon());
+            itemRow.push_back(items[j].maMatHang);
+            itemRow.push_back(items[j].tenMatHangTaiThoiDiem);
+            itemRow.push_back(toText(items[j].soLuong));
+            itemRow.push_back(toPreciseText(items[j].donGiaTaiThoiDiem));
+            itemRow.push_back(toPreciseText(items[j].thanhTien));
+            itemRows.push_back(itemRow);
         }
     }
-    return ghiToanBoFile("DATA/giao_dich_fnb.csv", output.str());
+    return writeTables(vector<pair<string, vector<vector<string> > > >{
+        make_pair("food_and_beverages", foodRows),
+        make_pair("promotions", promotionRows),
+        make_pair("invoices", invoiceRows),
+        make_pair("invoice_fb_items", itemRows)
+    });
 }
 
 void Database::docDanhSachFAndB(vector<FoodAndBeverage>& ds) {
-    ds.clear(); ifstream inFile("DATA/giao_dich_fnb.csv");
-    if (!inFile.is_open()) return; string line; bool reading = false;
-    while (getline(inFile, line)) {
-        if (line.find("[FOOD_AND_BEVERAGES]") != string::npos) { reading = true; continue; }
-        if (reading && line[0] == '[') { reading = false; break; }
-        if (reading && line.find("maMatHang") == string::npos && !line.empty()) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 5) ds.push_back(FoodAndBeverage(p[0], p[1], p[2], atof(p[3].c_str()), p[4]));
+    ds.clear();
+    vector<vector<string> > rows;
+    if (!readTable("food_and_beverages", rows)) return;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const vector<string>& p = rows[i];
+        if (p.size() >= 5) {
+            ds.push_back(FoodAndBeverage(p[0], p[1], p[2], atof(p[3].c_str()), p[4]));
         }
     }
-    inFile.close();
 }
 
 void Database::ghiDanhSachFAndB(const vector<FoodAndBeverage>& fnb) {
@@ -1549,17 +1075,16 @@ void Database::ghiDanhSachFAndB(const vector<FoodAndBeverage>& fnb) {
 }
 
 void Database::docDanhSachKhuyenMai(vector<Promotion>& ds) {
-    ds.clear(); ifstream inFile("DATA/giao_dich_fnb.csv");
-    if (!inFile.is_open()) return; string line; bool reading = false;
-    while (getline(inFile, line)) {
-        if (line.find("[PROMOTIONS]") != string::npos) { reading = true; continue; }
-        if (reading && line[0] == '[') { reading = false; break; }
-        if (reading && line.find("maKhuyenMai") == string::npos && !line.empty()) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 8) ds.push_back(Promotion(p[0], p[1], p[2], atof(p[3].c_str()), atof(p[4].c_str()), p[5], p[6], p[7]));
+    ds.clear();
+    vector<vector<string> > rows;
+    if (!readTable("promotions", rows)) return;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const vector<string>& p = rows[i];
+        if (p.size() >= 8) {
+            ds.push_back(Promotion(p[0], p[1], p[2], atof(p[3].c_str()),
+                                   atof(p[4].c_str()), p[5], p[6], p[7]));
         }
     }
-    inFile.close();
 }
 
 void Database::ghiDanhSachKhuyenMai(const vector<Promotion>& km) {
@@ -1568,30 +1093,26 @@ void Database::ghiDanhSachKhuyenMai(const vector<Promotion>& km) {
 }
 
 void Database::docDanhSachHoaDon(vector<Invoice>& ds) {
-    ds.clear(); ifstream inFile("DATA/giao_dich_fnb.csv");
-    if (!inFile.is_open()) return;
-    string line;
-    int section = 0;
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line[0] == '[') {
-            if (line.find("[INVOICES]") == 0) section = 1;
-            else if (line.find("[INVOICE_FB_ITEMS]") == 0) section = 2;
-            else section = 0;
-            continue;
+    ds.clear();
+    vector<vector<string> > invoices, items;
+    if (!readTable("invoices", invoices) ||
+        !readTable("invoice_fb_items", items)) return;
+    for (size_t i = 0; i < invoices.size(); ++i) {
+        const vector<string>& row = invoices[i];
+        if (row.size() >= 8) {
+            ds.push_back(Invoice(row[0], row[1], row[2], row[3],
+                                 atof(row[4].c_str()), row[5], row[6], row[7]));
         }
-        if (section == 1 && line.find("maHoaDon") == string::npos) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 8) ds.push_back(Invoice(p[0], p[1], p[2], p[3], atof(p[4].c_str()), p[5], p[6], p[7]));
-        } else if (section == 2 && line.find("maHoaDon") != 0) {
-            vector<string> p;
+    }
+    for (size_t i = 0; i < items.size(); ++i) {
+            const vector<string>& p = items[i];
             int quantity;
             double unitPrice, total;
-            if (!tachDongCSV(line, p) || p.size() != 6 ||
+            if (p.size() != 6 ||
                 !parsePositiveInteger(p[3], quantity) ||
                 !parseNonNegativeDouble(p[4], unitPrice) ||
                 !parseNonNegativeDouble(p[5], total)) {
-                cerr << "[CANH BAO]: Bo qua dong chi tiet F&B khong hop le trong giao_dich_fnb.csv.\n";
+                cerr << "[CANH BAO]: Bo qua dong chi tiet F&B khong hop le trong SQLite.\n";
                 continue;
             }
 
@@ -1616,74 +1137,49 @@ void Database::docDanhSachHoaDon(vector<Invoice>& ds) {
             item.donGiaTaiThoiDiem = unitPrice;
             item.thanhTien = total;
             ds[invoiceIndex].themChiTietFB(item);
-        }
     }
-    if (inFile.bad()) cerr << "[LOI]: Khong doc duoc day du du lieu hoa don va chi tiet F&B.\n";
-    inFile.close();
 }
 
 bool Database::ghiDanhSachHoaDon(const vector<Invoice>& hd) {
-    string originalContent;
-    if (!docToanBoFile("DATA/giao_dich_fnb.csv", originalContent) ||
-        originalContent.find("[FOOD_AND_BEVERAGES]") == string::npos ||
-        originalContent.find("[PROMOTIONS]") == string::npos ||
-        originalContent.find("[INVOICES]") == string::npos) {
-        return false;
-    }
-
     vector<FoodAndBeverage> fnb; vector<Promotion> km; docDanhSachFAndB(fnb); docDanhSachKhuyenMai(km);
     return ghiFileGiaoDichFNB(fnb, km, hd);
 }
 
 void Database::docDanhSachCa(vector<ShiftReport>& danhSachCa) {
     danhSachCa.clear();
-    ifstream inFile("DATA/van_hanh_he_thong.csv");
-    if (!inFile.is_open()) return;
-    string line;
-    bool reading = false;
-    while (getline(inFile, line)) {
-        if (line.empty()) continue;
-        if (line.find("[SHIFT_MANAGEMENTS]") != string::npos) {
-            reading = true;
-            continue;
-        }
-        if (reading && line[0] == '[') break;
-
-        if (reading && line.find("maCa") == string::npos) {
-            vector<string> p = tachChuoiCSV(line);
-            if (p.size() >= 11) {
-                danhSachCa.push_back(ShiftReport(
-                    p[0], p[1], p[2], p[3], p[4], p[5],
-                    atoll(p[6].c_str()),
-                    atoll(p[7].c_str()),
-                    p[9],
-                    (p[10] == "true" || p[10] == "1")
-                ));
-            }
+    vector<vector<string> > rows;
+    if (!readTable("shift_managements", rows)) return;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const vector<string>& p = rows[i];
+        if (p.size() >= 11) {
+            danhSachCa.push_back(ShiftReport(
+                p[0], p[1], p[2], p[3], p[4], p[5],
+                atoll(p[6].c_str()),
+                atoll(p[7].c_str()),
+                p[9],
+                (p[10] == "true" || p[10] == "1")
+            ));
         }
     }
-    inFile.close();
 }
 
 void Database::ghiDanhSachCa(const vector<ShiftReport>& danhSachCa) {
-    ofstream outFile("DATA/van_hanh_he_thong.csv", ios::trunc);
-    if (!outFile.is_open()) return;
-
-    outFile << "[SHIFT_MANAGEMENTS]\nmaCa,maNhanVien,tenNhanVien,ngayLam,gioBatDau,gioKetThuc,doanhThuHeThong,tienThucTe,chenhLech,trangThai,daKhoaBaoCao\n";
+    vector<vector<string> > rows;
     for (size_t i = 0; i < danhSachCa.size(); ++i) {
         const ShiftReport& sr = danhSachCa[i];
-        outFile << sr.getMaCa() << ","
-                << sr.getMaNhanVien() << ","
-                << sr.getTenNhanVien() << ","
-                << sr.getNgayLam() << ","
-                << sr.getGioBatDau() << ","
-                << sr.getGioKetThuc() << ","
-                << sr.getDoanhThuHeThong() << ","
-                << sr.getTienThucTe() << ","
-                << sr.getChenhLech() << ","
-                << sr.getTrangThai() << ","
-                << (sr.getDaKhoaBaoCao() ? "true" : "false")
-                << "\n";
+        vector<string> row;
+        row.push_back(sr.getMaCa());
+        row.push_back(sr.getMaNhanVien());
+        row.push_back(sr.getTenNhanVien());
+        row.push_back(sr.getNgayLam());
+        row.push_back(sr.getGioBatDau());
+        row.push_back(sr.getGioKetThuc());
+        row.push_back(toText(sr.getDoanhThuHeThong()));
+        row.push_back(toText(sr.getTienThucTe()));
+        row.push_back(toText(sr.getChenhLech()));
+        row.push_back(sr.getTrangThai());
+        row.push_back(sr.getDaKhoaBaoCao() ? "true" : "false");
+        rows.push_back(row);
     }
-    outFile.close();
+    writeTable("shift_managements", rows);
 }
