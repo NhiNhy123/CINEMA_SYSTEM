@@ -122,7 +122,7 @@ void CinemaUIApp::setupLoginView() {
     loginInputUser->setColors(
         sf::Color(255, 255, 255),
         sf::Color(203, 213, 225),
-        sf::Color(234, 88, 12),
+        sf::Color(2, 132, 199),
         sf::Color(15, 23, 42),
         sf::Color(148, 163, 184)
     );
@@ -138,7 +138,7 @@ void CinemaUIApp::setupLoginView() {
     loginInputPass->setColors(
         sf::Color(255, 255, 255),
         sf::Color(203, 213, 225),
-        sf::Color(234, 88, 12),
+        sf::Color(2, 132, 199),
         sf::Color(15, 23, 42),
         sf::Color(148, 163, 184)
     );
@@ -152,7 +152,7 @@ void CinemaUIApp::setupLoginView() {
     chkRememberMe->setColors(
         sf::Color(255, 255, 255),
         sf::Color(203, 213, 225),
-        sf::Color(234, 88, 12),
+        sf::Color(2, 132, 199),
         sf::Color(100, 116, 139)
     );
 
@@ -164,9 +164,9 @@ void CinemaUIApp::setupLoginView() {
         10.f
     ));
     btnLogin->setCustomColors(
-        sf::Color(234, 88, 12),
-        sf::Color(217, 80, 8),
-        sf::Color(194, 65, 12),
+        sf::Color(2, 132, 199),
+        sf::Color(3, 105, 161),
+        sf::Color(7, 89, 133),
         sf::Color(203, 213, 225)
     );
     btnLogin->setFont(Theme::FontPrimary);
@@ -2124,14 +2124,21 @@ void CinemaUIApp::render() {
 }
 
 void CinemaUIApp::renderLoginView() {
-    // 1. Draw warm cinematic golden bokeh background (Full Screen 1728x972)
-    if (loginBackgroundTexture.getSize().x > 0) {
-        window.draw(loginBackgroundSprite);
-    } else {
-        sf::RectangleShape bg(sf::Vector2f(1728.f, 972.f));
-        bg.setFillColor(sf::Color(30, 20, 15));
-        window.draw(bg);
-    }
+    // 1. Draw modern clean blue-white canvas (Full Screen 1728x972)
+    sf::RectangleShape bg(sf::Vector2f(1728.f, 972.f));
+    bg.setFillColor(sf::Color(240, 244, 248)); // #f0f4f8 soft blue-white
+    window.draw(bg);
+
+    // Decorative soft blue ambient shapes in background
+    sf::CircleShape glow1(380.f);
+    glow1.setPosition(80.f, -120.f);
+    glow1.setFillColor(sf::Color(224, 242, 254, 180)); // Soft sky blue #e0f2fe
+    window.draw(glow1);
+
+    sf::CircleShape glow2(420.f);
+    glow2.setPosition(1100.f, 480.f);
+    glow2.setFillColor(sf::Color(224, 242, 254, 160));
+    window.draw(glow2);
 
     float cardW = 1020.f;
     float cardH = 560.f;
@@ -2141,13 +2148,13 @@ void CinemaUIApp::renderLoginView() {
     float rightX = cardX + leftW + 45.f;   // 819.f
     float rightW = cardW - leftW - 90.f;   // 510.f
 
-    // 2. Drop shadow behind the card (smooth, soft black)
+    // 2. Drop shadow behind the card
     RoundedRectRenderer::render(
         window,
         sf::Vector2f(cardX - 4.f, cardY + 6.f),
         sf::Vector2f(cardW + 8.f, cardH + 8.f),
         22.f,
-        sf::Color(0, 0, 0, 95)
+        sf::Color(15, 23, 42, 25)
     );
 
     // 3. Main Crisp White Card Background
@@ -2156,30 +2163,38 @@ void CinemaUIApp::renderLoginView() {
         sf::Vector2f(cardX, cardY),
         sf::Vector2f(cardW, cardH),
         16.f,
-        sf::Color(255, 255, 255)
+        sf::Color(255, 255, 255),
+        1.f,
+        sf::Color(226, 232, 240)
     );
 
-    // 4. Left Panel Background: Warm Ivory / Cream
+    // 4. Left Panel Background: Soft Ice-Blue #f0f9ff
     RoundedRectRenderer::render(
         window,
         sf::Vector2f(cardX, cardY),
         sf::Vector2f(leftW, cardH),
         16.f,
-        sf::Color(255, 253, 244)
+        sf::Color(240, 249, 255)
     );
     // Square off the right side of the left panel
     sf::RectangleShape leftFiller(sf::Vector2f(16.f, cardH));
     leftFiller.setPosition(cardX + leftW - 16.f, cardY);
-    leftFiller.setFillColor(sf::Color(255, 253, 244));
+    leftFiller.setFillColor(sf::Color(240, 249, 255));
     window.draw(leftFiller);
 
-    // 5. Top Orange Accent Strip
+    // Left panel right separator line
+    sf::RectangleShape leftSep(sf::Vector2f(1.f, cardH));
+    leftSep.setPosition(cardX + leftW, cardY);
+    leftSep.setFillColor(sf::Color(224, 242, 254));
+    window.draw(leftSep);
+
+    // 5. Top Blue Accent Strip
     RoundedRectRenderer::render(
         window,
         sf::Vector2f(cardX, cardY),
         sf::Vector2f(cardW, 4.f),
         2.f,
-        sf::Color(234, 88, 12)
+        sf::Color(2, 132, 199)
     );
 
     // ==========================================
@@ -2187,10 +2202,10 @@ void CinemaUIApp::renderLoginView() {
     // ==========================================
     float leftCenterX = cardX + leftW / 2.0f;
 
-    // 1. Logo Badge (Rounded Square with User's Photo & Video Film Reel Logo)
-    float badgeSize = 98.f;
+    // 1. Logo Badge (Rounded Square with CINEMA logo)
+    float badgeSize = 100.f;
     float badgeX = leftCenterX - badgeSize / 2.0f;
-    float badgeY = cardY + 88.f;
+    float badgeY = cardY + 76.f;
 
     // Drop shadow behind logo badge
     RoundedRectRenderer::render(
@@ -2198,7 +2213,7 @@ void CinemaUIApp::renderLoginView() {
         sf::Vector2f(badgeX - 1.f, badgeY + 2.f),
         sf::Vector2f(badgeSize + 2.f, badgeSize + 2.f),
         22.f,
-        sf::Color(0, 0, 0, 18)
+        sf::Color(2, 132, 199, 25)
     );
 
     RoundedRectRenderer::render(
@@ -2207,30 +2222,51 @@ void CinemaUIApp::renderLoginView() {
         sf::Vector2f(badgeSize, badgeSize),
         20.f,
         sf::Color(255, 255, 255),
-        1.5f,
-        sf::Color(253, 230, 138)
+        2.f,
+        sf::Color(2, 132, 199)
     );
 
-    // Draw uploaded cinema logo image
-    if (cinemaLogoTexture.getSize().x > 0) {
-        float logoTargetSize = 80.f;
-        float lScale = logoTargetSize / static_cast<float>(cinemaLogoTexture.getSize().x);
-        cinemaLogoSprite.setScale(lScale, lScale);
-        cinemaLogoSprite.setPosition(
-            badgeX + (badgeSize - static_cast<float>(cinemaLogoTexture.getSize().x) * lScale) / 2.0f,
-            badgeY + (badgeSize - static_cast<float>(cinemaLogoTexture.getSize().y) * lScale) / 2.0f
-        );
-        window.draw(cinemaLogoSprite);
-    } else {
-        // Fallback lens illustration
-        sf::CircleShape lensCircle(18.f);
-        lensCircle.setOrigin(18.f, 18.f);
-        lensCircle.setPosition(leftCenterX, badgeY + badgeSize / 2.0f);
-        lensCircle.setFillColor(sf::Color(255, 255, 255));
-        lensCircle.setOutlineThickness(2.f);
-        lensCircle.setOutlineColor(sf::Color(234, 88, 12));
-        window.draw(lensCircle);
-    }
+    // Vector Cinema Projector & Camera Icon
+    sf::RectangleShape camBody(sf::Vector2f(34.f, 22.f));
+    camBody.setPosition(badgeX + 26.f, badgeY + 28.f);
+    camBody.setFillColor(sf::Color(2, 132, 199));
+    window.draw(camBody);
+
+    sf::ConvexShape camCone(3);
+    camCone.setPoint(0, sf::Vector2f(badgeX + 60.f, badgeY + 33.f));
+    camCone.setPoint(1, sf::Vector2f(badgeX + 74.f, badgeY + 26.f));
+    camCone.setPoint(2, sf::Vector2f(badgeX + 74.f, badgeY + 44.f));
+    camCone.setFillColor(sf::Color(2, 132, 199));
+    window.draw(camCone);
+
+    sf::CircleShape reel1(7.f);
+    reel1.setPosition(badgeX + 28.f, badgeY + 16.f);
+    reel1.setFillColor(sf::Color(15, 23, 42));
+    window.draw(reel1);
+    sf::CircleShape reel1Dot(2.5f);
+    reel1Dot.setPosition(badgeX + 32.5f, badgeY + 20.5f);
+    reel1Dot.setFillColor(sf::Color::White);
+    window.draw(reel1Dot);
+
+    sf::CircleShape reel2(7.f);
+    reel2.setPosition(badgeX + 44.f, badgeY + 16.f);
+    reel2.setFillColor(sf::Color(15, 23, 42));
+    window.draw(reel2);
+    sf::CircleShape reel2Dot(2.5f);
+    reel2Dot.setPosition(badgeX + 48.5f, badgeY + 20.5f);
+    reel2Dot.setFillColor(sf::Color::White);
+    window.draw(reel2Dot);
+
+    // Text "CINEMA" inside logo badge
+    sf::Text logoText;
+    logoText.setFont(Theme::FontPrimary);
+    logoText.setCharacterSize(14);
+    logoText.setStyle(sf::Text::Bold);
+    logoText.setFillColor(sf::Color(2, 132, 199));
+    logoText.setString("CINEMA");
+    sf::FloatRect ltB = logoText.getLocalBounds();
+    logoText.setPosition(badgeX + (badgeSize - ltB.width) / 2.0f - ltB.left, badgeY + 62.f);
+    window.draw(logoText);
 
     // 2. Pill Badge: 🔑 CỔNG ĐIỀU HÀNH CỤM RẠP
     float pillW = 224.f;
@@ -2243,58 +2279,48 @@ void CinemaUIApp::renderLoginView() {
         sf::Vector2f(pillX, pillY),
         sf::Vector2f(pillW, pillH),
         15.f,
-        sf::Color(254, 243, 199)
+        sf::Color(224, 242, 254)
     );
 
     // Key icon inside pill
     sf::CircleShape keyPill(4.f);
     keyPill.setPosition(pillX + 16.f, pillY + 9.5f);
-    keyPill.setFillColor(sf::Color(217, 119, 6));
+    keyPill.setFillColor(sf::Color(2, 132, 199));
     window.draw(keyPill);
 
     sf::RectangleShape keyPillStem(sf::Vector2f(8.f, 2.5f));
     keyPillStem.setPosition(pillX + 22.f, pillY + 12.5f);
-    keyPillStem.setFillColor(sf::Color(217, 119, 6));
+    keyPillStem.setFillColor(sf::Color(2, 132, 199));
     window.draw(keyPillStem);
 
     sf::Text pillText;
-    pillText.setFont(Theme::FontSecondary);
+    pillText.setFont(Theme::FontPrimary);
     pillText.setCharacterSize(12);
     pillText.setStyle(sf::Text::Bold);
-    pillText.setFillColor(sf::Color(180, 83, 9));
+    pillText.setFillColor(sf::Color(3, 105, 161));
     pillText.setString(toSfString("CỔNG ĐIỀU HÀNH CỤM RẠP"));
     pillText.setPosition(pillX + 38.f, pillY + 6.f);
     window.draw(pillText);
 
-    // 3. Brand Text: CINESTAR CINEMA (Bebas Neue display title)
-    sf::Text brandText1;
-    brandText1.setFont(Theme::FontCinema);
-    brandText1.setCharacterSize(46);
-    brandText1.setStyle(sf::Text::Bold);
-    brandText1.setFillColor(sf::Color(15, 23, 42));
-    brandText1.setString("CINESTAR");
-    sf::FloatRect b1 = brandText1.getLocalBounds();
-    brandText1.setPosition(leftCenterX - b1.width / 2.0f - b1.left, cardY + 250.f);
-    window.draw(brandText1);
-
-    sf::Text brandText2;
-    brandText2.setFont(Theme::FontCinema);
-    brandText2.setCharacterSize(46);
-    brandText2.setStyle(sf::Text::Bold);
-    brandText2.setFillColor(sf::Color(15, 23, 42));
-    brandText2.setString("CINEMA");
-    sf::FloatRect b2 = brandText2.getLocalBounds();
-    brandText2.setPosition(leftCenterX - b2.width / 2.0f - b2.left, cardY + 296.f);
-    window.draw(brandText2);
+    // 3. Brand Text: CINEMA (Clean, bold title)
+    sf::Text brandText;
+    brandText.setFont(Theme::FontCinema);
+    brandText.setCharacterSize(52);
+    brandText.setStyle(sf::Text::Bold);
+    brandText.setFillColor(sf::Color(15, 23, 42));
+    brandText.setString("CINEMA");
+    sf::FloatRect b1 = brandText.getLocalBounds();
+    brandText.setPosition(leftCenterX - b1.width / 2.0f - b1.left, cardY + 262.f);
+    window.draw(brandText);
 
     sf::Text brandSub;
-    brandSub.setFont(Theme::FontSecondary);
+    brandSub.setFont(Theme::FontPrimary);
     brandSub.setCharacterSize(13);
     brandSub.setStyle(sf::Text::Bold);
     brandSub.setFillColor(sf::Color(71, 85, 105));
     brandSub.setString(toSfString("HỆ THỐNG QUẢN LÝ RẠP CHIẾU PHIM"));
     sf::FloatRect bs = brandSub.getLocalBounds();
-    brandSub.setPosition(leftCenterX - bs.width / 2.0f - bs.left, cardY + 352.f);
+    brandSub.setPosition(leftCenterX - bs.width / 2.0f - bs.left, cardY + 332.f);
     window.draw(brandSub);
 
     // 4. Bottom Security Shield Badge Card
@@ -2310,7 +2336,7 @@ void CinemaUIApp::renderLoginView() {
         10.f,
         sf::Color(255, 255, 255),
         1.f,
-        sf::Color(254, 236, 185)
+        sf::Color(186, 230, 253)
     );
 
     // Shield Icon
@@ -2320,7 +2346,7 @@ void CinemaUIApp::renderLoginView() {
     shield.setPoint(2, sf::Vector2f(secX + 32.f, secY + 26.f));
     shield.setPoint(3, sf::Vector2f(secX + 27.f, secY + 34.f));
     shield.setPoint(4, sf::Vector2f(secX + 22.f, secY + 26.f));
-    shield.setFillColor(sf::Color(234, 88, 12));
+    shield.setFillColor(sf::Color(2, 132, 199));
     window.draw(shield);
 
     // Inner checkmark for shield
@@ -2334,7 +2360,7 @@ void CinemaUIApp::renderLoginView() {
     window.draw(sTick);
 
     sf::Text secText1;
-    secText1.setFont(Theme::FontSecondary);
+    secText1.setFont(Theme::FontPrimary);
     secText1.setCharacterSize(11);
     secText1.setFillColor(sf::Color(100, 116, 139));
     secText1.setString(toSfString("Hệ thống bảo mật nội bộ dành cho cán"));
@@ -2342,10 +2368,10 @@ void CinemaUIApp::renderLoginView() {
     window.draw(secText1);
 
     sf::Text secText2;
-    secText2.setFont(Theme::FontSecondary);
+    secText2.setFont(Theme::FontPrimary);
     secText2.setCharacterSize(11);
     secText2.setFillColor(sf::Color(100, 116, 139));
-    secText2.setString(toSfString("bộ & nhân viên CineStar"));
+    secText2.setString(toSfString("bộ & nhân viên quản trị Cinema"));
     secText2.setPosition(secX + 42.f, secY + 25.f);
     window.draw(secText2);
 
@@ -2364,7 +2390,7 @@ void CinemaUIApp::renderLoginView() {
     window.draw(rTitle);
 
     sf::Text rSub;
-    rSub.setFont(Theme::FontSecondary);
+    rSub.setFont(Theme::FontPrimary);
     rSub.setCharacterSize(13);
     rSub.setFillColor(sf::Color(100, 116, 139));
     rSub.setString(toSfString("Vui lòng xác thực tài khoản được cấp quyền quản trị cụm rạp"));
@@ -2374,7 +2400,7 @@ void CinemaUIApp::renderLoginView() {
     // 2. Field 1: TÀI KHOẢN NHÂN SỰ
     sf::RectangleShape idIconBg(sf::Vector2f(14.f, 12.f));
     idIconBg.setPosition(rightX, cardY + 148.f);
-    idIconBg.setFillColor(sf::Color(234, 88, 12));
+    idIconBg.setFillColor(sf::Color(2, 132, 199));
     window.draw(idIconBg);
 
     sf::Text idLabel;
@@ -2417,14 +2443,14 @@ void CinemaUIApp::renderLoginView() {
     // 3. Field 2: MẬT KHẨU TRUY CẬP
     sf::RectangleShape lockBody(sf::Vector2f(12.f, 9.f));
     lockBody.setPosition(rightX, cardY + 240.f);
-    lockBody.setFillColor(sf::Color(234, 88, 12));
+    lockBody.setFillColor(sf::Color(2, 132, 199));
     window.draw(lockBody);
 
     sf::CircleShape lockShackle(3.5f);
     lockShackle.setPosition(rightX + 2.5f, cardY + 236.f);
     lockShackle.setFillColor(sf::Color::Transparent);
     lockShackle.setOutlineThickness(1.5f);
-    lockShackle.setOutlineColor(sf::Color(234, 88, 12));
+    lockShackle.setOutlineColor(sf::Color(2, 132, 199));
     window.draw(lockShackle);
 
     sf::Text passLabel;
