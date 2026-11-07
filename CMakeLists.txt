@@ -51,9 +51,9 @@ if (WIN32)
 endif()
 
 if (TARGET SFML::Graphics)
-    target_link_libraries(CinemaUI PRIVATE SFML::Graphics SFML::Window SFML::System sqlite3)
+    target_link_libraries(CinemaUI PRIVATE SFML::Graphics SFML::Window SFML::System "-Wl,-Bstatic,-lsqlite3,-Bdynamic")
 else()
-    target_link_libraries(CinemaUI PRIVATE sfml-graphics sfml-window sfml-system sqlite3)
+    target_link_libraries(CinemaUI PRIVATE sfml-graphics sfml-window sfml-system "-Wl,-Bstatic,-lsqlite3,-Bdynamic")
 endif()
 
 # Target 2: Console / Terminal Cinema System
@@ -66,5 +66,5 @@ if (WIN32)
     target_compile_options(CinemaConsole PRIVATE -include windows.h)
 endif()
 
-target_link_libraries(CinemaConsole PRIVATE sqlite3)
+target_link_libraries(CinemaConsole PRIVATE "-Wl,-Bstatic,-lsqlite3,-Bdynamic")
 

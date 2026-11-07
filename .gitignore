@@ -16,3 +16,18 @@ obj/
 *.tmp
 *.old.exe
 *.tmp.exe
+
+# SQLite temporary runtime files
+*-shm
+*-wal
+*-journal
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Dev-C++ IDE project and layout files
+*.dev
+*.layout
+Makefile.win
+
+
