@@ -2,17 +2,64 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "type": "cppbuild",
-            "label": "C/C++: g++ build project",
+            "type": "shell",
+            "label": "Build Cinema UI (SFML)",
             "command": "C:\\msys64\\ucrt64\\bin\\g++.exe",
             "args": [
-                "-fdiagnostics-color=always",
-                "-g",
-                "-std=c++11",
+                "-std=c++17",
+                "-O2",
+                "-include",
+                "windows.h",
                 "-I",
                 "${workspaceFolder}\\include",
+                "-I",
+                "${workspaceFolder}\\include\\UI",
+                "${workspaceFolder}\\src\\Cinema_UI_main.cpp",
                 "${workspaceFolder}\\src\\ActivityLog.cpp",
+                "${workspaceFolder}\\src\\Customer.cpp",
+                "${workspaceFolder}\\src\\Database.cpp",
+                "${workspaceFolder}\\src\\FAndB.cpp",
+                "${workspaceFolder}\\src\\Invoice.cpp",
+                "${workspaceFolder}\\src\\Movie.cpp",
+                "${workspaceFolder}\\src\\Promotion.cpp",
+                "${workspaceFolder}\\src\\Room.cpp",
+                "${workspaceFolder}\\src\\Seat.cpp",
+                "${workspaceFolder}\\src\\ShilftManagement.cpp",
+                "${workspaceFolder}\\src\\Showtime.cpp",
+                "${workspaceFolder}\\src\\SysLog.cpp",
+                "${workspaceFolder}\\src\\Ticket.cpp",
+                "${workspaceFolder}\\src\\User.cpp",
+                "${workspaceFolder}\\src\\UI\\UITheme.cpp",
+                "${workspaceFolder}\\src\\UI\\CinemaUIApp.cpp",
+                "-lsfml-graphics",
+                "-lsfml-window",
+                "-lsfml-system",
+                "-o",
+                "${workspaceFolder}\\CinemaUI.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "type": "shell",
+            "label": "Build Cinema Console",
+            "command": "C:\\msys64\\ucrt64\\bin\\g++.exe",
+            "args": [
+                "-std=c++17",
+                "-include",
+                "windows.h",
+                "-I",
+                "${workspaceFolder}\\include",
                 "${workspaceFolder}\\src\\Cinema_main.cpp",
+                "${workspaceFolder}\\src\\ActivityLog.cpp",
                 "${workspaceFolder}\\src\\Customer.cpp",
                 "${workspaceFolder}\\src\\Database.cpp",
                 "${workspaceFolder}\\src\\FAndB.cpp",
@@ -28,18 +75,14 @@
                 "${workspaceFolder}\\src\\User.cpp",
                 "-Wl,-Bstatic,-lsqlite3,-Bdynamic",
                 "-o",
-                "${workspaceFolder}\\cinema.exe"
+                "${workspaceFolder}\\CinemaConsole.exe"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
             },
             "problemMatcher": [
                 "$gcc"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
+            ]
         }
     ]
 }
