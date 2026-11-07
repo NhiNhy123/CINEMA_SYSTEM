@@ -320,8 +320,7 @@ void Database::docDanhSachUsers(vector<Customer>& danhSachKH) {
         if (row.size() < 4 || row[0].empty()) continue;
         const string& maKH = row[0];
         if (!customerIds.insert(maKH).second) {
-            cerr << "[CANH BAO]: Ma khach hang bi trung trong SQLite: "
-                 << maKH << ". Giu nguyen ban ghi de tranh mat du lieu.\n";
+            continue;
         }
         map<string, vector<string> >::const_iterator user = usersById.find(maKH);
         const vector<string>* profile = user == usersById.end() ? NULL : &user->second;
@@ -492,8 +491,25 @@ void Database::docDanhSachTheLoai(vector<pair<string, string> >& ds) {
     ds.clear();
     vector<vector<string> > rows;
     if (!readTable("genres", rows)) return;
+    bool upgraded = false;
     for (size_t i = 0; i < rows.size(); ++i) {
-        if (rows[i].size() >= 2) ds.push_back(make_pair(rows[i][0], rows[i][1]));
+        if (rows[i].size() >= 2) {
+            string code = rows[i][0];
+            string name = rows[i][1];
+            if (code == "TL01" && name == "Hanh Dong") { name = "Hành Động"; rows[i][1] = name; upgraded = true; }
+            else if (code == "TL02" && name == "Kinh Di") { name = "Kinh Dị"; rows[i][1] = name; upgraded = true; }
+            else if (code == "TL03" && name == "Tinh Cam") { name = "Tình Cảm"; rows[i][1] = name; upgraded = true; }
+            else if (code == "TL04" && name == "Hoat Hinh") { name = "Hoạt Hình"; rows[i][1] = name; upgraded = true; }
+            else if (code == "TL05" && name == "Tam Ly") { name = "Tâm Lý"; rows[i][1] = name; upgraded = true; }
+            else if (code == "TL06" && name == "Gia Dinh") { name = "Gia Đình"; rows[i][1] = name; upgraded = true; }
+            else if (code == "TL07" && (name == "Hoat Hinh" || name == "Vien Tuong")) { name = "Viễn Tưởng"; rows[i][1] = name; upgraded = true; }
+            else if (code == "TL08" && name == "Kich Tinh") { name = "Kịch Tính"; rows[i][1] = name; upgraded = true; }
+            else if (code == "TL09" && name == "Gay Can") { name = "Gay Cấn"; rows[i][1] = name; upgraded = true; }
+            ds.push_back(make_pair(code, name));
+        }
+    }
+    if (upgraded) {
+        writeTable("genres", rows);
     }
 }
 
@@ -514,7 +530,7 @@ bool Database::themLoaiTheLoai(const string& tenTheLoai) {
     bool daTonTai;
     do {
         stringstream ss;
-        ss << "TL0" << nextId++;
+        ss << "TL" << setw(2) << setfill('0') << nextId++;
         maTheLoai = ss.str();
         daTonTai = false;
         for (size_t i = 0; i < dsTheLoai.size(); ++i) {
@@ -555,8 +571,10 @@ bool Database::xoaLoaiTheLoai(const string& maTheLoai) {
     docMovieGenres(movieGenres);
     docDanhSachPhim(danhSachPhim);
 
-    for (size_t i = 0; i < movieGenres.size(); ++i) {
-        if (movieGenres[i].second == maTheLoai) return false;
+    for (size_t i = movieGenres.size(); i > 0; --i) {
+        if (movieGenres[i - 1].second == maTheLoai) {
+            movieGenres.erase(movieGenres.begin() + (i - 1));
+        }
     }
     for (size_t i = 0; i < dsTheLoai.size(); ++i) {
         if (dsTheLoai[i].first == maTheLoai) {

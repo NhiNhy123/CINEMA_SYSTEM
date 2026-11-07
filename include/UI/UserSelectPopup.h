@@ -6,6 +6,7 @@
 #include "RoundRectButton.h"
 #include <string>
 #include <functional>
+#include <cmath>
 
 namespace UI {
 
@@ -18,6 +19,7 @@ private:
 
     std::string title;
     std::string message;
+    ButtonStyle currentConfirmStyle;
 
     RoundRectButton btnConfirm;
     RoundRectButton btnCancel;
@@ -27,11 +29,13 @@ private:
 
 public:
     UserSelectPopup(sf::Vector2f winSize = sf::Vector2f(1728.f, 972.f))
-        : isOpen(false), windowSize(winSize), cardSize(sf::Vector2f(480.f, 220.f)),
+        : isOpen(false), windowSize(winSize), cardSize(sf::Vector2f(460.f, 210.f)),
           title("Xác nhận thao tác"), message("Bạn có chắc chắn muốn thực hiện hành động này?"),
-          btnConfirm("Xác nhận", sf::Vector2f(0.f, 0.f), sf::Vector2f(130.f, 42.f), ButtonStyle::Danger),
-          btnCancel("Hủy bỏ", sf::Vector2f(0.f, 0.f), sf::Vector2f(130.f, 42.f), ButtonStyle::Dark)
+          currentConfirmStyle(ButtonStyle::Primary),
+          btnConfirm("Xác nhận", sf::Vector2f(0.f, 0.f), sf::Vector2f(136.f, 42.f), ButtonStyle::Primary, 10.f),
+          btnCancel("Hủy bỏ", sf::Vector2f(0.f, 0.f), sf::Vector2f(136.f, 42.f), ButtonStyle::Ghost, 10.f)
     {
+        applyButtonTheme(currentConfirmStyle);
         updateLayout();
 
         btnConfirm.setOnClick([this]() {
@@ -45,27 +49,67 @@ public:
         });
     }
 
+    void applyButtonTheme(ButtonStyle confirmStyle) {
+        currentConfirmStyle = confirmStyle;
+        btnCancel.setFontSize(14);
+        btnCancel.setCustomColors(
+            sf::Color(241, 245, 249),
+            sf::Color(226, 232, 240),
+            sf::Color(203, 213, 225),
+            sf::Color(241, 245, 249)
+        );
+        btnCancel.setOutline(1.f, sf::Color(203, 213, 225));
+        btnCancel.setTextColor(sf::Color(51, 65, 85));
+
+        btnConfirm.setFontSize(14);
+        if (confirmStyle == ButtonStyle::Danger) {
+            btnConfirm.setCustomColors(
+                sf::Color(220, 38, 38),
+                sf::Color(185, 28, 28),
+                sf::Color(153, 27, 27),
+                sf::Color(226, 232, 240)
+            );
+            btnConfirm.setOutline(0.f, sf::Color::Transparent);
+            btnConfirm.setTextColor(sf::Color::White);
+        } else {
+            // Primary sky-blue tone matching app's main theme
+            btnConfirm.setCustomColors(
+                sf::Color(2, 132, 199),
+                sf::Color(3, 105, 161),
+                sf::Color(7, 89, 133),
+                sf::Color(226, 232, 240)
+            );
+            btnConfirm.setOutline(0.f, sf::Color::Transparent);
+            btnConfirm.setTextColor(sf::Color::White);
+        }
+    }
+
     void updateLayout() {
         cardPos = sf::Vector2f(
-            (windowSize.x - cardSize.x) / 2.0f,
-            (windowSize.y - cardSize.y) / 2.0f
+            std::round((windowSize.x - cardSize.x) / 2.0f),
+            std::round((windowSize.y - cardSize.y) / 2.0f)
         );
 
-        float btnY = cardPos.y + cardSize.y - 60.f;
-        btnCancel.setPosition(sf::Vector2f(cardPos.x + cardSize.x - 290.f, btnY));
-        btnConfirm.setPosition(sf::Vector2f(cardPos.x + cardSize.x - 150.f, btnY));
+        float btnW = 136.f;
+        float btnGap = 16.f;
+        float totalBtnW = btnW * 2.f + btnGap;
+        float startX = std::round(cardPos.x + (cardSize.x - totalBtnW) / 2.0f);
+        float btnY = std::round(cardPos.y + cardSize.y - 62.f);
+
+        btnCancel.setPosition(sf::Vector2f(startX, btnY));
+        btnConfirm.setPosition(sf::Vector2f(startX + btnW + btnGap, btnY));
     }
 
     void show(
         const std::string& t,
         const std::string& msg,
-        ButtonStyle confirmStyle = ButtonStyle::Danger,
+        ButtonStyle confirmStyle = ButtonStyle::Primary,
         const std::string& confirmLabel = "Xác nhận",
         const std::string& cancelLabel = "Hủy bỏ"
     ) {
         title = t;
         message = msg;
-        btnConfirm.setStyle(confirmStyle);
+        applyButtonTheme(confirmStyle);
         btnConfirm.setText(confirmLabel);
         btnCancel.setText(cancelLabel);
         isOpen = true;
@@ -102,42 +146,71 @@ public:
     void draw(sf::RenderTarget& target) {
         if (!isOpen) return;
 
-        // Semi-transparent backdrop
+        // Soft semi-transparent backdrop matching light theme
         sf::RectangleShape backdrop(windowSize);
-        backdrop.setFillColor(sf::Color(0, 0, 0, 185));
+        backdrop.setFillColor(sf::Color(15, 23, 42, 115));
         target.draw(backdrop);
 
-        // Dialog Card
+        // Subtle drop shadow
+        RoundedRectRenderer::render(
+            target,
+            sf::Vector2f(cardPos.x, cardPos.y + 6.f),
+            cardSize,
+            18.f,
+            sf::Color(15, 23, 42, 35)
+        );
+
+        // Dialog Card (Clean White + Soft Sky-Blue Border)
         RoundedRectRenderer::render(
             target,
             cardPos,
             cardSize,
-            Theme::RadiusLarge,
-            Theme::CardBg,
+            18.f,
+            sf::Color::White,
             1.5f,
-            Theme::CardBorder
+            sf::Color(186, 230, 253)
         );
 
-        // Title
+        // Top Accent Pill Bar
+        sf::Color accentCol = (currentConfirmStyle == ButtonStyle::Danger)
+            ? sf::Color(220, 38, 38)
+            : sf::Color(2, 132, 199);
+        RoundedRectRenderer::render(
+            target,
+            sf::Vector2f(cardPos.x + (cardSize.x - 64.f) / 2.f, cardPos.y + 14.f),
+            sf::Vector2f(64.f, 4.f),
+            2.f,
+            accentCol
+        );
+
+        // Centered Title
         sf::Text titleText;
         titleText.setFont(Theme::FontPrimary);
-        titleText.setCharacterSize(Theme::SizeTitle);
+        titleText.setCharacterSize(22);
         titleText.setStyle(sf::Text::Bold);
-        titleText.setFillColor(Theme::TextPrimary);
+        titleText.setFillColor(sf::Color(15, 23, 42));
         titleText.setString(toSfString(title));
-        titleText.setPosition(cardPos.x + 28.f, cardPos.y + 24.f);
+        sf::FloatRect tb = titleText.getLocalBounds();
+        titleText.setPosition(
+            std::round(cardPos.x + (cardSize.x - tb.width) / 2.0f - tb.left),
+            std::round(cardPos.y + 32.f - tb.top)
+        );
         target.draw(titleText);
 
-        // Message
+        // Centered Message
         sf::Text msgText;
         msgText.setFont(Theme::FontPrimary);
-        msgText.setCharacterSize(Theme::SizeBody);
-        msgText.setFillColor(Theme::TextSecondary);
+        msgText.setCharacterSize(15);
+        msgText.setFillColor(sf::Color(71, 85, 105));
         msgText.setString(toSfString(message));
-        msgText.setPosition(cardPos.x + 28.f, cardPos.y + 76.f);
+        sf::FloatRect mb = msgText.getLocalBounds();
+        msgText.setPosition(
+            std::round(cardPos.x + (cardSize.x - mb.width) / 2.0f - mb.left),
+            std::round(cardPos.y + 82.f - mb.top)
+        );
         target.draw(msgText);
 
-        // Buttons
+        // Centered Buttons
         btnCancel.draw(target);
         btnConfirm.draw(target);
     }

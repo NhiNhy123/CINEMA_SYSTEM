@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <map>
 
 #include "UITheme.h"
 #include "RoundedRectRenderer.h"
@@ -68,6 +69,21 @@ struct VisualSeat {
     bool isSelected;
 };
 
+struct StaffAccountInfo {
+    std::string maNguoiDung;
+    std::string hoTen;
+    std::string soDienThoai;
+    std::string email;
+    std::string ngaySinh;
+    std::string gioiTinh;
+    std::string cccd;
+    std::string taiKhoan;
+    std::string matKhau;
+    std::string vaiTro;
+    std::string trangThaiLamViec;
+    std::string trangThaiTaiKhoan;
+};
+
 class CinemaUIApp {
 private:
     sf::RenderWindow window;
@@ -98,13 +114,19 @@ private:
     // Active View Tab
     ActiveTab currentTab;
 
-    // Cached Backend Data (Synchronized 100% with DATA/*.csv)
+    // Cached Backend Data (Synchronized 100% with SQLite DATA/cinema.db)
     std::vector<Movie> movieList;
     std::vector<Room> roomList;
     std::vector<Seat> allSeats;
     std::vector<Showtime> showtimeList;
     std::vector<FoodAndBeverage> fnbList;
     std::vector<std::pair<std::string, string>> genreList;
+    std::vector<Customer> customerList;
+    std::vector<Promotion> promoList;
+    std::vector<ShiftReport> shiftList;
+    std::vector<Invoice> invoiceList;
+    std::vector<Ticket> ticketList;
+    std::vector<StaffAccountInfo> staffUserList;
 
     // Navigation & Layout
     float sidebarWidth;
@@ -123,9 +145,13 @@ private:
     int selectedMovieRowIdx;
     int selectedGenreRowIdx;
     int selectedGenreChoiceIdx;
+    std::string movieAgeFilter; // "", "P", "T13", "T18", "C18"
+    bool moviePosActive;
+    std::map<std::string, std::shared_ptr<sf::Texture>> moviePosterTextures;
 
     std::unique_ptr<RoundRectButton> btnSubTabMovies;
     std::unique_ptr<RoundRectButton> btnSubTabGenres;
+    std::unique_ptr<RoundRectButton> btnQuickAddMovie;
     std::unique_ptr<UIInputBox> movieSearchInput;
 
     // Movie Form Inputs
@@ -135,6 +161,7 @@ private:
     std::unique_ptr<UIInputBox> inputMovieReleaseDate;
     std::unique_ptr<UIInputBox> inputMovieAgeRating;
     std::unique_ptr<UIInputBox> inputMovieGenre;
+    std::unique_ptr<UIInputBox> inputMoviePoster;
     std::unique_ptr<UIInputBox> inputMovieDesc;
 
     // Movie Form Buttons
@@ -150,6 +177,12 @@ private:
     std::unique_ptr<RoundRectButton> btnGenreCreate;
     std::unique_ptr<RoundRectButton> btnGenreUpdate;
     std::unique_ptr<RoundRectButton> btnGenreDelete;
+    std::unique_ptr<RoundRectButton> btnGenreClear;
+    std::unique_ptr<UIInputBox> genreSearchInput;
+    std::unique_ptr<RoundRectButton> btnExportGenres;
+    int selectedGenreColorIdx;
+    std::map<std::string, int> genreColorMap;
+    bool genreSortAsc;
 
     // View 2: Seat Booking Components (Bán Vé - POS Kiosk Mode)
     std::string currentShowtimeId;
@@ -214,6 +247,7 @@ public:
 
 private:
     void loadDataFromDatabase();
+    void reloadMoviePosterTextures();
     void setupUIComponents();
     void setupLoginView();
     bool authenticateUser(const std::string& u, const std::string& p);

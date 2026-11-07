@@ -14,6 +14,8 @@
 #include <fstream>
 #include <algorithm>
 #include <iostream>
+#include <cmath>
+#include <sqlite3.h>
 
 namespace UI {
 
@@ -38,7 +40,9 @@ CinemaUIApp::CinemaUIApp()
       movieSubTab(0),
       selectedMovieRowIdx(-1),
       selectedGenreRowIdx(-1),
-      selectedGenreChoiceIdx(0)
+      selectedGenreChoiceIdx(0),
+      movieAgeFilter(""),
+      moviePosActive(true)
 {
 }
 
@@ -90,16 +94,92 @@ void CinemaUIApp::loadDataFromDatabase() {
     showtimeList.clear();
     fnbList.clear();
     genreList.clear();
+    customerList.clear();
+    promoList.clear();
+    shiftList.clear();
+    invoiceList.clear();
+    ticketList.clear();
+    staffUserList.clear();
 
-    // Read real data directly from CSV files via Database class
+    // Read real data directly from SQLite DATA/cinema.db via Database class
     db.docDanhSachPhim(movieList);
     db.docDanhSachPhong(roomList);
     db.docDanhSachGhe(allSeats);
     db.docDanhSachSuatChieu(showtimeList);
     db.docDanhSachFAndB(fnbList);
     db.docDanhSachTheLoai(genreList);
+    db.docDanhSachUsers(customerList);
+    db.docDanhSachKhuyenMai(promoList);
+    db.docDanhSachCa(shiftList);
+    db.docDanhSachHoaDon(invoiceList);
+    db.docDanhSachVe(ticketList);
+
+    // Load staff & admin accounts from SQLite users table
+    sqlite3* database = nullptr;
+    if (sqlite3_open("DATA/cinema.db", &database) == SQLITE_OK && database != nullptr) {
+        sqlite3_stmt* stmt = nullptr;
+        const char* sql =
+            "SELECT maNguoiDung,hoTen,soDienThoai,email,ngaySinh,gioiTinh,cccd,"
+            "taiKhoan,matKhau,vaiTro,trangThaiLamViec,trangThaiTaiKhoan "
+            "FROM users WHERE vaiTro IN ('Admin','Staff') ORDER BY rowid";
+        if (sqlite3_prepare_v2(database, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                auto colStr = [&](int c) -> std::string {
+                    const unsigned char* txt = sqlite3_column_text(stmt, c);
+                    return txt ? reinterpret_cast<const char*>(txt) : "";
+                };
+                StaffAccountInfo info;
+                info.maNguoiDung = colStr(0);
+                info.hoTen = colStr(1);
+                info.soDienThoai = colStr(2);
+                info.email = colStr(3);
+                info.ngaySinh = colStr(4);
+                info.gioiTinh = colStr(5);
+                info.cccd = colStr(6);
+                info.taiKhoan = colStr(7);
+                info.matKhau = colStr(8);
+                info.vaiTro = colStr(9);
+                info.trangThaiLamViec = colStr(10);
+                info.trangThaiTaiKhoan = colStr(11);
+                staffUserList.push_back(info);
+            }
+            sqlite3_finalize(stmt);
+        }
+        sqlite3_close(database);
+    }
 
     fnbQuantities.assign(fnbList.size(), 0);
+    reloadMoviePosterTextures();
+}
+
+void CinemaUIApp::reloadMoviePosterTextures() {
+    moviePosterTextures.clear();
+    for (const auto& m : movieList) {
+        std::string id = m.getMaPhim();
+        std::string dbPath = m.getPoster();
+        std::vector<std::string> candidates;
+        if (!dbPath.empty() && dbPath != "assets/posters/poster_default.jpg") {
+            candidates.push_back(dbPath);
+        }
+        candidates.push_back("assets/posters/" + id + ".jpg");
+        candidates.push_back("assets/posters/" + id + ".png");
+        candidates.push_back("assets/posters/" + id + ".jpeg");
+        if (!dbPath.empty()) {
+            candidates.push_back(dbPath);
+        }
+
+        for (const auto& path : candidates) {
+            std::ifstream f(path.c_str(), std::ios::binary);
+            if (!f.good()) continue;
+            f.close();
+            std::shared_ptr<sf::Texture> tex(new sf::Texture());
+            if (tex->loadFromFile(path)) {
+                tex->setSmooth(true);
+                moviePosterTextures[id] = tex;
+                break;
+            }
+        }
+    }
 }
 
 void CinemaUIApp::setupLoginView() {
@@ -108,17 +188,17 @@ void CinemaUIApp::setupLoginView() {
     float cardX = (1728.f - cardW) / 2.0f; // 354.f
     float cardY = (972.f - cardH) / 2.0f;  // 206.f
     float leftW = 420.f;
-    float rightX = cardX + leftW + 45.f;   // 819.f
-    float rightW = cardW - leftW - 90.f;   // 510.f
+    float rightW = 520.f;
+    float rightX = cardX + leftW + (cardW - leftW - rightW) / 2.0f; // Centered horizontally in right panel (814.f)
 
     loginInputUser = std::unique_ptr<UIInputBox>(new UIInputBox(
-        sf::Vector2f(rightX, cardY + 170.f),
-        sf::Vector2f(rightW, 46.f),
+        sf::Vector2f(rightX, cardY + 196.f),
+        sf::Vector2f(rightW, 54.f),
         "Nhập mã nhân viên hoặc email...",
-        Theme::SizeBody
+        16
     ));
-    loginInputUser->setTextInset(44.f);
-    loginInputUser->setCornerRadius(8.f);
+    loginInputUser->setTextInset(48.f);
+    loginInputUser->setCornerRadius(10.f);
     loginInputUser->setColors(
         sf::Color(255, 255, 255),
         sf::Color(203, 213, 225),
@@ -128,13 +208,13 @@ void CinemaUIApp::setupLoginView() {
     );
 
     loginInputPass = std::unique_ptr<PasswordField>(new PasswordField(
-        sf::Vector2f(rightX, cardY + 262.f),
-        sf::Vector2f(rightW, 46.f),
+        sf::Vector2f(rightX, cardY + 300.f),
+        sf::Vector2f(rightW, 54.f),
         "••••••••••••",
-        Theme::SizeBody
+        16
     ));
-    loginInputPass->setTextInset(44.f);
-    loginInputPass->setCornerRadius(8.f);
+    loginInputPass->setTextInset(48.f);
+    loginInputPass->setCornerRadius(10.f);
     loginInputPass->setColors(
         sf::Color(255, 255, 255),
         sf::Color(203, 213, 225),
@@ -145,21 +225,21 @@ void CinemaUIApp::setupLoginView() {
 
     chkRememberMe = std::unique_ptr<UICheckboxItem>(new UICheckboxItem(
         "Ghi nhớ đăng nhập",
-        sf::Vector2f(rightX, cardY + 326.f),
+        sf::Vector2f(rightX, cardY + 374.f),
         true,
-        13
+        15
     ));
     chkRememberMe->setColors(
         sf::Color(255, 255, 255),
         sf::Color(203, 213, 225),
         sf::Color(2, 132, 199),
-        sf::Color(100, 116, 139)
+        sf::Color(71, 85, 105)
     );
 
     btnLogin = std::unique_ptr<RoundRectButton>(new RoundRectButton(
         "ĐĂNG NHẬP HỆ THỐNG  →",
-        sf::Vector2f(rightX, cardY + 368.f),
-        sf::Vector2f(rightW, 48.f),
+        sf::Vector2f(rightX, cardY + 416.f),
+        sf::Vector2f(rightW, 54.f),
         ButtonStyle::Primary,
         10.f
     ));
@@ -170,57 +250,13 @@ void CinemaUIApp::setupLoginView() {
         sf::Color(203, 213, 225)
     );
     btnLogin->setFont(Theme::FontPrimary);
-    btnLogin->setFontSize(15);
-
-    btnQuickAdmin = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "Mẫu Admin: admin01 / 123456",
-        sf::Vector2f(rightX, cardY + 434.f),
-        sf::Vector2f(250.f, 32.f),
-        ButtonStyle::Dark,
-        6.f
-    ));
-    btnQuickAdmin->setCustomColors(
-        sf::Color(248, 250, 252),
-        sf::Color(241, 245, 249),
-        sf::Color(226, 232, 240),
-        sf::Color(203, 213, 225)
-    );
-    btnQuickAdmin->setOutline(1.f, sf::Color(203, 213, 225));
-    btnQuickAdmin->setFontSize(12);
-
-    btnQuickStaff = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "Mẫu Staff: staff01 / 123456",
-        sf::Vector2f(rightX + 265.f, cardY + 434.f),
-        sf::Vector2f(250.f, 32.f),
-        ButtonStyle::Dark,
-        6.f
-    ));
-    btnQuickStaff->setCustomColors(
-        sf::Color(248, 250, 252),
-        sf::Color(241, 245, 249),
-        sf::Color(226, 232, 240),
-        sf::Color(203, 213, 225)
-    );
-    btnQuickStaff->setOutline(1.f, sf::Color(203, 213, 225));
-    btnQuickStaff->setFontSize(12);
+    btnLogin->setFontSize(17);
 
     // Handle button actions
     btnLogin->setOnClick([this]() {
         std::string u = loginInputUser->getText();
         std::string p = loginInputPass->getText();
         authenticateUser(u, p);
-    });
-
-    btnQuickAdmin->setOnClick([this]() {
-        loginInputUser->setText("admin01");
-        loginInputPass->setText("123456");
-        loginErrorMsg = "";
-    });
-
-    btnQuickStaff->setOnClick([this]() {
-        loginInputUser->setText("staff01");
-        loginInputPass->setText("123456");
-        loginErrorMsg = "";
     });
 
     loginInputPass->setOnEnter([this](const std::string& p) {
@@ -235,57 +271,58 @@ bool CinemaUIApp::authenticateUser(const std::string& inputUser, const std::stri
         return false;
     }
 
-    // Read real users from DATA/quan_ly_nhan_su.csv
-    std::ifstream file("DATA/quan_ly_nhan_su.csv");
-    if (!file.is_open()) {
-        loginErrorMsg = "Không thể mở file DATA/quan_ly_nhan_su.csv!";
+    // Read real users from SQLite DATA/cinema.db (users table)
+    sqlite3* database = nullptr;
+    if (sqlite3_open("DATA/cinema.db", &database) != SQLITE_OK || database == nullptr) {
+        if (database != nullptr) sqlite3_close(database);
+        loginErrorMsg = "Không thể mở cơ sở dữ liệu SQLite DATA/cinema.db!";
         return false;
     }
 
-    std::string line;
-    bool inUserSection = false;
+    sqlite3_stmt* statement = nullptr;
+    const char* sql =
+        "SELECT maNguoiDung,hoTen,email,taiKhoan,matKhau,vaiTro,trangThaiLamViec,trangThaiTaiKhoan "
+        "FROM users WHERE (taiKhoan=? OR maNguoiDung=? OR email=?) AND matKhau=? ORDER BY rowid LIMIT 1";
+
     bool found = false;
+    std::string statusErr = "";
 
-    while (std::getline(file, line)) {
-        if (line.empty()) continue;
-        if (line.find("[USERS]") != std::string::npos) {
-            inUserSection = true;
-            continue;
-        }
-        if (inUserSection && line[0] == '[') {
-            break;
-        }
+    if (sqlite3_prepare_v2(database, sql, -1, &statement, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text(statement, 1, inputUser.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement, 2, inputUser.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement, 3, inputUser.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(statement, 4, inputPass.c_str(), -1, SQLITE_TRANSIENT);
 
-        if (inUserSection && line.find("maNguoiDung") == std::string::npos) {
-            std::stringstream ss(line);
-            std::string item;
-            std::vector<std::string> parts;
-            while (std::getline(ss, item, ',')) {
-                parts.push_back(item);
-            }
+        if (sqlite3_step(statement) == SQLITE_ROW) {
+            auto getCol = [&](int idx) -> std::string {
+                const unsigned char* txt = sqlite3_column_text(statement, idx);
+                return txt ? reinterpret_cast<const char*>(txt) : "";
+            };
+            std::string uid = getCol(0);
+            std::string uname = getCol(1);
+            std::string role = getCol(5);
+            std::string workStatus = getCol(6);
+            std::string accStatus = getCol(7);
 
-            // CSV format: maNguoiDung,hoTen,soDienThoai,email,ngaySinh,gioiTinh,cccd,taiKhoan,matKhau,vaiTro,...
-            if (parts.size() >= 10) {
-                std::string csvEmail = parts[3];
-                std::string csvAcc = parts[7];
-                std::string csvPass = parts[8];
-                bool identityMatches =
-                    parts[0] == inputUser || csvEmail == inputUser || csvAcc == inputUser;
-
-                if (identityMatches && csvPass == inputPass) {
-                    currentUserId = parts[0];
-                    currentUserName = parts[1];
-                    currentUserRole = parts[9];
-                    found = true;
-                    break;
-                }
+            if (role == "Staff" && accStatus == "BiKhoa") {
+                statusErr = "Tài khoản nhân viên đã bị khóa!";
+            } else if (role == "Staff" && workStatus == "DaNghiViec") {
+                statusErr = "Nhân viên đã nghỉ việc, không thể đăng nhập!";
+            } else {
+                currentUserId = uid;
+                currentUserName = uname;
+                currentUserRole = role;
+                found = true;
             }
         }
+        sqlite3_finalize(statement);
     }
+    sqlite3_close(database);
 
     if (found) {
         isLoggedIn = true;
         loginErrorMsg = "";
+        loadDataFromDatabase();
 
         if (currentUserRole == "Admin") {
             currentTab = ActiveTab::Reports;
@@ -294,12 +331,12 @@ bool CinemaUIApp::authenticateUser(const std::string& inputUser, const std::stri
         }
         setupNavigation();
 
-        // Record real activity log into CSV
+        // Record real activity log into SQLite DATA/cinema.db
         ActivityLog::ghiNhan(currentUserId, currentUserRole, "DANG_NHAP", "Dang nhap thanh cong qua giao dien UI");
         setupLogsView(); // refresh log table
         return true;
     } else {
-        loginErrorMsg = "Tài khoản hoặc mật khẩu không chính xác!";
+        loginErrorMsg = statusErr.empty() ? "Tài khoản hoặc mật khẩu không chính xác!" : statusErr;
         return false;
     }
 }
@@ -617,7 +654,7 @@ void CinemaUIApp::setupUIComponents() {
         if (confirmPopup) {
             confirmPopup->show(
                 "ĐỒNG BỘ NHẬT KÝ HỆ THỐNG",
-                "Đã tải lại toàn bộ nhật ký kiểm toán mới nhất từ nhat_ky_hoat_dong.csv!",
+                "Đã tải lại toàn bộ nhật ký kiểm toán mới nhất từ SQLite (DATA/cinema.db)!",
                 ButtonStyle::Primary,
                 "OK",
                 "Đóng"
@@ -795,138 +832,169 @@ void CinemaUIApp::setupDashboardView() {
 }
 
 void CinemaUIApp::setupMoviesView() {
-    float leftColX = sidebarWidth + 20.f;
-    float rightColX = sidebarWidth + 960.f;
-    float rightColW = 494.f;
+    float leftColX = sidebarWidth + 24.f;
+    float rightColX = sidebarWidth + 968.f;
+    float rightColW = 486.f;
 
-    // Sub-tab buttons
+    // Sub-tab buttons matching reference image
     btnSubTabMovies = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "Quản lý Phim",
-        sf::Vector2f(leftColX + 4.f, 74.f),
-        sf::Vector2f(130.f, 34.f),
+        "",
+        sf::Vector2f(leftColX, 180.f),
+        sf::Vector2f(205.f, 40.f),
         ButtonStyle::Ghost,
-        4.f
+        8.f
     ));
-    btnSubTabMovies->setFontSize(15);
+    btnSubTabMovies->setFontSize(16);
+    btnSubTabMovies->setOutline(0.f, sf::Color::Transparent);
     btnSubTabMovies->setCustomColors(
         sf::Color::Transparent,
-        sf::Color(226, 232, 240, 60),
-        sf::Color(203, 213, 225),
+        sf::Color(226, 232, 240, 70),
+        sf::Color(203, 213, 225, 110),
         sf::Color::Transparent
     );
-    btnSubTabMovies->setTextColor(sf::Color(15, 23, 42));
     btnSubTabMovies->setOnClick([this]() {
         movieSubTab = 0;
     });
 
     btnSubTabGenres = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "Quản lý Thể loại",
-        sf::Vector2f(leftColX + 145.f, 74.f),
-        sf::Vector2f(150.f, 34.f),
+        "",
+        sf::Vector2f(leftColX + 215.f, 180.f),
+        sf::Vector2f(205.f, 40.f),
         ButtonStyle::Ghost,
-        4.f
+        8.f
     ));
-    btnSubTabGenres->setFontSize(15);
+    btnSubTabGenres->setFontSize(16);
+    btnSubTabGenres->setOutline(0.f, sf::Color::Transparent);
     btnSubTabGenres->setCustomColors(
         sf::Color::Transparent,
-        sf::Color(226, 232, 240, 60),
-        sf::Color(203, 213, 225),
+        sf::Color(226, 232, 240, 70),
+        sf::Color(203, 213, 225, 110),
         sf::Color::Transparent
     );
-    btnSubTabGenres->setTextColor(sf::Color(100, 116, 139));
     btnSubTabGenres->setOnClick([this]() {
         movieSubTab = 1;
     });
 
-    // Quick search input
+    // Quick search input inside Left Card (cardY = 232.f)
     movieSearchInput = std::unique_ptr<UIInputBox>(new UIInputBox(
-        sf::Vector2f(leftColX + 115.f, 132.f),
-        sf::Vector2f(320.f, 36.f),
-        "Tìm theo Mã, Tên, Thể loại...",
+        sf::Vector2f(leftColX + 108.f, 248.f),
+        sf::Vector2f(305.f, 36.f),
+        "     Tìm theo Mã, Tên, Thể loại...",
         Theme::SizeBody
     ));
-    movieSearchInput->setCornerRadius(6.f);
+    movieSearchInput->setCornerRadius(8.f);
     movieSearchInput->setColors(
-        sf::Color::White,
-        sf::Color(203, 213, 225),
+        sf::Color(241, 245, 249),
+        sf::Color(226, 232, 240),
         sf::Color(2, 132, 199),
         sf::Color(15, 23, 42),
         sf::Color(148, 163, 184)
     );
 
-    // Movie Form Inputs
-    float inputX = rightColX + 140.f;
-    float inputW = 320.f;
-    float inputH = 36.f;
+    // "+ Thêm mới phim" top-right button inside Left Card filter bar
+    btnQuickAddMovie = std::unique_ptr<RoundRectButton>(new RoundRectButton(
+        "+ Thêm mới phim",
+        sf::Vector2f(leftColX + 698.f, 248.f),
+        sf::Vector2f(210.f, 36.f),
+        ButtonStyle::Primary,
+        8.f
+    ));
+    btnQuickAddMovie->setFontSize(14);
+    btnQuickAddMovie->setCustomColors(
+        sf::Color(3, 105, 161),
+        sf::Color(2, 132, 199),
+        sf::Color(7, 89, 133),
+        sf::Color(203, 213, 225)
+    );
+    btnQuickAddMovie->setOnClick([this]() {
+        selectedMovieRowIdx = -1;
+        std::string nextId = "P0" + std::to_string(movieList.size() + 1);
+        inputMovieId->setText(nextId);
+        inputMovieTitle->setText("");
+        inputMovieDuration->setText("120");
+        inputMovieReleaseDate->setText("15/11/2026");
+        inputMovieAgeRating->setText("T18");
+        inputMovieGenre->setText("");
+        if (inputMoviePoster) inputMoviePoster->setText("assets/posters/" + nextId + ".jpg");
+        inputMovieDesc->setText("");
+    });
+
+    // Movie Form Inputs (Right Card: rightColX, cardY = 232.f)
+    float inputX = rightColX + 136.f;
+    float inputW = 330.f;
+    float inputH = 35.f;
+    sf::Color softInputBg(241, 245, 249);
+    sf::Color softInputBorder(226, 232, 240);
+    sf::Color focusBlue(2, 132, 199);
 
     inputMovieId = std::unique_ptr<UIInputBox>(new UIInputBox(
-        sf::Vector2f(inputX, 175.f),
+        sf::Vector2f(inputX, 286.f),
         sf::Vector2f(inputW, inputH),
         "Mã phim tự sinh...",
         Theme::SizeBody
     ));
-    inputMovieId->setColors(sf::Color(248, 250, 252), sf::Color(226, 232, 240), sf::Color(226, 232, 240), sf::Color(71, 85, 105), sf::Color(148, 163, 184));
-    inputMovieId->setCornerRadius(6.f);
+    inputMovieId->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(30, 41, 59), sf::Color(148, 163, 184));
+    inputMovieId->setCornerRadius(8.f);
     inputMovieId->setText("P0" + std::to_string(movieList.size() + 1));
 
     inputMovieTitle = std::unique_ptr<UIInputBox>(new UIInputBox(
-        sf::Vector2f(inputX, 224.f),
+        sf::Vector2f(inputX, 331.f),
         sf::Vector2f(inputW, inputH),
         "Nhập tên phim...",
         Theme::SizeBody
     ));
-    inputMovieTitle->setColors(sf::Color::White, sf::Color(203, 213, 225), sf::Color(2, 132, 199), sf::Color(15, 23, 42), sf::Color(148, 163, 184));
-    inputMovieTitle->setCornerRadius(6.f);
+    inputMovieTitle->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(15, 23, 42), sf::Color(148, 163, 184));
+    inputMovieTitle->setCornerRadius(8.f);
 
     inputMovieDuration = std::unique_ptr<UIInputBox>(new UIInputBox(
-        sf::Vector2f(inputX, 273.f),
+        sf::Vector2f(inputX, 376.f),
         sf::Vector2f(inputW, inputH),
         "120",
         Theme::SizeBody
     ));
-    inputMovieDuration->setColors(sf::Color::White, sf::Color(203, 213, 225), sf::Color(2, 132, 199), sf::Color(15, 23, 42), sf::Color(148, 163, 184));
-    inputMovieDuration->setCornerRadius(6.f);
+    inputMovieDuration->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(15, 23, 42), sf::Color(148, 163, 184));
+    inputMovieDuration->setCornerRadius(8.f);
 
     inputMovieReleaseDate = std::unique_ptr<UIInputBox>(new UIInputBox(
-        sf::Vector2f(inputX, 322.f),
+        sf::Vector2f(inputX, 421.f),
         sf::Vector2f(inputW, inputH),
         "dd/MM/yyyy",
         Theme::SizeBody
     ));
-    inputMovieReleaseDate->setColors(sf::Color::White, sf::Color(203, 213, 225), sf::Color(2, 132, 199), sf::Color(15, 23, 42), sf::Color(148, 163, 184));
-    inputMovieReleaseDate->setCornerRadius(6.f);
+    inputMovieReleaseDate->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(15, 23, 42), sf::Color(148, 163, 184));
+    inputMovieReleaseDate->setCornerRadius(8.f);
     inputMovieReleaseDate->setText("01/04/2026");
 
     inputMovieAgeRating = std::unique_ptr<UIInputBox>(new UIInputBox(
-        sf::Vector2f(inputX, 371.f),
+        sf::Vector2f(inputX, 466.f),
         sf::Vector2f(inputW, inputH),
-        "P, C13, C16, C18",
+        "P, K, T13, T18",
         Theme::SizeBody
     ));
-    inputMovieAgeRating->setColors(sf::Color::White, sf::Color(203, 213, 225), sf::Color(2, 132, 199), sf::Color(15, 23, 42), sf::Color(148, 163, 184));
-    inputMovieAgeRating->setCornerRadius(6.f);
-    inputMovieAgeRating->setText("C18");
+    inputMovieAgeRating->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(15, 23, 42), sf::Color(148, 163, 184));
+    inputMovieAgeRating->setCornerRadius(8.f);
+    inputMovieAgeRating->setText("T18");
 
     inputMovieGenre = std::unique_ptr<UIInputBox>(new UIInputBox(
-        sf::Vector2f(inputX, 420.f),
-        sf::Vector2f(inputW - 110.f, inputH),
-        "Hành Động, Tâm Lý",
+        sf::Vector2f(inputX, 511.f),
+        sf::Vector2f(inputW - 92.f, inputH),
+        "Tâm Lý, Hành Động",
         Theme::SizeBody
     ));
-    inputMovieGenre->setColors(sf::Color::White, sf::Color(203, 213, 225), sf::Color(2, 132, 199), sf::Color(15, 23, 42), sf::Color(148, 163, 184));
-    inputMovieGenre->setCornerRadius(6.f);
+    inputMovieGenre->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(15, 23, 42), sf::Color(148, 163, 184));
+    inputMovieGenre->setCornerRadius(8.f);
 
     btnSelectGenre = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "Chọn thể lo...",
-        sf::Vector2f(inputX + inputW - 100.f, 420.f),
-        sf::Vector2f(100.f, inputH),
+        "Chọn...",
+        sf::Vector2f(inputX + inputW - 84.f, 511.f),
+        sf::Vector2f(84.f, inputH),
         ButtonStyle::Ghost,
-        6.f
+        8.f
     ));
     btnSelectGenre->setFontSize(13);
-    btnSelectGenre->setCustomColors(sf::Color(248, 250, 252), sf::Color(241, 245, 249), sf::Color(226, 232, 240), sf::Color(248, 250, 252));
-    btnSelectGenre->setOutline(1.f, sf::Color(203, 213, 225));
-    btnSelectGenre->setTextColor(sf::Color(51, 65, 85));
+    btnSelectGenre->setCustomColors(sf::Color(224, 242, 254), sf::Color(186, 230, 253), sf::Color(125, 211, 252), sf::Color(241, 245, 249));
+    btnSelectGenre->setOutline(1.f, sf::Color(186, 230, 253));
+    btnSelectGenre->setTextColor(sf::Color(3, 105, 161));
     btnSelectGenre->setOnClick([this]() {
         if (!genreList.empty()) {
             selectedGenreChoiceIdx = (selectedGenreChoiceIdx + 1) % genreList.size();
@@ -934,29 +1002,40 @@ void CinemaUIApp::setupMoviesView() {
         }
     });
 
+    // Dedicated Poster Path Input (paired with visual Poster Preview slot)
+    inputMoviePoster = std::unique_ptr<UIInputBox>(new UIInputBox(
+        sf::Vector2f(inputX + 58.f, 566.f),
+        sf::Vector2f(inputW - 58.f, inputH),
+        "assets/posters/P01.jpg",
+        Theme::SizeBody
+    ));
+    inputMoviePoster->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(15, 23, 42), sf::Color(148, 163, 184));
+    inputMoviePoster->setCornerRadius(8.f);
+    inputMoviePoster->setText("assets/posters/P01.jpg");
+
     inputMovieDesc = std::unique_ptr<UIInputBox>(new UIInputBox(
-        sf::Vector2f(inputX, 472.f),
-        sf::Vector2f(inputW, 76.f),
+        sf::Vector2f(rightColX + 20.f, 650.f),
+        sf::Vector2f(rightColW - 40.f, 78.f),
         "Nhập nội dung tóm tắt phim...",
         Theme::SizeBody
     ));
-    inputMovieDesc->setColors(sf::Color::White, sf::Color(203, 213, 225), sf::Color(2, 132, 199), sf::Color(15, 23, 42), sf::Color(148, 163, 184));
-    inputMovieDesc->setCornerRadius(6.f);
+    inputMovieDesc->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(51, 65, 85), sf::Color(148, 163, 184));
+    inputMovieDesc->setCornerRadius(8.f);
 
-    // Form Action Buttons
-    float btnW = (rightColW - 48.f - 14.f) / 2.0f; // ~215.f
-    float btnRow1Y = 720.f;
-    float btnRow2Y = 772.f;
+    // Form Action Buttons matching reference image
+    float btnW = (rightColW - 40.f - 12.f) / 2.0f; // 217.f
+    float btnRow1Y = 796.f;
+    float btnRow2Y = 846.f;
 
     btnMovieCreate = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "Thêm mới",
-        sf::Vector2f(rightColX + 24.f, btnRow1Y),
-        sf::Vector2f(btnW, 42.f),
+        "+ Thêm mới",
+        sf::Vector2f(rightColX + 20.f, btnRow1Y),
+        sf::Vector2f(btnW, 40.f),
         ButtonStyle::Success,
-        6.f
+        8.f
     ));
-    btnMovieCreate->setFontSize(15);
-    btnMovieCreate->setCustomColors(sf::Color(34, 197, 94), sf::Color(22, 163, 74), sf::Color(21, 128, 61), sf::Color(203, 213, 225));
+    btnMovieCreate->setFontSize(14);
+    btnMovieCreate->setCustomColors(sf::Color(5, 150, 105), sf::Color(4, 120, 87), sf::Color(6, 95, 70), sf::Color(203, 213, 225));
     btnMovieCreate->setOnClick([this]() {
         std::string title = inputMovieTitle->getText();
         if (title.find_first_not_of(" \t\r\n") == std::string::npos) {
@@ -1006,7 +1085,7 @@ void CinemaUIApp::setupMoviesView() {
 
         std::string ageStr = inputMovieAgeRating->getText();
         int age = 0;
-        if (ageStr == "P" || ageStr == "p") age = 0;
+        if (ageStr == "P" || ageStr == "p" || ageStr == "K" || ageStr == "k") age = 0;
         else {
             std::string numOnly = "";
             for (char ch : ageStr) {
@@ -1017,6 +1096,9 @@ void CinemaUIApp::setupMoviesView() {
 
         std::string gName = inputMovieGenre->getText();
         std::string desc = inputMovieDesc->getText();
+        std::string posterPath = (inputMoviePoster && !inputMoviePoster->getText().empty())
+                                 ? inputMoviePoster->getText()
+                                 : ("assets/posters/" + id + ".jpg");
 
         int day = 1, month = 1, year = 2026;
         DateFormat::parseDate(normRel, day, month, year);
@@ -1027,28 +1109,45 @@ void CinemaUIApp::setupMoviesView() {
               << std::setw(2) << month << "/" << std::setw(4) << year;
         std::string endDate = ssEnd.str();
 
-        Movie m(id, title, dur, age, normRel, endDate, desc, "assets/posters/poster_default.jpg");
+        Movie m(id, title, dur, age, normRel, endDate, desc, posterPath);
         movieList.push_back(m);
         db.ghiDanhSachPhim(movieList);
         if (!gName.empty()) {
-            db.capNhatTheLoaiChoPhim(id, gName);
+            std::stringstream gss(gName);
+            std::string gToken;
+            bool firstGenre = true;
+            while (std::getline(gss, gToken, ',')) {
+                size_t s = gToken.find_first_not_of(" \t\r\n");
+                size_t e = gToken.find_last_not_of(" \t\r\n");
+                if (s != std::string::npos && e != std::string::npos) {
+                    std::string cleanG = gToken.substr(s, e - s + 1);
+                    if (firstGenre) {
+                        db.capNhatTheLoaiChoPhim(id, cleanG);
+                        firstGenre = false;
+                    } else {
+                        db.themTheLoaiChoPhim(id, cleanG);
+                    }
+                }
+            }
             db.docDanhSachTheLoai(genreList);
         }
+        db.docDanhSachPhim(movieList);
+        reloadMoviePosterTextures();
         ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_PHIM", "Them phim moi: " + title + " (" + id + ")");
-        confirmPopup->show("Thành công", "Đã thêm phim '" + title + "' vào cơ sở dữ liệu quan_ly_phim.csv!", ButtonStyle::Success, "Hoàn tất", "Đóng");
+        confirmPopup->show("Thành công", "Đã thêm phim mới!", ButtonStyle::Primary, "Đóng", "Quay lại");
     });
 
     btnMovieUpdate = std::unique_ptr<RoundRectButton>(new RoundRectButton(
         "Cập nhật",
-        sf::Vector2f(rightColX + 24.f + btnW + 14.f, btnRow1Y),
-        sf::Vector2f(btnW, 42.f),
+        sf::Vector2f(rightColX + 20.f + btnW + 12.f, btnRow1Y),
+        sf::Vector2f(btnW, 40.f),
         ButtonStyle::Ghost,
-        6.f
+        8.f
     ));
-    btnMovieUpdate->setFontSize(15);
-    btnMovieUpdate->setCustomColors(sf::Color::White, sf::Color(248, 250, 252), sf::Color(241, 245, 249), sf::Color(226, 232, 240));
-    btnMovieUpdate->setOutline(1.f, sf::Color(203, 213, 225));
-    btnMovieUpdate->setTextColor(sf::Color(15, 23, 42));
+    btnMovieUpdate->setFontSize(14);
+    btnMovieUpdate->setCustomColors(sf::Color(224, 242, 254), sf::Color(186, 230, 253), sf::Color(125, 211, 252), sf::Color(226, 232, 240));
+    btnMovieUpdate->setOutline(1.f, sf::Color(186, 230, 253));
+    btnMovieUpdate->setTextColor(sf::Color(3, 105, 161));
     btnMovieUpdate->setOnClick([this]() {
         if (selectedMovieRowIdx >= 0 && selectedMovieRowIdx < static_cast<int>(movieList.size())) {
             std::string title = inputMovieTitle->getText();
@@ -1069,6 +1168,7 @@ void CinemaUIApp::setupMoviesView() {
             }
 
             std::string rel = inputMovieReleaseDate->getText();
+            std::string oldRel = DateFormat::normalizeDate(movieList[selectedMovieRowIdx].getNgayKhoiChieu());
             if (!rel.empty()) {
                 if (!DateFormat::isValidDate(rel)) {
                     confirmPopup->show("Lỗi", "Ngày khởi chiếu không hợp lệ! Vui lòng nhập định dạng DD/MM/YYYY.", ButtonStyle::Danger, "Đóng", "Hủy");
@@ -1076,9 +1176,9 @@ void CinemaUIApp::setupMoviesView() {
                 }
                 std::string normRel = DateFormat::normalizeDate(rel);
                 int todayKey = 0;
-                if (DateFormat::todayDateKey(todayKey)) {
+                if (normRel != oldRel && DateFormat::todayDateKey(todayKey)) {
                     if (DateFormat::dateKey(normRel) < todayKey) {
-                        confirmPopup->show("Lỗi", "Ngày khởi chiếu không được nằm trong quá khứ!", ButtonStyle::Danger, "Đóng", "Hủy");
+                        confirmPopup->show("Lỗi", "Ngày khởi chiếu mới không được nằm trong quá khứ!", ButtonStyle::Danger, "Đóng", "Hủy");
                         return;
                     }
                 }
@@ -1087,7 +1187,7 @@ void CinemaUIApp::setupMoviesView() {
 
             std::string ageStr = inputMovieAgeRating->getText();
             int age = 0;
-            if (ageStr == "P" || ageStr == "p") age = 0;
+            if (ageStr == "P" || ageStr == "p" || ageStr == "K" || ageStr == "k") age = 0;
             else {
                 std::string numOnly = "";
                 for (char ch : ageStr) {
@@ -1098,23 +1198,73 @@ void CinemaUIApp::setupMoviesView() {
 
             std::string gName = inputMovieGenre->getText();
             std::string mId = movieList[selectedMovieRowIdx].getMaPhim();
+            std::string newDesc = inputMovieDesc->getText();
+            std::string newPoster = inputMoviePoster ? inputMoviePoster->getText() : "";
+            std::string curGenre = db.layTheLoaiCuaPhim(mId);
+            std::string curPoster = movieList[selectedMovieRowIdx].getPoster();
+            if (curPoster.empty() || curPoster == "assets/posters/poster_default.jpg") {
+                curPoster = "assets/posters/" + mId + ".jpg";
+            }
+
+            bool isUnchanged = (title == movieList[selectedMovieRowIdx].getTenPhim()) &&
+                               (dur == movieList[selectedMovieRowIdx].getThoiLuong()) &&
+                               (age == movieList[selectedMovieRowIdx].getNhanDoTuoi()) &&
+                               (rel.empty() || rel == oldRel) &&
+                               (gName == curGenre) &&
+                               (newDesc == movieList[selectedMovieRowIdx].getMoTa()) &&
+                               (newPoster.empty() || newPoster == curPoster);
+            if (isUnchanged) {
+                confirmPopup->show("Thông báo", "Chưa có thông tin nào thay đổi!", ButtonStyle::Primary, "Đóng", "Quay lại");
+                return;
+            }
 
             movieList[selectedMovieRowIdx].setTenPhim(title);
             movieList[selectedMovieRowIdx].setThoiLuong(dur);
             movieList[selectedMovieRowIdx].setNhanDoTuoi(age);
             if (!rel.empty()) {
                 movieList[selectedMovieRowIdx].setNgayKhoiChieu(rel);
+                std::string curEnd = DateFormat::normalizeDate(movieList[selectedMovieRowIdx].getNgayKetThuc());
+                if (DateFormat::dateKey(rel) > DateFormat::dateKey(curEnd)) {
+                    int day = 1, month = 1, year = 2026;
+                    DateFormat::parseDate(rel, day, month, year);
+                    month += 1;
+                    if (month > 12) { month = 1; year += 1; }
+                    std::ostringstream ssEnd;
+                    ssEnd << std::setfill('0') << std::setw(2) << day << "/"
+                          << std::setw(2) << month << "/" << std::setw(4) << year;
+                    movieList[selectedMovieRowIdx].setNgayKetThuc(ssEnd.str());
+                }
             }
-            movieList[selectedMovieRowIdx].setMoTa(inputMovieDesc->getText());
+            movieList[selectedMovieRowIdx].setMoTa(newDesc);
+            if (!newPoster.empty()) {
+                movieList[selectedMovieRowIdx].setPoster(newPoster);
+            }
 
             db.ghiDanhSachPhim(movieList);
             if (!gName.empty()) {
-                db.capNhatTheLoaiChoPhim(mId, gName);
+                std::stringstream gss(gName);
+                std::string gToken;
+                bool firstGenre = true;
+                while (std::getline(gss, gToken, ',')) {
+                    size_t s = gToken.find_first_not_of(" \t\r\n");
+                    size_t e = gToken.find_last_not_of(" \t\r\n");
+                    if (s != std::string::npos && e != std::string::npos) {
+                        std::string cleanG = gToken.substr(s, e - s + 1);
+                        if (firstGenre) {
+                            db.capNhatTheLoaiChoPhim(mId, cleanG);
+                            firstGenre = false;
+                        } else {
+                            db.themTheLoaiChoPhim(mId, cleanG);
+                        }
+                    }
+                }
                 db.docDanhSachTheLoai(genreList);
             }
+            db.docDanhSachPhim(movieList);
+            reloadMoviePosterTextures();
 
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "SUA_PHIM", "Cap nhat thong tin phim: " + title);
-            confirmPopup->show("Thành công", "Cập nhật thông tin phim thành công!", ButtonStyle::Success, "Đóng", "Quay lại");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "SUA_PHIM", "Cap nhat thong tin phim: " + title + " (" + mId + ")");
+            confirmPopup->show("Thành công", "Đã cập nhật thông tin!", ButtonStyle::Primary, "Đóng", "Quay lại");
         } else {
             confirmPopup->show("Thông báo", "Vui lòng chọn 1 phim từ danh sách để cập nhật!", ButtonStyle::Primary, "Đóng", "Hủy");
         }
@@ -1122,13 +1272,13 @@ void CinemaUIApp::setupMoviesView() {
 
     btnMovieDelete = std::unique_ptr<RoundRectButton>(new RoundRectButton(
         "Xóa",
-        sf::Vector2f(rightColX + 24.f, btnRow2Y),
-        sf::Vector2f(btnW, 42.f),
+        sf::Vector2f(rightColX + 20.f, btnRow2Y),
+        sf::Vector2f(btnW, 40.f),
         ButtonStyle::Ghost,
-        6.f
+        8.f
     ));
-    btnMovieDelete->setFontSize(15);
-    btnMovieDelete->setCustomColors(sf::Color::White, sf::Color(254, 242, 242), sf::Color(254, 226, 226), sf::Color(226, 232, 240));
+    btnMovieDelete->setFontSize(14);
+    btnMovieDelete->setCustomColors(sf::Color(254, 226, 226), sf::Color(254, 202, 202), sf::Color(252, 165, 165), sf::Color(226, 232, 240));
     btnMovieDelete->setOutline(1.f, sf::Color(252, 165, 165));
     btnMovieDelete->setTextColor(sf::Color(220, 38, 38));
     btnMovieDelete->setOnClick([this]() {
@@ -1138,6 +1288,7 @@ void CinemaUIApp::setupMoviesView() {
             confirmPopup->setOnConfirm([this, pName]() {
                 movieList.erase(movieList.begin() + selectedMovieRowIdx);
                 db.ghiDanhSachPhim(movieList);
+                reloadMoviePosterTextures();
                 ActivityLog::ghiNhan(currentUserId, currentUserRole, "XOA_PHIM", "Xoa phim: " + pName);
                 selectedMovieRowIdx = -1;
             });
@@ -1146,23 +1297,25 @@ void CinemaUIApp::setupMoviesView() {
 
     btnMovieClear = std::unique_ptr<RoundRectButton>(new RoundRectButton(
         "Clear Form",
-        sf::Vector2f(rightColX + 24.f + btnW + 14.f, btnRow2Y),
-        sf::Vector2f(btnW, 42.f),
+        sf::Vector2f(rightColX + 20.f + btnW + 12.f, btnRow2Y),
+        sf::Vector2f(btnW, 40.f),
         ButtonStyle::Ghost,
-        6.f
+        8.f
     ));
-    btnMovieClear->setFontSize(15);
-    btnMovieClear->setCustomColors(sf::Color::White, sf::Color(248, 250, 252), sf::Color(241, 245, 249), sf::Color(226, 232, 240));
+    btnMovieClear->setFontSize(14);
+    btnMovieClear->setCustomColors(sf::Color(241, 245, 249), sf::Color(226, 232, 240), sf::Color(203, 213, 225), sf::Color(226, 232, 240));
     btnMovieClear->setOutline(1.f, sf::Color(203, 213, 225));
-    btnMovieClear->setTextColor(sf::Color(15, 23, 42));
+    btnMovieClear->setTextColor(sf::Color(51, 65, 85));
     btnMovieClear->setOnClick([this]() {
         selectedMovieRowIdx = -1;
-        inputMovieId->setText("P0" + std::to_string(movieList.size() + 1));
+        std::string nextId = "P0" + std::to_string(movieList.size() + 1);
+        inputMovieId->setText(nextId);
         inputMovieTitle->setText("");
         inputMovieDuration->setText("120");
         inputMovieReleaseDate->setText("01/04/2026");
-        inputMovieAgeRating->setText("C18");
+        inputMovieAgeRating->setText("T18");
         inputMovieGenre->setText("");
+        if (inputMoviePoster) inputMoviePoster->setText("assets/posters/" + nextId + ".jpg");
         inputMovieDesc->setText("");
     });
 
@@ -1173,65 +1326,232 @@ void CinemaUIApp::setupMoviesView() {
         inputMovieTitle->setText(movieList[0].getTenPhim());
         inputMovieDuration->setText(std::to_string(movieList[0].getThoiLuong()));
         inputMovieReleaseDate->setText(movieList[0].getNgayKhoiChieu());
-        inputMovieAgeRating->setText("C" + std::to_string(movieList[0].getNhanDoTuoi()));
+        int a0 = movieList[0].getNhanDoTuoi();
+        inputMovieAgeRating->setText(a0 <= 0 ? "P" : ("T" + std::to_string(a0)));
         inputMovieGenre->setText(db.layTheLoaiCuaPhim(movieList[0].getMaPhim()));
+        std::string p0 = movieList[0].getPoster();
+        if (p0.empty() || p0 == "assets/posters/poster_default.jpg") {
+            p0 = "assets/posters/" + movieList[0].getMaPhim() + ".jpg";
+        }
+        if (inputMoviePoster) inputMoviePoster->setText(p0);
         inputMovieDesc->setText(movieList[0].getMoTa());
     }
 
-    // Genre Form Setup
-    inputGenreId = std::unique_ptr<UIInputBox>(new UIInputBox(
-        sf::Vector2f(inputX, 175.f),
-        sf::Vector2f(inputW, inputH),
-        "TL01",
-        Theme::SizeBody
+    // Genre Form Setup (Matching Reference UI & Linked to SQLite Backend)
+    selectedGenreColorIdx = 0;
+    genreSortAsc = true;
+    genreColorMap["TL01"] = 0; // Red
+    genreColorMap["TL02"] = 1; // Purple
+    genreColorMap["TL03"] = 2; // Pink
+    genreColorMap["TL04"] = 3; // Amber
+    genreColorMap["TL05"] = 4; // Blue
+    genreColorMap["TL06"] = 5; // Emerald
+    genreColorMap["TL07"] = 6; // Cyan
+    genreColorMap["TL08"] = 7; // Orange
+    genreColorMap["TL09"] = 8; // Crimson
+
+    genreSearchInput = std::unique_ptr<UIInputBox>(new UIInputBox(
+        sf::Vector2f(rightColX - 40.f, 180.f),
+        sf::Vector2f(310.f, 40.f),
+        "     Tìm tên hoặc mã thể loại...",
+        13
     ));
-    inputGenreId->setColors(sf::Color(248, 250, 252), sf::Color(226, 232, 240), sf::Color(226, 232, 240), sf::Color(71, 85, 105), sf::Color(148, 163, 184));
-    inputGenreId->setCornerRadius(6.f);
+    genreSearchInput->setColors(sf::Color::White, sf::Color(226, 232, 240), focusBlue, sf::Color(15, 23, 42), sf::Color(148, 163, 184));
+    genreSearchInput->setCornerRadius(20.f);
+
+    btnExportGenres = std::unique_ptr<RoundRectButton>(new RoundRectButton(
+        "    Xuất danh sách",
+        sf::Vector2f(rightColX + 282.f, 180.f),
+        sf::Vector2f(170.f, 40.f),
+        ButtonStyle::Ghost,
+        10.f
+    ));
+    btnExportGenres->setFontSize(13);
+    btnExportGenres->setCustomColors(sf::Color::White, sf::Color(241, 245, 249), sf::Color(226, 232, 240), sf::Color(241, 245, 249));
+    btnExportGenres->setOutline(1.f, sf::Color(226, 232, 240));
+    btnExportGenres->setTextColor(sf::Color(30, 41, 59));
+    btnExportGenres->setOnClick([this]() {
+        std::ofstream out("DATA/danh_sach_the_loai.csv", std::ios::out | std::ios::trunc);
+        if (out.is_open()) {
+            out << "MaTheLoai,TenTheLoai\n";
+            for (const auto& g : genreList) {
+                out << g.first << "," << g.second << "\n";
+            }
+            out.close();
+        }
+        ActivityLog::ghiNhan(currentUserId, currentUserRole, "XUAT_THE_LOAI", "Xuat danh sach the loai phim");
+        confirmPopup->show("Thành công", "Đã xuất danh sách thể loại!", ButtonStyle::Primary, "Đóng", "Quay lại");
+    });
+
+    float gInputX = rightColX + 24.f;
+    float gInputW = rightColW - 48.f;
+    float gInputH = 44.f;
+    float gHalfBtnW = (gInputW - 14.f) / 2.f;
+
+    inputGenreId = std::unique_ptr<UIInputBox>(new UIInputBox(
+        sf::Vector2f(gInputX, 352.f),
+        sf::Vector2f(gInputW, gInputH),
+        "TL01",
+        14
+    ));
+    inputGenreId->setColors(sf::Color(241, 245, 249), sf::Color(226, 232, 240), focusBlue, sf::Color(30, 41, 59), sf::Color(148, 163, 184));
+    inputGenreId->setCornerRadius(10.f);
 
     inputGenreName = std::unique_ptr<UIInputBox>(new UIInputBox(
-        sf::Vector2f(inputX, 225.f),
-        sf::Vector2f(inputW, inputH),
-        "Tên thể loại mới...",
-        Theme::SizeBody
+        sf::Vector2f(gInputX, 442.f),
+        sf::Vector2f(gInputW, gInputH),
+        "Nhập tên thể loại...",
+        14
     ));
-    inputGenreName->setColors(sf::Color::White, sf::Color(203, 213, 225), sf::Color(2, 132, 199), sf::Color(15, 23, 42), sf::Color(148, 163, 184));
-    inputGenreName->setCornerRadius(6.f);
+    inputGenreName->setColors(sf::Color::White, sf::Color(203, 213, 225), focusBlue, sf::Color(15, 23, 42), sf::Color(148, 163, 184));
+    inputGenreName->setCornerRadius(10.f);
+
+    if (!genreList.empty()) {
+        selectedGenreRowIdx = 0;
+        inputGenreId->setText(genreList[0].first);
+        inputGenreName->setText(genreList[0].second);
+    }
 
     btnGenreCreate = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "Thêm thể loại",
-        sf::Vector2f(rightColX + 24.f, 290.f),
-        sf::Vector2f(btnW, 42.f),
+        "  + Thêm thể loại",
+        sf::Vector2f(gInputX, 616.f),
+        sf::Vector2f(gHalfBtnW, 44.f),
         ButtonStyle::Success,
-        6.f
+        10.f
     ));
-    btnGenreCreate->setFontSize(15);
-    btnGenreCreate->setCustomColors(sf::Color(34, 197, 94), sf::Color(22, 163, 74), sf::Color(21, 128, 61), sf::Color(203, 213, 225));
+    btnGenreCreate->setFontSize(14);
+    btnGenreCreate->setCustomColors(sf::Color(5, 150, 105), sf::Color(4, 120, 87), sf::Color(6, 95, 70), sf::Color(203, 213, 225));
     btnGenreCreate->setOnClick([this]() {
         std::string gName = inputGenreName->getText();
-        if (!gName.empty()) {
-            db.themLoaiTheLoai(gName);
+        size_t s = gName.find_first_not_of(" \t\r\n");
+        size_t e = gName.find_last_not_of(" \t\r\n");
+        if (s == std::string::npos) {
+            confirmPopup->show("Lỗi", "Tên thể loại không được để trống!", ButtonStyle::Danger, "Đóng", "Quay lại");
+            return;
+        }
+        gName = gName.substr(s, e - s + 1);
+        if (db.themLoaiTheLoai(gName)) {
             genreList.clear();
             db.docDanhSachTheLoai(genreList);
-            confirmPopup->show("Thành công", "Đã thêm thể loại: " + gName, ButtonStyle::Success, "Đóng", "Hủy");
+            if (!genreList.empty()) {
+                selectedGenreRowIdx = static_cast<int>(genreList.size()) - 1;
+                std::string newId = genreList.back().first;
+                genreColorMap[newId] = selectedGenreColorIdx;
+                inputGenreId->setText(newId);
+                inputGenreName->setText(genreList.back().second);
+            }
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_THE_LOAI", "Them the loai: " + gName);
+            confirmPopup->show("Thành công", "Đã thêm thể loại mới!", ButtonStyle::Primary, "Đóng", "Quay lại");
+        } else {
+            confirmPopup->show("Thông báo", "Thể loại này đã tồn tại trong hệ thống!", ButtonStyle::Primary, "Đóng", "Quay lại");
         }
     });
 
     btnGenreDelete = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "Xóa thể loại",
-        sf::Vector2f(rightColX + 24.f + btnW + 14.f, 290.f),
-        sf::Vector2f(btnW, 42.f),
+        "   Xóa thể loại",
+        sf::Vector2f(gInputX + gHalfBtnW + 14.f, 616.f),
+        sf::Vector2f(gHalfBtnW, 44.f),
         ButtonStyle::Danger,
-        6.f
+        10.f
     ));
-    btnGenreDelete->setFontSize(15);
+    btnGenreDelete->setFontSize(14);
+    btnGenreDelete->setCustomColors(sf::Color(225, 29, 72), sf::Color(190, 18, 60), sf::Color(159, 18, 57), sf::Color(203, 213, 225));
     btnGenreDelete->setOnClick([this]() {
         if (selectedGenreRowIdx >= 0 && selectedGenreRowIdx < static_cast<int>(genreList.size())) {
             std::string gId = genreList[selectedGenreRowIdx].first;
-            db.xoaLoaiTheLoai(gId);
+            std::string gName = genreList[selectedGenreRowIdx].second;
+            confirmPopup->show("Xác nhận xóa", "Bạn có chắc chắn muốn xóa thể loại '" + gName + "'?", ButtonStyle::Danger, "Xóa thể loại", "Quay lại");
+            confirmPopup->setOnConfirm([this, gId, gName]() {
+                if (db.xoaLoaiTheLoai(gId)) {
+                    genreList.clear();
+                    db.docDanhSachTheLoai(genreList);
+                    if (!genreList.empty()) {
+                        selectedGenreRowIdx = 0;
+                        inputGenreId->setText(genreList[0].first);
+                        inputGenreName->setText(genreList[0].second);
+                    } else {
+                        selectedGenreRowIdx = -1;
+                        inputGenreId->setText("TL01");
+                        inputGenreName->setText("");
+                    }
+                    ActivityLog::ghiNhan(currentUserId, currentUserRole, "XOA_THE_LOAI", "Xoa the loai: " + gName + " (" + gId + ")");
+                }
+            });
+        } else {
+            confirmPopup->show("Thông báo", "Vui lòng chọn 1 thể loại từ danh sách để xóa!", ButtonStyle::Primary, "Đóng", "Quay lại");
+        }
+    });
+
+    btnGenreUpdate = std::unique_ptr<RoundRectButton>(new RoundRectButton(
+        "   Lưu thay đổi",
+        sf::Vector2f(gInputX, 672.f),
+        sf::Vector2f(gInputW, 44.f),
+        ButtonStyle::Primary,
+        10.f
+    ));
+    btnGenreUpdate->setFontSize(14);
+    btnGenreUpdate->setCustomColors(sf::Color(2, 132, 199), sf::Color(3, 105, 161), sf::Color(7, 89, 133), sf::Color(203, 213, 225));
+    btnGenreUpdate->setOnClick([this]() {
+        if (selectedGenreRowIdx < 0 || selectedGenreRowIdx >= static_cast<int>(genreList.size())) {
+            confirmPopup->show("Thông báo", "Vui lòng chọn 1 thể loại từ danh sách để cập nhật!", ButtonStyle::Primary, "Đóng", "Quay lại");
+            return;
+        }
+        std::string gId = genreList[selectedGenreRowIdx].first;
+        std::string oldName = genreList[selectedGenreRowIdx].second;
+        std::string gName = inputGenreName->getText();
+        size_t s = gName.find_first_not_of(" \t\r\n");
+        size_t e = gName.find_last_not_of(" \t\r\n");
+        if (s == std::string::npos) {
+            confirmPopup->show("Lỗi", "Tên thể loại không được để trống!", ButtonStyle::Danger, "Đóng", "Quay lại");
+            return;
+        }
+        gName = gName.substr(s, e - s + 1);
+        int oldCol = genreColorMap.count(gId) ? genreColorMap[gId] : (selectedGenreRowIdx % 5);
+        if (gName == oldName && selectedGenreColorIdx == oldCol) {
+            confirmPopup->show("Thông báo", "Chưa có thông tin nào thay đổi!", ButtonStyle::Primary, "Đóng", "Quay lại");
+            return;
+        }
+        if (gName != oldName) {
+            if (!db.suaLoaiTheLoai(gId, gName)) {
+                confirmPopup->show("Lỗi", "Tên thể loại đã tồn tại hoặc không hợp lệ!", ButtonStyle::Danger, "Đóng", "Quay lại");
+                return;
+            }
             genreList.clear();
             db.docDanhSachTheLoai(genreList);
-            selectedGenreRowIdx = -1;
         }
+        genreColorMap[gId] = selectedGenreColorIdx;
+        ActivityLog::ghiNhan(currentUserId, currentUserRole, "SUA_THE_LOAI", "Cap nhat the loai: " + gName + " (" + gId + ")");
+        confirmPopup->show("Thành công", "Đã cập nhật thông tin!", ButtonStyle::Primary, "Đóng", "Quay lại");
+    });
+
+    btnGenreClear = std::unique_ptr<RoundRectButton>(new RoundRectButton(
+        "   Làm mới biểu mẫu",
+        sf::Vector2f(gInputX, 728.f),
+        sf::Vector2f(gInputW, 40.f),
+        ButtonStyle::Ghost,
+        10.f
+    ));
+    btnGenreClear->setFontSize(13);
+    btnGenreClear->setCustomColors(sf::Color::White, sf::Color(241, 245, 249), sf::Color(226, 232, 240), sf::Color(241, 245, 249));
+    btnGenreClear->setOutline(1.f, sf::Color(226, 232, 240));
+    btnGenreClear->setTextColor(sf::Color(51, 65, 85));
+    btnGenreClear->setOnClick([this]() {
+        selectedGenreRowIdx = -1;
+        size_t nextId = 1;
+        std::string nextCode;
+        bool exists = false;
+        do {
+            std::ostringstream ss;
+            ss << "TL" << std::setw(2) << std::setfill('0') << nextId++;
+            nextCode = ss.str();
+            exists = false;
+            for (const auto& g : genreList) {
+                if (g.first == nextCode) { exists = true; break; }
+            }
+        } while (exists);
+        inputGenreId->setText(nextCode);
+        inputGenreName->setText("");
+        inputGenreName->setFocused(true);
     });
 }
 
@@ -1632,35 +1952,35 @@ void CinemaUIApp::setupLogsView() {
 
     std::vector<TableColumn> cols = {
         {"Thời Gian", 220.f, false},
-        {"Tài Khoản", 180.f, false},
+        {"Mã Người Dùng", 180.f, false},
+        {"Vai Trò", 180.f, false},
         {"Hành Động", 280.f, false},
-        {"Mã Đối Tượng", 180.f, false},
-        {"Chi Tiết Nhật Ký (nhat_ky_hoat_dong.csv)", 510.f, false}
+        {"Chi Tiết Nhật Ký (cinema.db)", 510.f, false}
     };
     logsTable->setColumns(cols);
 
-    // Read activity logs directly from DATA/nhat_ky_hoat_dong.csv
+    // Read activity logs directly from SQLite DATA/cinema.db (nhat_ky_hoat_dong table)
     std::vector<std::vector<std::string>> tRows;
-    std::ifstream file("DATA/nhat_ky_hoat_dong.csv");
-    if (file.is_open()) {
-        std::string line;
-        bool isHeader = true;
-        while (std::getline(file, line)) {
-            if (line.empty()) continue;
-            if (isHeader) { isHeader = false; continue; }
-            std::stringstream ss(line);
-            std::string item;
-            std::vector<std::string> row;
-            while (std::getline(ss, item, ',')) {
-                row.push_back(item);
+    sqlite3* database = nullptr;
+    if (sqlite3_open("DATA/cinema.db", &database) == SQLITE_OK && database != nullptr) {
+        sqlite3_stmt* stmt = nullptr;
+        const char* sql = "SELECT thoiGian,maNguoiDung,vaiTro,hanhDong,chiTiet FROM nhat_ky_hoat_dong ORDER BY rowid";
+        if (sqlite3_prepare_v2(database, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                std::vector<std::string> row;
+                for (int i = 0; i < 5; ++i) {
+                    const unsigned char* txt = sqlite3_column_text(stmt, i);
+                    row.push_back(txt ? reinterpret_cast<const char*>(txt) : "");
+                }
+                tRows.push_back(row);
             }
-            if (!row.empty()) tRows.push_back(row);
+            sqlite3_finalize(stmt);
         }
+        sqlite3_close(database);
     }
 
     if (tRows.empty()) {
-        tRows.push_back({"2026-10-31 09:00:00", "U001", "Admin", "DANG_NHAP", "Dang nhap he thong thanh cong"});
-        tRows.push_back({"2026-10-31 09:15:30", "U002", "Staff", "BAN_VE", "Xuat ve ghe A1, A2 suat SC01"});
+        tRows.push_back({"07/11/2026 09:00:00", "U001", "Admin", "DANG_NHAP", "Dang nhap he thong thanh cong"});
     }
 
     // Display newest logs first
@@ -1711,16 +2031,6 @@ void CinemaUIApp::handleEvents() {
                 if (event.type == sf::Event::MouseMoved) btnLogin->handleMouseMove(mousePos);
                 else if (event.type == sf::Event::MouseButtonPressed) btnLogin->handleMouseButtonPressed(event.mouseButton.button, mousePos);
                 else if (event.type == sf::Event::MouseButtonReleased) btnLogin->handleMouseButtonReleased(event.mouseButton.button, mousePos);
-            }
-            if (btnQuickAdmin) {
-                if (event.type == sf::Event::MouseMoved) btnQuickAdmin->handleMouseMove(mousePos);
-                else if (event.type == sf::Event::MouseButtonPressed) btnQuickAdmin->handleMouseButtonPressed(event.mouseButton.button, mousePos);
-                else if (event.type == sf::Event::MouseButtonReleased) btnQuickAdmin->handleMouseButtonReleased(event.mouseButton.button, mousePos);
-            }
-            if (btnQuickStaff) {
-                if (event.type == sf::Event::MouseMoved) btnQuickStaff->handleMouseMove(mousePos);
-                else if (event.type == sf::Event::MouseButtonPressed) btnQuickStaff->handleMouseButtonPressed(event.mouseButton.button, mousePos);
-                else if (event.type == sf::Event::MouseButtonReleased) btnQuickStaff->handleMouseButtonReleased(event.mouseButton.button, mousePos);
             }
             continue;
         }
@@ -1787,6 +2097,7 @@ void CinemaUIApp::handleEvents() {
                 handleBtn(btnSubTabGenres);
 
                 if (movieSubTab == 0) {
+                    handleBtn(btnQuickAddMovie);
                     if (movieSearchInput) {
                         if (event.type == sf::Event::MouseButtonPressed) movieSearchInput->handleMouseButtonPressed(event.mouseButton.button, mousePos);
                         else if (event.type == sf::Event::TextEntered) movieSearchInput->handleTextEntered(event.text.unicode);
@@ -1815,6 +2126,10 @@ void CinemaUIApp::handleEvents() {
                         if (event.type == sf::Event::MouseButtonPressed) inputMovieGenre->handleMouseButtonPressed(event.mouseButton.button, mousePos);
                         else if (event.type == sf::Event::TextEntered) inputMovieGenre->handleTextEntered(event.text.unicode);
                     }
+                    if (inputMoviePoster) {
+                        if (event.type == sf::Event::MouseButtonPressed) inputMoviePoster->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                        else if (event.type == sf::Event::TextEntered) inputMoviePoster->handleTextEntered(event.text.unicode);
+                    }
                     if (inputMovieDesc) {
                         if (event.type == sf::Event::MouseButtonPressed) inputMovieDesc->handleMouseButtonPressed(event.mouseButton.button, mousePos);
                         else if (event.type == sf::Event::TextEntered) inputMovieDesc->handleTextEntered(event.text.unicode);
@@ -1825,14 +2140,49 @@ void CinemaUIApp::handleEvents() {
                     handleBtn(btnMovieDelete);
                     handleBtn(btnMovieClear);
 
-                    // Row selection click in movie table
                     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-                        float leftColX = sidebarWidth + 20.f;
-                        float leftColW = 920.f;
-                        float rowStartY = 120.f + 60.f + 44.f;
-                        float rowH = 50.f;
-                        if (mousePos.x >= leftColX + 20.f && mousePos.x <= leftColX + leftColW - 20.f &&
-                            mousePos.y >= rowStartY && mousePos.y <= rowStartY + 14.f * rowH) {
+                        float leftColX = sidebarWidth + 24.f;
+                        float leftColW = 928.f;
+                        float rightColX = sidebarWidth + 968.f;
+                        float rightColW = 486.f;
+                        float inputX = rightColX + 136.f;
+
+                        // 1. Age Filter Pills in Left Card Filter Bar (Tất cả | P | K | T13 | T18)
+                        float filterBarX = leftColX + 422.f;
+                        float filterBarY = 248.f;
+                        if (mousePos.y >= filterBarY && mousePos.y <= filterBarY + 36.f &&
+                            mousePos.x >= filterBarX && mousePos.x <= filterBarX + 266.f) {
+                            float relX = mousePos.x - filterBarX;
+                            if (relX < 62.f) movieAgeFilter = "";
+                            else if (relX < 104.f) movieAgeFilter = "P";
+                            else if (relX < 146.f) movieAgeFilter = "K";
+                            else if (relX < 204.f) movieAgeFilter = "13";
+                            else movieAgeFilter = "18";
+                        }
+
+                        // 2. Age Selector Pills inside Right Form (P | K | T13 | T18 at y = 466.f)
+                        if (mousePos.y >= 466.f && mousePos.y <= 501.f &&
+                            mousePos.x >= inputX && mousePos.x <= inputX + 330.f) {
+                            float relX = mousePos.x - inputX;
+                            float segW = 330.f / 4.f;
+                            int seg = static_cast<int>(relX / segW);
+                            const char* ratings[] = {"P", "K", "T13", "T18"};
+                            if (seg >= 0 && seg < 4 && inputMovieAgeRating) {
+                                inputMovieAgeRating->setText(ratings[seg]);
+                            }
+                        }
+
+                        // 3. POS Toggle Switch inside Right Form (y = 736.f .. 784.f)
+                        if (mousePos.x >= rightColX + 20.f && mousePos.x <= rightColX + rightColW - 20.f &&
+                            mousePos.y >= 736.f && mousePos.y <= 784.f) {
+                            moviePosActive = !moviePosActive;
+                        }
+
+                        // 4. Row selection & Action Icon clicks in Movie Table
+                        float rowStartY = 232.f + 64.f + 42.f; // 338.f
+                        float rowH = 66.f;
+                        if (mousePos.x >= leftColX + 16.f && mousePos.x <= leftColX + leftColW - 16.f &&
+                            mousePos.y >= rowStartY && mousePos.y <= rowStartY + 8.f * rowH) {
                             int clickedVisualRow = static_cast<int>((mousePos.y - rowStartY) / rowH);
 
                             std::string query = movieSearchInput ? movieSearchInput->getText() : "";
@@ -1843,10 +2193,26 @@ void CinemaUIApp::handleEvents() {
                             for (size_t i = 0; i < movieList.size(); ++i) {
                                 std::string pName = movieList[i].getTenPhim();
                                 std::string pCode = movieList[i].getMaPhim();
+                                std::string pGenre = db.layTheLoaiCuaPhim(pCode);
+                                int pAge = movieList[i].getNhanDoTuoi();
+
+                                if (!movieAgeFilter.empty()) {
+                                    if (movieAgeFilter == "P" && pAge > 0) continue;
+                                    if (movieAgeFilter == "K" && pAge > 12) continue;
+                                    if (movieAgeFilter == "13" && pAge != 13) continue;
+                                    if (movieAgeFilter == "18" && pAge < 16) continue;
+                                }
+
                                 if (!query.empty()) {
                                     std::string pNameLower = pName;
+                                    std::string pCodeLower = pCode;
+                                    std::string pGenreLower = pGenre;
                                     std::transform(pNameLower.begin(), pNameLower.end(), pNameLower.begin(), ::tolower);
-                                    if (pNameLower.find(query) == std::string::npos && pCode.find(query) == std::string::npos) {
+                                    std::transform(pCodeLower.begin(), pCodeLower.end(), pCodeLower.begin(), ::tolower);
+                                    std::transform(pGenreLower.begin(), pGenreLower.end(), pGenreLower.begin(), ::tolower);
+                                    if (pNameLower.find(query) == std::string::npos &&
+                                        pCodeLower.find(query) == std::string::npos &&
+                                        pGenreLower.find(query) == std::string::npos) {
                                         continue;
                                     }
                                 }
@@ -1858,41 +2224,128 @@ void CinemaUIApp::handleEvents() {
                             }
 
                             if (targetIdx >= 0 && targetIdx < static_cast<int>(movieList.size())) {
-                                selectedMovieRowIdx = targetIdx;
-                                inputMovieId->setText(movieList[targetIdx].getMaPhim());
-                                inputMovieTitle->setText(movieList[targetIdx].getTenPhim());
-                                inputMovieDuration->setText(std::to_string(movieList[targetIdx].getThoiLuong()));
-                                inputMovieReleaseDate->setText(movieList[targetIdx].getNgayKhoiChieu());
-                                inputMovieAgeRating->setText("C" + std::to_string(movieList[targetIdx].getNhanDoTuoi()));
-                                inputMovieGenre->setText(db.layTheLoaiCuaPhim(movieList[targetIdx].getMaPhim()));
-                                inputMovieDesc->setText(movieList[targetIdx].getMoTa());
+                                bool clickedEditIcon = (mousePos.x >= leftColX + 844.f && mousePos.x <= leftColX + 874.f);
+                                bool clickedDeleteIcon = (mousePos.x >= leftColX + 876.f && mousePos.x <= leftColX + 908.f);
+
+                                bool hasFormChanges = false;
+                                if (selectedMovieRowIdx == targetIdx) {
+                                    std::string curId = movieList[targetIdx].getMaPhim();
+                                    int ageVal = movieList[targetIdx].getNhanDoTuoi();
+                                    std::string curAgeStr = (ageVal <= 0) ? "P" : ("T" + std::to_string(ageVal));
+                                    std::string curGenre = db.layTheLoaiCuaPhim(curId);
+                                    std::string curPoster = movieList[targetIdx].getPoster();
+                                    if (curPoster.empty() || curPoster == "assets/posters/poster_default.jpg") {
+                                        curPoster = "assets/posters/" + curId + ".jpg";
+                                    }
+                                    if (inputMovieTitle && inputMovieTitle->getText() != movieList[targetIdx].getTenPhim()) hasFormChanges = true;
+                                    if (inputMovieDuration && inputMovieDuration->getText() != std::to_string(movieList[targetIdx].getThoiLuong())) hasFormChanges = true;
+                                    if (inputMovieReleaseDate && DateFormat::normalizeDate(inputMovieReleaseDate->getText()) != DateFormat::normalizeDate(movieList[targetIdx].getNgayKhoiChieu())) hasFormChanges = true;
+                                    if (inputMovieAgeRating && inputMovieAgeRating->getText() != curAgeStr) hasFormChanges = true;
+                                    if (inputMovieGenre && inputMovieGenre->getText() != curGenre) hasFormChanges = true;
+                                    if (inputMoviePoster && inputMoviePoster->getText() != curPoster) hasFormChanges = true;
+                                    if (inputMovieDesc && inputMovieDesc->getText() != movieList[targetIdx].getMoTa()) hasFormChanges = true;
+                                }
+
+                                // Only trigger backend update when clicking Pencil Edit icon if the user has already edited the form
+                                if (clickedEditIcon && selectedMovieRowIdx == targetIdx && hasFormChanges && btnMovieUpdate) {
+                                    btnMovieUpdate->triggerClick();
+                                } else {
+                                    selectedMovieRowIdx = targetIdx;
+                                    inputMovieId->setText(movieList[targetIdx].getMaPhim());
+                                    inputMovieTitle->setText(movieList[targetIdx].getTenPhim());
+                                    inputMovieDuration->setText(std::to_string(movieList[targetIdx].getThoiLuong()));
+                                    inputMovieReleaseDate->setText(movieList[targetIdx].getNgayKhoiChieu());
+                                    int ageVal = movieList[targetIdx].getNhanDoTuoi();
+                                    inputMovieAgeRating->setText(ageVal <= 0 ? "P" : ("T" + std::to_string(ageVal)));
+                                    inputMovieGenre->setText(db.layTheLoaiCuaPhim(movieList[targetIdx].getMaPhim()));
+                                    std::string pPath = movieList[targetIdx].getPoster();
+                                    if (pPath.empty() || pPath == "assets/posters/poster_default.jpg") {
+                                        pPath = "assets/posters/" + movieList[targetIdx].getMaPhim() + ".jpg";
+                                    }
+                                    if (inputMoviePoster) inputMoviePoster->setText(pPath);
+                                    inputMovieDesc->setText(movieList[targetIdx].getMoTa());
+
+                                    if (clickedEditIcon && inputMovieTitle) {
+                                        inputMovieTitle->setFocused(true);
+                                    } else if (clickedDeleteIcon && btnMovieDelete) {
+                                        btnMovieDelete->triggerClick();
+                                    }
+                                }
                             }
                         }
                     }
                 } else {
-                    if (inputGenreId) {
-                        if (event.type == sf::Event::MouseButtonPressed) inputGenreId->handleMouseButtonPressed(event.mouseButton.button, mousePos);
-                        else if (event.type == sf::Event::TextEntered) inputGenreId->handleTextEntered(event.text.unicode);
+                    if (genreSearchInput) {
+                        if (event.type == sf::Event::MouseButtonPressed) genreSearchInput->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                        else if (event.type == sf::Event::TextEntered) genreSearchInput->handleTextEntered(event.text.unicode);
                     }
                     if (inputGenreName) {
                         if (event.type == sf::Event::MouseButtonPressed) inputGenreName->handleMouseButtonPressed(event.mouseButton.button, mousePos);
                         else if (event.type == sf::Event::TextEntered) inputGenreName->handleTextEntered(event.text.unicode);
                     }
+                    handleBtn(btnExportGenres);
                     handleBtn(btnGenreCreate);
                     handleBtn(btnGenreDelete);
+                    handleBtn(btnGenreUpdate);
+                    handleBtn(btnGenreClear);
 
                     if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-                        float leftColX = sidebarWidth + 20.f;
-                        float leftColW = 920.f;
-                        float rowStartY = 120.f + 20.f + 38.f;
-                        float rowH = 46.f;
-                        if (mousePos.x >= leftColX + 20.f && mousePos.x <= leftColX + leftColW - 20.f &&
-                            mousePos.y >= rowStartY && mousePos.y <= rowStartY + genreList.size() * rowH) {
-                            int clickedIdx = static_cast<int>((mousePos.y - rowStartY) / rowH);
-                            if (clickedIdx >= 0 && clickedIdx < static_cast<int>(genreList.size())) {
-                                selectedGenreRowIdx = clickedIdx;
-                                inputGenreId->setText(genreList[clickedIdx].first);
-                                inputGenreName->setText(genreList[clickedIdx].second);
+                        float leftColX = sidebarWidth + 24.f;
+                        float leftColW = 928.f;
+                        float rightColX = sidebarWidth + 968.f;
+
+                        // 1. Sort Toggle button [Mã thể loại ↓↑]
+                        if (mousePos.x >= leftColX + leftColW - 140.f && mousePos.x <= leftColX + leftColW - 20.f &&
+                            mousePos.y >= 246.f && mousePos.y <= 278.f) {
+                            genreSortAsc = !genreSortAsc;
+                        }
+
+                        // 2. Color Swatch Selection (5 circles under MÀU SẮC BIỂU THỊ)
+                        for (int c = 0; c < 5; ++c) {
+                            float cx = rightColX + 42.f + c * 40.f;
+                            float cy = 574.f;
+                            float dx = mousePos.x - cx;
+                            float dy = mousePos.y - cy;
+                            if (dx * dx + dy * dy <= 18.f * 18.f) {
+                                selectedGenreColorIdx = c;
+                                break;
+                            }
+                        }
+
+                        // 3. Genre Table Row Click (filtered & sorted)
+                        float rowStartY = 232.f + 58.f + 40.f;
+                        float rowH = 56.f;
+                        if (mousePos.x >= leftColX && mousePos.x <= leftColX + leftColW &&
+                            mousePos.y >= rowStartY && mousePos.y <= rowStartY + 10 * rowH) {
+                            int clickedVisualRow = static_cast<int>((mousePos.y - rowStartY) / rowH);
+                            std::string q = genreSearchInput ? genreSearchInput->getText() : "";
+                            std::transform(q.begin(), q.end(), q.begin(), ::tolower);
+
+                            std::vector<int> visibleIndices;
+                            for (size_t i = 0; i < genreList.size(); ++i) {
+                                if (!q.empty()) {
+                                    std::string cLow = genreList[i].first;
+                                    std::string nLow = genreList[i].second;
+                                    std::transform(cLow.begin(), cLow.end(), cLow.begin(), ::tolower);
+                                    std::transform(nLow.begin(), nLow.end(), nLow.begin(), ::tolower);
+                                    if (cLow.find(q) == std::string::npos && nLow.find(q) == std::string::npos) {
+                                        continue;
+                                    }
+                                }
+                                visibleIndices.push_back(static_cast<int>(i));
+                            }
+                            if (!genreSortAsc) {
+                                std::reverse(visibleIndices.begin(), visibleIndices.end());
+                            }
+
+                            if (clickedVisualRow >= 0 && clickedVisualRow < static_cast<int>(visibleIndices.size())) {
+                                int actualIdx = visibleIndices[clickedVisualRow];
+                                selectedGenreRowIdx = actualIdx;
+                                std::string gId = genreList[actualIdx].first;
+                                inputGenreId->setText(gId);
+                                inputGenreName->setText(genreList[actualIdx].second);
+                                int colIdx = genreColorMap.count(gId) ? genreColorMap[gId] : actualIdx;
+                                selectedGenreColorIdx = colIdx % 5;
                             }
                         }
                     }
@@ -2046,6 +2499,20 @@ void CinemaUIApp::update(float dt) {
     if (currentTab == ActiveTab::Dashboard && dashboardSlider) {
         dashboardSlider->update(dt);
     }
+
+    if (currentTab == ActiveTab::Movies) {
+        if (movieSearchInput) movieSearchInput->update(dt);
+        if (inputMovieId) inputMovieId->update(dt);
+        if (inputMovieTitle) inputMovieTitle->update(dt);
+        if (inputMovieDuration) inputMovieDuration->update(dt);
+        if (inputMovieReleaseDate) inputMovieReleaseDate->update(dt);
+        if (inputMovieAgeRating) inputMovieAgeRating->update(dt);
+        if (inputMovieGenre) inputMovieGenre->update(dt);
+        if (inputMoviePoster) inputMoviePoster->update(dt);
+        if (inputMovieDesc) inputMovieDesc->update(dt);
+        if (inputGenreId) inputGenreId->update(dt);
+        if (inputGenreName) inputGenreName->update(dt);
+    }
 }
 
 void CinemaUIApp::render() {
@@ -2145,8 +2612,8 @@ void CinemaUIApp::renderLoginView() {
     float cardX = (1728.f - cardW) / 2.0f; // 354.f (Centered)
     float cardY = (972.f - cardH) / 2.0f;  // 206.f (Centered)
     float leftW = 420.f;
-    float rightX = cardX + leftW + 45.f;   // 819.f
-    float rightW = cardW - leftW - 90.f;   // 510.f
+    float rightW = 520.f;
+    float rightX = cardX + leftW + (cardW - leftW - rightW) / 2.0f; // 814.f (Centered in right panel)
 
     // 2. Drop shadow behind the card
     RoundedRectRenderer::render(
@@ -2202,10 +2669,10 @@ void CinemaUIApp::renderLoginView() {
     // ==========================================
     float leftCenterX = cardX + leftW / 2.0f;
 
-    // 1. Logo Badge (Rounded Square with CINEMA logo)
-    float badgeSize = 100.f;
+    // 1. Logo Badge (Rounded Square with CINESTAR logo - unchanged)
+    float badgeSize = 110.f;
     float badgeX = leftCenterX - badgeSize / 2.0f;
-    float badgeY = cardY + 76.f;
+    float badgeY = cardY + 68.f;
 
     // Drop shadow behind logo badge
     RoundedRectRenderer::render(
@@ -2226,153 +2693,212 @@ void CinemaUIApp::renderLoginView() {
         sf::Color(2, 132, 199)
     );
 
-    // Vector Cinema Projector & Camera Icon
-    sf::RectangleShape camBody(sf::Vector2f(34.f, 22.f));
-    camBody.setPosition(badgeX + 26.f, badgeY + 28.f);
-    camBody.setFillColor(sf::Color(2, 132, 199));
-    window.draw(camBody);
+    if (cinemaLogoTexture.getSize().x > 0 && cinemaLogoTexture.getSize().y > 0) {
+        sf::Vector2u texSz = cinemaLogoTexture.getSize();
+        // Crop tightly around the central camera + curved CINESTAR logo
+        int cropX = static_cast<int>(texSz.x * 0.24f);
+        int cropY = static_cast<int>(texSz.y * 0.23f);
+        int cropW = static_cast<int>(texSz.x * 0.52f);
+        int cropH = static_cast<int>(texSz.y * 0.52f);
+        cinemaLogoSprite.setTextureRect(sf::IntRect(cropX, cropY, cropW, cropH));
+        float targetSize = 88.f;
+        cinemaLogoSprite.setScale(
+            targetSize / static_cast<float>(cropW),
+            targetSize / static_cast<float>(cropH)
+        );
+        cinemaLogoSprite.setPosition(
+            badgeX + (badgeSize - targetSize) / 2.0f,
+            badgeY + (badgeSize - targetSize) / 2.0f
+        );
+        window.draw(cinemaLogoSprite);
+    }
 
-    sf::ConvexShape camCone(3);
-    camCone.setPoint(0, sf::Vector2f(badgeX + 60.f, badgeY + 33.f));
-    camCone.setPoint(1, sf::Vector2f(badgeX + 74.f, badgeY + 26.f));
-    camCone.setPoint(2, sf::Vector2f(badgeX + 74.f, badgeY + 44.f));
-    camCone.setFillColor(sf::Color(2, 132, 199));
-    window.draw(camCone);
+    // 2. Pill Badge: 🔑 CỔNG ĐIỀU HÀNH CỤM RẠP (perfectly centered icon + text)
+    sf::Text pillText;
+    pillText.setFont(Theme::FontPrimary);
+    pillText.setCharacterSize(13);
+    pillText.setStyle(sf::Text::Bold);
+    pillText.setFillColor(sf::Color(3, 105, 161));
+    pillText.setString(toSfString("CỔNG ĐIỀU HÀNH CỤM RẠP"));
+    sf::FloatRect ptB = pillText.getLocalBounds();
 
-    sf::CircleShape reel1(7.f);
-    reel1.setPosition(badgeX + 28.f, badgeY + 16.f);
-    reel1.setFillColor(sf::Color(15, 23, 42));
-    window.draw(reel1);
-    sf::CircleShape reel1Dot(2.5f);
-    reel1Dot.setPosition(badgeX + 32.5f, badgeY + 20.5f);
-    reel1Dot.setFillColor(sf::Color::White);
-    window.draw(reel1Dot);
-
-    sf::CircleShape reel2(7.f);
-    reel2.setPosition(badgeX + 44.f, badgeY + 16.f);
-    reel2.setFillColor(sf::Color(15, 23, 42));
-    window.draw(reel2);
-    sf::CircleShape reel2Dot(2.5f);
-    reel2Dot.setPosition(badgeX + 48.5f, badgeY + 20.5f);
-    reel2Dot.setFillColor(sf::Color::White);
-    window.draw(reel2Dot);
-
-    // Text "CINEMA" inside logo badge
-    sf::Text logoText;
-    logoText.setFont(Theme::FontPrimary);
-    logoText.setCharacterSize(14);
-    logoText.setStyle(sf::Text::Bold);
-    logoText.setFillColor(sf::Color(2, 132, 199));
-    logoText.setString("CINEMA");
-    sf::FloatRect ltB = logoText.getLocalBounds();
-    logoText.setPosition(badgeX + (badgeSize - ltB.width) / 2.0f - ltB.left, badgeY + 62.f);
-    window.draw(logoText);
-
-    // 2. Pill Badge: 🔑 CỔNG ĐIỀU HÀNH CỤM RẠP
-    float pillW = 224.f;
-    float pillH = 30.f;
-    float pillX = leftCenterX - pillW / 2.0f;
-    float pillY = cardY + 204.f;
+    float iconW = 16.f;
+    float iconGap = 9.f;
+    float groupW = iconW + iconGap + ptB.width;
+    float pillW = groupW + 38.f;
+    float pillH = 34.f;
+    float pillX = std::round(leftCenterX - pillW / 2.0f);
+    float pillY = cardY + 206.f;
 
     RoundedRectRenderer::render(
         window,
         sf::Vector2f(pillX, pillY),
         sf::Vector2f(pillW, pillH),
-        15.f,
+        17.f,
         sf::Color(224, 242, 254)
     );
 
+    float groupStartX = std::round(pillX + (pillW - groupW) / 2.0f);
     // Key icon inside pill
-    sf::CircleShape keyPill(4.f);
-    keyPill.setPosition(pillX + 16.f, pillY + 9.5f);
+    sf::CircleShape keyPill(4.5f);
+    keyPill.setPosition(groupStartX, pillY + (pillH - 9.f) / 2.0f);
     keyPill.setFillColor(sf::Color(2, 132, 199));
     window.draw(keyPill);
 
-    sf::RectangleShape keyPillStem(sf::Vector2f(8.f, 2.5f));
-    keyPillStem.setPosition(pillX + 22.f, pillY + 12.5f);
+    sf::RectangleShape keyPillStem(sf::Vector2f(8.5f, 2.5f));
+    keyPillStem.setPosition(groupStartX + 6.5f, pillY + (pillH - 2.5f) / 2.0f);
     keyPillStem.setFillColor(sf::Color(2, 132, 199));
     window.draw(keyPillStem);
 
-    sf::Text pillText;
-    pillText.setFont(Theme::FontPrimary);
-    pillText.setCharacterSize(12);
-    pillText.setStyle(sf::Text::Bold);
-    pillText.setFillColor(sf::Color(3, 105, 161));
-    pillText.setString(toSfString("CỔNG ĐIỀU HÀNH CỤM RẠP"));
-    pillText.setPosition(pillX + 38.f, pillY + 6.f);
+    pillText.setPosition(
+        std::round(groupStartX + iconW + iconGap - ptB.left),
+        std::round(pillY + (pillH - ptB.height) / 2.0f - ptB.top)
+    );
     window.draw(pillText);
 
-    // 3. Brand Text: CINEMA (Clean, bold title)
+    // 3. Brand Text: CINESTAR & Subtitle centered in the middle
     sf::Text brandText;
     brandText.setFont(Theme::FontCinema);
-    brandText.setCharacterSize(52);
+    brandText.setCharacterSize(54);
     brandText.setStyle(sf::Text::Bold);
     brandText.setFillColor(sf::Color(15, 23, 42));
-    brandText.setString("CINEMA");
+    brandText.setString("CINESTAR");
     sf::FloatRect b1 = brandText.getLocalBounds();
-    brandText.setPosition(leftCenterX - b1.width / 2.0f - b1.left, cardY + 262.f);
+    brandText.setPosition(
+        std::round(leftCenterX - (b1.left + b1.width / 2.0f)),
+        cardY + 262.f
+    );
     window.draw(brandText);
 
     sf::Text brandSub;
     brandSub.setFont(Theme::FontPrimary);
-    brandSub.setCharacterSize(13);
+    brandSub.setCharacterSize(14);
     brandSub.setStyle(sf::Text::Bold);
-    brandSub.setFillColor(sf::Color(71, 85, 105));
+    brandSub.setFillColor(sf::Color(110, 124, 142));
     brandSub.setString(toSfString("HỆ THỐNG QUẢN LÝ RẠP CHIẾU PHIM"));
     sf::FloatRect bs = brandSub.getLocalBounds();
-    brandSub.setPosition(leftCenterX - bs.width / 2.0f - bs.left, cardY + 332.f);
+    brandSub.setPosition(
+        std::round(leftCenterX - (bs.left + bs.width / 2.0f)),
+        cardY + 340.f
+    );
     window.draw(brandSub);
 
-    // 4. Bottom Security Shield Badge Card
-    float secW = 340.f;
-    float secH = 50.f;
-    float secX = leftCenterX - secW / 2.0f;
-    float secY = cardY + 472.f;
+    // 4. Bottom Security Shield Badge Card (matching reference image)
+    float secW = 364.f;
+    float secH = 72.f;
+    float secX = std::round(leftCenterX - secW / 2.0f);
+    float secY = cardY + 448.f;
 
     RoundedRectRenderer::render(
         window,
         sf::Vector2f(secX, secY),
         sf::Vector2f(secW, secH),
-        10.f,
+        16.f,
         sf::Color(255, 255, 255),
-        1.f,
-        sf::Color(186, 230, 253)
+        1.5f,
+        sf::Color(210, 236, 252)
     );
 
-    // Shield Icon
-    sf::ConvexShape shield(5);
-    shield.setPoint(0, sf::Vector2f(secX + 22.f, secY + 14.f));
-    shield.setPoint(1, sf::Vector2f(secX + 32.f, secY + 14.f));
-    shield.setPoint(2, sf::Vector2f(secX + 32.f, secY + 26.f));
-    shield.setPoint(3, sf::Vector2f(secX + 27.f, secY + 34.f));
-    shield.setPoint(4, sf::Vector2f(secX + 22.f, secY + 26.f));
-    shield.setFillColor(sf::Color(2, 132, 199));
-    window.draw(shield);
+    // Soft ice-blue rounded square icon container on the left
+    float iconBoxSize = 40.f;
+    float iconBoxX = secX + 16.f;
+    float iconBoxY = std::round(secY + (secH - iconBoxSize) / 2.0f);
+    sf::Color iconBoxBg(235, 248, 255);
+    RoundedRectRenderer::render(
+        window,
+        sf::Vector2f(iconBoxX, iconBoxY),
+        sf::Vector2f(iconBoxSize, iconBoxSize),
+        10.f,
+        iconBoxBg,
+        1.f,
+        sf::Color(205, 234, 254)
+    );
 
-    // Inner checkmark for shield
-    sf::VertexArray sTick(sf::LinesStrip, 3);
-    sTick[0].position = sf::Vector2f(secX + 24.5f, secY + 22.f);
-    sTick[1].position = sf::Vector2f(secX + 26.5f, secY + 25.f);
-    sTick[2].position = sf::Vector2f(secX + 30.f, secY + 19.f);
-    sTick[0].color = sf::Color(255, 255, 255);
-    sTick[1].color = sf::Color(255, 255, 255);
-    sTick[2].color = sf::Color(255, 255, 255);
-    window.draw(sTick);
+    // 16x Supersampled Smooth Shield + Checkmark Icon Texture
+    static sf::Texture shieldTex;
+    static bool shieldTexReady = false;
+    if (!shieldTexReady) {
+        const int texS = 40;
+        sf::Image shImg;
+        shImg.create(texS, texS, sf::Color(235, 248, 255, 0));
+
+        auto inShield = [](float x, float y, float sc) -> bool {
+            x /= sc;
+            y /= sc;
+            float yTop = -10.2f + 0.042f * x * x;
+            if (y < yTop || y > 11.2f) return false;
+            float maxW = 9.4f;
+            if (y > -6.5f) {
+                float t = (y + 6.5f) / (11.2f + 6.5f);
+                if (t > 1.f) return false;
+                maxW = 9.4f * std::pow(std::max(0.f, 1.f - t * t), 0.58f);
+            }
+            return std::fabs(x) <= maxW;
+        };
+
+        auto distSeg = [](float px, float py, float ax, float ay, float bx, float by) -> float {
+            float vx = bx - ax, vy = by - ay;
+            float wx = px - ax, wy = py - ay;
+            float c1 = vx * wx + vy * wy;
+            if (c1 <= 0.f) return std::sqrt(wx * wx + wy * wy);
+            float c2 = vx * vx + vy * vy;
+            if (c2 <= c1) return std::sqrt((px - bx) * (px - bx) + (py - by) * (py - by));
+            float b = c1 / c2;
+            float pbx = ax + b * vx, pby = ay + b * vy;
+            return std::sqrt((px - pbx) * (px - pbx) + (py - pby) * (py - pby));
+        };
+
+        for (int py = 0; py < texS; ++py) {
+            for (int px = 0; px < texS; ++px) {
+                int hits = 0;
+                for (int sy = 0; sy < 4; ++sy) {
+                    for (int sx = 0; sx < 4; ++sx) {
+                        float fx = (px + (sx + 0.5f) * 0.25f) - texS * 0.5f;
+                        float fy = (py + (sy + 0.5f) * 0.25f) - texS * 0.5f;
+                        bool stroke = inShield(fx, fy, 1.0f) && !inShield(fx, fy, 0.78f);
+                        float d1 = distSeg(fx, fy, -3.6f, 0.2f, -1.0f, 2.8f);
+                        float d2 = distSeg(fx, fy, -1.0f, 2.8f,  4.0f, -2.4f);
+                        bool check = (d1 <= 1.05f || d2 <= 1.05f);
+                        if (stroke || check) hits++;
+                    }
+                }
+                if (hits > 0) {
+                    sf::Uint8 alpha = static_cast<sf::Uint8>((hits * 255) / 16);
+                    shImg.setPixel(px, py, sf::Color(2, 132, 199, alpha));
+                }
+            }
+        }
+        shieldTex.loadFromImage(shImg);
+        shieldTex.setSmooth(true);
+        shieldTexReady = true;
+    }
+
+    sf::Sprite shieldSpr(shieldTex);
+    shieldSpr.setPosition(iconBoxX, iconBoxY);
+    window.draw(shieldSpr);
+
+    float secTextX = iconBoxX + iconBoxSize + 14.f;
+    float maxSecTextW = secW - (secTextX - secX) - 16.f;
 
     sf::Text secText1;
     secText1.setFont(Theme::FontPrimary);
-    secText1.setCharacterSize(11);
+    secText1.setCharacterSize(13);
     secText1.setFillColor(sf::Color(100, 116, 139));
-    secText1.setString(toSfString("Hệ thống bảo mật nội bộ dành cho cán"));
-    secText1.setPosition(secX + 42.f, secY + 9.f);
+    secText1.setString(toSfString("Hệ thống bảo mật nội bộ dành cho cán bộ &"));
+    sf::FloatRect st1B = secText1.getLocalBounds();
+    if (st1B.width > maxSecTextW && st1B.width > 0.f) {
+        secText1.setScale(maxSecTextW / st1B.width, 1.f);
+    }
+    secText1.setPosition(std::round(secTextX), std::round(secY + 17.f));
     window.draw(secText1);
 
     sf::Text secText2;
     secText2.setFont(Theme::FontPrimary);
-    secText2.setCharacterSize(11);
+    secText2.setCharacterSize(13);
     secText2.setFillColor(sf::Color(100, 116, 139));
-    secText2.setString(toSfString("bộ & nhân viên quản trị Cinema"));
-    secText2.setPosition(secX + 42.f, secY + 25.f);
+    secText2.setString(toSfString("nhân viên quản trị Cinestar"));
+    secText2.setScale(secText1.getScale());
+    secText2.setPosition(std::round(secTextX), std::round(secY + 38.f));
     window.draw(secText2);
 
     // ==========================================
@@ -2382,72 +2908,72 @@ void CinemaUIApp::renderLoginView() {
     // 1. Heading
     sf::Text rTitle;
     rTitle.setFont(Theme::FontPrimary);
-    rTitle.setCharacterSize(26);
+    rTitle.setCharacterSize(30);
     rTitle.setStyle(sf::Text::Bold);
     rTitle.setFillColor(sf::Color(15, 23, 42));
     rTitle.setString(toSfString("Đăng nhập hệ thống"));
-    rTitle.setPosition(rightX, cardY + 52.f);
+    rTitle.setPosition(rightX, cardY + 70.f);
     window.draw(rTitle);
 
     sf::Text rSub;
     rSub.setFont(Theme::FontPrimary);
-    rSub.setCharacterSize(13);
+    rSub.setCharacterSize(15);
     rSub.setFillColor(sf::Color(100, 116, 139));
     rSub.setString(toSfString("Vui lòng xác thực tài khoản được cấp quyền quản trị cụm rạp"));
-    rSub.setPosition(rightX, cardY + 94.f);
+    rSub.setPosition(rightX, cardY + 114.f);
     window.draw(rSub);
 
     // 2. Field 1: TÀI KHOẢN NHÂN SỰ
-    sf::RectangleShape idIconBg(sf::Vector2f(14.f, 12.f));
-    idIconBg.setPosition(rightX, cardY + 148.f);
+    sf::RectangleShape idIconBg(sf::Vector2f(15.f, 13.f));
+    idIconBg.setPosition(rightX, cardY + 170.f);
     idIconBg.setFillColor(sf::Color(2, 132, 199));
     window.draw(idIconBg);
 
     sf::Text idLabel;
     idLabel.setFont(Theme::FontPrimary);
-    idLabel.setCharacterSize(12);
+    idLabel.setCharacterSize(14);
     idLabel.setStyle(sf::Text::Bold);
     idLabel.setFillColor(sf::Color(71, 85, 105));
     idLabel.setString(toSfString("TÀI KHOẢN NHÂN SỰ"));
-    idLabel.setPosition(rightX + 20.f, cardY + 146.f);
+    idLabel.setPosition(rightX + 22.f, cardY + 166.f);
     window.draw(idLabel);
 
     if (loginInputUser) {
         loginInputUser->draw(window);
-        // Sharp inside user avatar icon 👤
-        float uIconX = rightX + 16.f;
-        float uIconY = cardY + 170.f + 15.f;
+        // Sharp inside user avatar icon 👤 (centered vertically inside 54px box)
+        float uIconX = rightX + 18.f;
+        float uIconY = cardY + 196.f + 19.f;
 
-        sf::CircleShape uRing(8.f);
-        uRing.setOrigin(8.f, 8.f);
+        sf::CircleShape uRing(9.f);
+        uRing.setOrigin(9.f, 9.f);
         uRing.setPosition(uIconX + 8.f, uIconY + 8.f);
         uRing.setFillColor(sf::Color::Transparent);
         uRing.setOutlineThickness(1.5f);
         uRing.setOutlineColor(sf::Color(148, 163, 184));
         window.draw(uRing);
 
-        sf::CircleShape uHead(2.5f);
-        uHead.setOrigin(2.5f, 2.5f);
+        sf::CircleShape uHead(2.8f);
+        uHead.setOrigin(2.8f, 2.8f);
         uHead.setPosition(uIconX + 8.f, uIconY + 5.f);
         uHead.setFillColor(sf::Color(148, 163, 184));
         window.draw(uHead);
 
-        sf::CircleShape uBody(4.f);
-        uBody.setOrigin(4.f, 4.f);
+        sf::CircleShape uBody(4.5f);
+        uBody.setOrigin(4.5f, 4.5f);
         uBody.setScale(1.f, 0.5f);
-        uBody.setPosition(uIconX + 8.f, uIconY + 11.5f);
+        uBody.setPosition(uIconX + 8.f, uIconY + 12.f);
         uBody.setFillColor(sf::Color(148, 163, 184));
         window.draw(uBody);
     }
 
     // 3. Field 2: MẬT KHẨU TRUY CẬP
-    sf::RectangleShape lockBody(sf::Vector2f(12.f, 9.f));
-    lockBody.setPosition(rightX, cardY + 240.f);
+    sf::RectangleShape lockBody(sf::Vector2f(13.f, 10.f));
+    lockBody.setPosition(rightX, cardY + 274.f);
     lockBody.setFillColor(sf::Color(2, 132, 199));
     window.draw(lockBody);
 
-    sf::CircleShape lockShackle(3.5f);
-    lockShackle.setPosition(rightX + 2.5f, cardY + 236.f);
+    sf::CircleShape lockShackle(4.f);
+    lockShackle.setPosition(rightX + 2.5f, cardY + 269.f);
     lockShackle.setFillColor(sf::Color::Transparent);
     lockShackle.setOutlineThickness(1.5f);
     lockShackle.setOutlineColor(sf::Color(2, 132, 199));
@@ -2455,34 +2981,34 @@ void CinemaUIApp::renderLoginView() {
 
     sf::Text passLabel;
     passLabel.setFont(Theme::FontPrimary);
-    passLabel.setCharacterSize(12);
+    passLabel.setCharacterSize(14);
     passLabel.setStyle(sf::Text::Bold);
     passLabel.setFillColor(sf::Color(71, 85, 105));
     passLabel.setString(toSfString("MẬT KHẨU TRUY CẬP"));
-    passLabel.setPosition(rightX + 20.f, cardY + 238.f);
+    passLabel.setPosition(rightX + 22.f, cardY + 270.f);
     window.draw(passLabel);
 
     if (loginInputPass) {
         loginInputPass->draw(window);
-        // Sharp inside key icon 🔑
-        float kIconX = rightX + 16.f;
-        float kIconY = cardY + 262.f + 15.f;
+        // Sharp inside key icon 🔑 (centered vertically inside 54px box)
+        float kIconX = rightX + 18.f;
+        float kIconY = cardY + 300.f + 21.f;
 
-        sf::CircleShape kHead(4.f);
-        kHead.setOrigin(4.f, 4.f);
+        sf::CircleShape kHead(4.5f);
+        kHead.setOrigin(4.5f, 4.5f);
         kHead.setPosition(kIconX + 6.f, kIconY + 6.f);
         kHead.setFillColor(sf::Color::Transparent);
         kHead.setOutlineThickness(1.5f);
         kHead.setOutlineColor(sf::Color(148, 163, 184));
         window.draw(kHead);
 
-        sf::RectangleShape kStem(sf::Vector2f(8.f, 2.f));
-        kStem.setPosition(kIconX + 10.f, kIconY + 5.f);
+        sf::RectangleShape kStem(sf::Vector2f(9.f, 2.f));
+        kStem.setPosition(kIconX + 10.5f, kIconY + 5.f);
         kStem.setFillColor(sf::Color(148, 163, 184));
         window.draw(kStem);
 
-        sf::RectangleShape kTooth(sf::Vector2f(2.f, 3.5f));
-        kTooth.setPosition(kIconX + 16.f, kIconY + 6.f);
+        sf::RectangleShape kTooth(sf::Vector2f(2.f, 4.f));
+        kTooth.setPosition(kIconX + 17.f, kIconY + 6.f);
         kTooth.setFillColor(sf::Color(148, 163, 184));
         window.draw(kTooth);
     }
@@ -2501,11 +3027,11 @@ void CinemaUIApp::renderLoginView() {
     if (!loginErrorMsg.empty()) {
         sf::Text errText;
         errText.setFont(Theme::FontPrimary);
-        errText.setCharacterSize(13);
+        errText.setCharacterSize(14);
         errText.setStyle(sf::Text::Bold);
         errText.setFillColor(sf::Color(220, 38, 38));
         errText.setString(toSfString(loginErrorMsg));
-        errText.setPosition(rightX, cardY + 430.f);
+        errText.setPosition(rightX, cardY + 482.f);
         window.draw(errText);
     }
 }
@@ -3009,128 +3535,449 @@ void CinemaUIApp::renderDashboardView() {
 
 void CinemaUIApp::renderMoviesView() {
     float contentAreaW = 1728.f - sidebarWidth;
-    float contentAreaH = 972.f - topbarHeight;
 
-    // 1. Soft grey canvas background matching reference
-    sf::RectangleShape mBg(sf::Vector2f(contentAreaW, contentAreaH));
-    mBg.setPosition(sidebarWidth, topbarHeight);
-    mBg.setFillColor(sf::Color(241, 245, 249)); // #f1f5f9
+    // 1. Soft slate-white canvas background (#f8fafc) matching reference
+    sf::RectangleShape mBg(sf::Vector2f(contentAreaW, 972.f));
+    mBg.setPosition(sidebarWidth, 0.f);
+    mBg.setFillColor(sf::Color(248, 250, 252));
     window.draw(mBg);
 
-    // 2. Top Header Bar (Dark Navy matching target image)
-    sf::RectangleShape topBar(sf::Vector2f(contentAreaW, topbarHeight));
-    topBar.setPosition(sidebarWidth, 0.f);
-    topBar.setFillColor(sf::Color(15, 23, 42)); // Dark Navy #0f172a
-    window.draw(topBar);
+    // 2. Top Utility Strip (White bar with hub breadcrumb & server online badge)
+    sf::RectangleShape topStrip(sf::Vector2f(contentAreaW, 44.f));
+    topStrip.setPosition(sidebarWidth, 0.f);
+    topStrip.setFillColor(sf::Color::White);
+    window.draw(topStrip);
+
+    sf::RectangleShape topStripLine(sf::Vector2f(contentAreaW, 1.f));
+    topStripLine.setPosition(sidebarWidth, 44.f);
+    topStripLine.setFillColor(sf::Color(226, 232, 240));
+    window.draw(topStripLine);
+
+    sf::Text hubTxt;
+    hubTxt.setFont(Theme::FontPrimary);
+    hubTxt.setCharacterSize(13);
+    hubTxt.setStyle(sf::Text::Bold);
+    hubTxt.setFillColor(sf::Color(30, 41, 59));
+    hubTxt.setString(toSfString("Cinestar Quốc Thanh (Hub 01)  /  Cụm Rạp Trung Tâm"));
+    hubTxt.setPosition(sidebarWidth + 24.f, 13.f);
+    window.draw(hubTxt);
+
+    // Server Online pill on top right
+    RoundedRectRenderer::render(window, sf::Vector2f(1728.f - 185.f, 9.f), sf::Vector2f(125.f, 26.f), 13.f, sf::Color(240, 253, 244), 1.f, sf::Color(187, 247, 208));
+    sf::CircleShape onlineDot(4.f);
+    onlineDot.setFillColor(sf::Color(22, 163, 74));
+    onlineDot.setPosition(1728.f - 173.f, 18.f);
+    window.draw(onlineDot);
+
+    sf::Text onlineTxt;
+    onlineTxt.setFont(Theme::FontPrimary);
+    onlineTxt.setCharacterSize(12);
+    onlineTxt.setStyle(sf::Text::Bold);
+    onlineTxt.setFillColor(sf::Color(21, 128, 61));
+    onlineTxt.setString(toSfString("Máy chủ: Online"));
+    onlineTxt.setPosition(1728.f - 160.f, 14.f);
+    window.draw(onlineTxt);
+
+    // User avatar circle on top right
+    sf::CircleShape userAv(14.f);
+    userAv.setFillColor(sf::Color(3, 105, 161));
+    userAv.setPosition(1728.f - 48.f, 8.f);
+    window.draw(userAv);
+
+    // 3. Main Page Heading (Breadcrumb removed as requested)
+    float leftColX = sidebarWidth + 24.f;
+    float leftColW = 928.f;
+    float rightColX = sidebarWidth + 968.f;
+    float rightColW = 486.f;
 
     sf::Text hTitle;
     hTitle.setFont(Theme::FontPrimary);
-    hTitle.setCharacterSize(20);
+    hTitle.setCharacterSize(24);
     hTitle.setStyle(sf::Text::Bold);
-    hTitle.setFillColor(sf::Color::White);
+    hTitle.setFillColor(sf::Color(15, 23, 42));
     hTitle.setString(toSfString("QUẢN LÝ PHIM & THỂ LOẠI"));
-    hTitle.setPosition(sidebarWidth + 24.f, 13.f);
+    hTitle.setPosition(leftColX, 62.f);
     window.draw(hTitle);
 
     sf::Text hSub;
     hSub.setFont(Theme::FontPrimary);
     hSub.setCharacterSize(13);
-    hSub.setFillColor(sf::Color(148, 163, 184)); // #94a3b8
-    hSub.setString(toSfString("Quản lý danh sách phim, thông tin chi tiết và danh mục thể loại"));
-    hSub.setPosition(sidebarWidth + 24.f, 38.f);
+    hSub.setFillColor(sf::Color(100, 116, 139));
+    hSub.setString(toSfString("Quản lý danh sách phim, thông số kiểm duyệt, thông tin chi tiết và danh mục phân loại chiếu rạp"));
+    hSub.setPosition(leftColX, 96.f);
     window.draw(hSub);
 
-    // 3. Sub-tabs Bar
-    float leftColX = sidebarWidth + 20.f;
-    float leftColW = 920.f;
-    float rightColX = sidebarWidth + 960.f;
-    float rightColW = 494.f;
+    // 4. Four Status Summary Pills
+    int todayKey = 0;
+    DateFormat::todayDateKey(todayKey);
+    int nowShowingCount = 0;
+    int comingSoonCount = 0;
+    for (const auto& m : movieList) {
+        int rKey = DateFormat::dateKey(DateFormat::normalizeDate(m.getNgayKhoiChieu()));
+        if (todayKey > 0 && rKey > todayKey) comingSoonCount++;
+        else nowShowingCount++;
+    }
+
+    auto drawStatPill = [&](float px, float py, float pw, const std::string& label, sf::Color bgCol, sf::Color borderCol, sf::Color txtCol, sf::Color dotCol, bool hasDot) {
+        RoundedRectRenderer::render(window, sf::Vector2f(px, py), sf::Vector2f(pw, 30.f), 8.f, bgCol, 1.f, borderCol);
+        float textOffsetX = px + 12.f;
+        if (hasDot) {
+            sf::CircleShape d(4.f);
+            d.setFillColor(dotCol);
+            d.setPosition(px + 12.f, py + 11.f);
+            window.draw(d);
+            textOffsetX = px + 24.f;
+        }
+        sf::Text pt;
+        pt.setFont(Theme::FontPrimary);
+        pt.setCharacterSize(13);
+        pt.setStyle(sf::Text::Bold);
+        pt.setFillColor(txtCol);
+        pt.setString(toSfString(label));
+        pt.setPosition(textOffsetX, py + 6.f);
+        window.draw(pt);
+    };
+
+    float pillY = 134.f;
+    drawStatPill(leftColX, pillY, 135.f, "Tổng số: " + std::to_string(movieList.size()) + " phim", sf::Color(241, 245, 249), sf::Color(226, 232, 240), sf::Color(15, 23, 42), sf::Color(3, 105, 161), true);
+    drawStatPill(leftColX + 145.f, pillY, 130.f, "Đang chiếu: " + std::to_string(nowShowingCount), sf::Color(241, 245, 249), sf::Color(226, 232, 240), sf::Color(15, 23, 42), sf::Color(3, 105, 161), true);
+    drawStatPill(leftColX + 285.f, pillY, 125.f, "Sắp chiếu: " + std::to_string(comingSoonCount), sf::Color(241, 245, 249), sf::Color(226, 232, 240), sf::Color(15, 23, 42), sf::Color(71, 85, 105), true);
+    drawStatPill(leftColX + 420.f, pillY, 145.f, "CMS: Trực tuyến", sf::Color(220, 252, 231), sf::Color(187, 247, 208), sf::Color(21, 128, 61), sf::Color(22, 163, 74), true);
+
+    // 5. Sub-tabs Bar (y = 180.f, height = 40.f, matching reference image)
+    float tabW = 205.f;
+    float tabH = 40.f;
+    float tabY = 180.f;
+    float tab1X = leftColX;
+    float tab2X = leftColX + 215.f;
+
+    RoundedRectRenderer::render(
+        window,
+        sf::Vector2f(tab1X, tabY),
+        sf::Vector2f(tabW, tabH),
+        10.f,
+        (movieSubTab == 0) ? sf::Color::White : sf::Color(248, 250, 252),
+        1.5f,
+        (movieSubTab == 0) ? sf::Color(2, 132, 199) : sf::Color(226, 232, 240)
+    );
+    RoundedRectRenderer::render(
+        window,
+        sf::Vector2f(tab2X, tabY),
+        sf::Vector2f(tabW + 15.f, tabH),
+        10.f,
+        (movieSubTab == 1) ? sf::Color::White : sf::Color(248, 250, 252),
+        1.5f,
+        (movieSubTab == 1) ? sf::Color(2, 132, 199) : sf::Color(226, 232, 240)
+    );
 
     if (btnSubTabMovies) btnSubTabMovies->draw(window);
-    if (btnSubTabGenres) btnSubTabGenres->draw(window);
-
-    // Active Tab Underline Indicator
-    sf::RectangleShape activeBar;
-    if (movieSubTab == 0) {
-        activeBar.setPosition(leftColX + 4.f, 108.f);
-        activeBar.setSize(sf::Vector2f(115.f, 3.f));
-    } else {
-        activeBar.setPosition(leftColX + 145.f, 108.f);
-        activeBar.setSize(sf::Vector2f(135.f, 3.f));
+    if (btnSubTabGenres) {
+        btnSubTabGenres->setSize(sf::Vector2f(tabW + 15.f, tabH));
+        btnSubTabGenres->draw(window);
     }
-    activeBar.setFillColor(sf::Color(2, 132, 199)); // Cyan/Blue #0284c7
-    window.draw(activeBar);
 
-    // 4. LEFT CARD: White Table Card
-    float cardY = 120.f;
-    float cardH = 824.f;
+    // Tab 1: "Quản lý Phim" + [07] badge centered together
+    sf::Text tab1Txt;
+    tab1Txt.setFont(Theme::FontPrimary);
+    tab1Txt.setCharacterSize(15);
+    tab1Txt.setStyle(sf::Text::Bold);
+    tab1Txt.setFillColor((movieSubTab == 0) ? sf::Color(2, 132, 199) : sf::Color(100, 116, 139));
+    tab1Txt.setString(toSfString("Quản lý Phim"));
+    sf::FloatRect t1Bounds = tab1Txt.getLocalBounds();
+
+    float badgeW = 30.f;
+    float badgeH = 22.f;
+    float groupGap = 8.f;
+    float totalGroupW = t1Bounds.width + groupGap + badgeW;
+    float groupStartX = tab1X + (tabW - totalGroupW) / 2.f;
+
+    tab1Txt.setPosition(
+        std::round(groupStartX - t1Bounds.left),
+        std::round(tabY + (tabH - t1Bounds.height) / 2.f - t1Bounds.top)
+    );
+    window.draw(tab1Txt);
+
+    float badgeX = std::round(groupStartX + t1Bounds.width + groupGap);
+    float badgeY = std::round(tabY + (tabH - badgeH) / 2.f);
+    RoundedRectRenderer::render(
+        window,
+        sf::Vector2f(badgeX, badgeY),
+        sf::Vector2f(badgeW, badgeH),
+        11.f,
+        (movieSubTab == 0) ? sf::Color(2, 132, 199) : sf::Color(226, 232, 240)
+    );
+
+    sf::Text cntBadge;
+    cntBadge.setFont(Theme::FontPrimary);
+    cntBadge.setCharacterSize(12);
+    cntBadge.setStyle(sf::Text::Bold);
+    cntBadge.setFillColor((movieSubTab == 0) ? sf::Color::White : sf::Color(71, 85, 105));
+    std::ostringstream cntOss;
+    cntOss << std::setw(2) << std::setfill('0') << movieList.size();
+    cntBadge.setString(cntOss.str());
+    sf::FloatRect cbBounds = cntBadge.getLocalBounds();
+    cntBadge.setPosition(
+        std::round(badgeX + (badgeW - cbBounds.width) / 2.f - cbBounds.left),
+        std::round(badgeY + (badgeH - cbBounds.height) / 2.f - cbBounds.top)
+    );
+    window.draw(cntBadge);
+
+    // Tab 2: "Quản lý Thể loại" + [09] badge centered together
+    sf::Text tab2Txt;
+    tab2Txt.setFont(Theme::FontPrimary);
+    tab2Txt.setCharacterSize(15);
+    tab2Txt.setStyle(sf::Text::Bold);
+    tab2Txt.setFillColor((movieSubTab == 1) ? sf::Color(2, 132, 199) : sf::Color(100, 116, 139));
+    tab2Txt.setString(toSfString("Quản lý Thể loại"));
+    sf::FloatRect t2Bounds = tab2Txt.getLocalBounds();
+
+    float tab2ActualW = tabW + 15.f;
+    float totalGroup2W = t2Bounds.width + groupGap + badgeW;
+    float group2StartX = tab2X + (tab2ActualW - totalGroup2W) / 2.f;
+
+    tab2Txt.setPosition(
+        std::round(group2StartX - t2Bounds.left),
+        std::round(tabY + (tabH - t2Bounds.height) / 2.f - t2Bounds.top)
+    );
+    window.draw(tab2Txt);
+
+    float badge2X = std::round(group2StartX + t2Bounds.width + groupGap);
+    float badge2Y = std::round(tabY + (tabH - badgeH) / 2.f);
+    RoundedRectRenderer::render(
+        window,
+        sf::Vector2f(badge2X, badge2Y),
+        sf::Vector2f(badgeW, badgeH),
+        11.f,
+        (movieSubTab == 1) ? sf::Color(2, 132, 199) : sf::Color(226, 232, 240)
+    );
+
+    sf::Text cnt2Badge;
+    cnt2Badge.setFont(Theme::FontPrimary);
+    cnt2Badge.setCharacterSize(12);
+    cnt2Badge.setStyle(sf::Text::Bold);
+    cnt2Badge.setFillColor((movieSubTab == 1) ? sf::Color::White : sf::Color(71, 85, 105));
+    std::ostringstream cnt2Oss;
+    cnt2Oss << std::setw(2) << std::setfill('0') << genreList.size();
+    cnt2Badge.setString(cnt2Oss.str());
+    sf::FloatRect cb2Bounds = cnt2Badge.getLocalBounds();
+    cnt2Badge.setPosition(
+        std::round(badge2X + (badgeW - cb2Bounds.width) / 2.f - cb2Bounds.left),
+        std::round(badge2Y + (badgeH - cb2Bounds.height) / 2.f - cb2Bounds.top)
+    );
+    window.draw(cnt2Badge);
+
+    // Top-right Search & Export controls on Sub-tab bar when movieSubTab == 1
+    if (movieSubTab == 1) {
+        if (genreSearchInput) genreSearchInput->draw(window);
+        // Magnifying glass icon inside genreSearchInput
+        sf::CircleShape gLens(5.5f);
+        gLens.setPosition(rightColX - 24.f, 193.f);
+        gLens.setFillColor(sf::Color::Transparent);
+        gLens.setOutlineThickness(1.6f);
+        gLens.setOutlineColor(sf::Color(148, 163, 184));
+        window.draw(gLens);
+        sf::RectangleShape gHandle(sf::Vector2f(5.f, 1.6f));
+        gHandle.setPosition(rightColX - 15.f, 203.f);
+        gHandle.setRotation(45.f);
+        gHandle.setFillColor(sf::Color(148, 163, 184));
+        window.draw(gHandle);
+
+        if (btnExportGenres) btnExportGenres->draw(window);
+        // Green spreadsheet/file icon inside btnExportGenres
+        RoundedRectRenderer::render(window, sf::Vector2f(rightColX + 298.f, 192.f), sf::Vector2f(13.f, 16.f), 2.f, sf::Color(220, 252, 231), 1.2f, sf::Color(22, 163, 74));
+        sf::RectangleShape expLine1(sf::Vector2f(7.f, 1.5f));
+        expLine1.setPosition(rightColX + 301.f, 197.f);
+        expLine1.setFillColor(sf::Color(22, 163, 74));
+        window.draw(expLine1);
+        sf::RectangleShape expLine2(sf::Vector2f(7.f, 1.5f));
+        expLine2.setPosition(rightColX + 301.f, 201.f);
+        expLine2.setFillColor(sf::Color(22, 163, 74));
+        window.draw(expLine2);
+    }
+
+    // Helper lambda to draw a Poster Thumbnail (either loaded sf::Texture or clean clapperboard placeholder)
+    auto drawPosterBox = [&](const std::string& movieCode, const std::string& customPath, float bx, float by, float bw, float bh) {
+        RoundedRectRenderer::render(window, sf::Vector2f(bx, by), sf::Vector2f(bw, bh), 6.f, sf::Color(224, 242, 254), 1.f, sf::Color(186, 230, 253));
+
+        std::shared_ptr<sf::Texture> tex = nullptr;
+        auto it = moviePosterTextures.find(movieCode);
+        if (it != moviePosterTextures.end() && it->second && it->second->getSize().x > 0) {
+            tex = it->second;
+        } else if (!customPath.empty()) {
+            std::ifstream f(customPath.c_str(), std::ios::binary);
+            if (f.good()) {
+                f.close();
+                std::shared_ptr<sf::Texture> loaded(new sf::Texture());
+                if (loaded->loadFromFile(customPath)) {
+                    loaded->setSmooth(true);
+                    moviePosterTextures[movieCode] = loaded;
+                    tex = loaded;
+                }
+            }
+        }
+
+        if (tex && tex->getSize().x > 0 && tex->getSize().y > 0) {
+            sf::Sprite sp(*tex);
+            float sx = (bw - 2.f) / static_cast<float>(tex->getSize().x);
+            float sy = (bh - 2.f) / static_cast<float>(tex->getSize().y);
+            sp.setScale(sx, sy);
+            sp.setPosition(bx + 1.f, by + 1.f);
+            window.draw(sp);
+        } else {
+            // Vector film clapperboard icon inside placeholder slot
+            float icW = std::min(bw * 0.52f, 20.f);
+            float icH = std::min(bh * 0.36f, 16.f);
+            float icX = bx + (bw - icW) / 2.f;
+            float icY = by + (bh - icH) / 2.f;
+
+            sf::RectangleShape clapBody(sf::Vector2f(icW, icH));
+            clapBody.setPosition(icX, icY);
+            clapBody.setFillColor(sf::Color::Transparent);
+            clapBody.setOutlineThickness(1.5f);
+            clapBody.setOutlineColor(sf::Color(2, 132, 199));
+            window.draw(clapBody);
+
+            sf::RectangleShape clapTop(sf::Vector2f(icW, 4.f));
+            clapTop.setPosition(icX, icY);
+            clapTop.setFillColor(sf::Color(2, 132, 199));
+            window.draw(clapTop);
+        }
+    };
+
+    // 6. LEFT CARD: White Table Card (cardY = 232.f, cardH = 716.f)
+    float cardY = 232.f;
+    float cardH = 716.f;
     RoundedRectRenderer::render(
         window,
         sf::Vector2f(leftColX, cardY),
         sf::Vector2f(leftColW, cardH),
-        8.f,
+        12.f,
         sf::Color::White,
         1.f,
         sf::Color(226, 232, 240)
     );
 
     if (movieSubTab == 0) {
-        // Search Row
+        // Filter Bar Row
         sf::Text lblSearch;
         lblSearch.setFont(Theme::FontPrimary);
-        lblSearch.setCharacterSize(15);
+        lblSearch.setCharacterSize(14);
         lblSearch.setStyle(sf::Text::Bold);
-        lblSearch.setFillColor(sf::Color(15, 23, 42));
+        lblSearch.setFillColor(sf::Color(30, 41, 59));
         lblSearch.setString(toSfString("Tìm nhanh:"));
-        lblSearch.setPosition(leftColX + 22.f, cardY + 22.f);
+        lblSearch.setPosition(leftColX + 20.f, cardY + 24.f);
         window.draw(lblSearch);
 
         if (movieSearchInput) movieSearchInput->draw(window);
 
-        // Table Header
-        float tblHeaderY = cardY + 60.f;
-        sf::RectangleShape thBg(sf::Vector2f(leftColW - 40.f, 42.f));
-        thBg.setPosition(leftColX + 20.f, tblHeaderY);
-        thBg.setFillColor(sf::Color(248, 250, 252));
-        window.draw(thBg);
+        // Magnifying glass icon inside search box
+        sf::CircleShape magGlass(5.5f);
+        magGlass.setFillColor(sf::Color::Transparent);
+        magGlass.setOutlineThickness(1.6f);
+        magGlass.setOutlineColor(sf::Color(100, 116, 139));
+        magGlass.setPosition(leftColX + 120.f, 259.f);
+        window.draw(magGlass);
 
-        sf::RectangleShape thDiv(sf::Vector2f(leftColW - 40.f, 1.f));
-        thDiv.setPosition(leftColX + 20.f, tblHeaderY + 42.f);
-        thDiv.setFillColor(sf::Color(226, 232, 240));
-        window.draw(thDiv);
+        // Age Rating Filter Bar (Tất cả | P | K | T13 | T18)
+        float filterBarX = leftColX + 422.f;
+        float filterBarY = 248.f;
+        RoundedRectRenderer::render(window, sf::Vector2f(filterBarX, filterBarY), sf::Vector2f(266.f, 36.f), 8.f, sf::Color(241, 245, 249), 1.f, sf::Color(226, 232, 240));
 
-        std::vector<std::string> cols = {"Mã phim", "Tên phim", "Thể loại", "Thời lượng", "Ngày chiếu", "Nhãn tuổi"};
-        std::vector<float> colX = {leftColX + 32.f, leftColX + 130.f, leftColX + 355.f, leftColX + 565.f, leftColX + 685.f, leftColX + 805.f};
+        struct AgePillItem { const char* label; const char* key; float x; float w; };
+        AgePillItem filterItems[] = {
+            {"Tất cả", "", 4.f, 56.f},
+            {"P", "P", 64.f, 38.f},
+            {"K", "K", 106.f, 38.f},
+            {"T13", "13", 148.f, 52.f},
+            {"T18", "18", 204.f, 58.f}
+        };
+        for (int f = 0; f < 5; ++f) {
+            bool active = (movieAgeFilter == filterItems[f].key);
+            if (active) {
+                RoundedRectRenderer::render(window, sf::Vector2f(filterBarX + filterItems[f].x, filterBarY + 4.f), sf::Vector2f(filterItems[f].w, 28.f), 6.f, sf::Color::White, 1.f, sf::Color(203, 213, 225));
+            }
+            sf::Text ft;
+            ft.setFont(Theme::FontPrimary);
+            ft.setCharacterSize(12);
+            ft.setStyle(sf::Text::Bold);
+            ft.setFillColor(active ? sf::Color(3, 105, 161) : sf::Color(71, 85, 105));
+            ft.setString(toSfString(filterItems[f].label));
+            sf::FloatRect fb = ft.getLocalBounds();
+            ft.setPosition(
+                std::round(filterBarX + filterItems[f].x + (filterItems[f].w - fb.width) / 2.f - fb.left),
+                std::round(filterBarY + (36.f - fb.height) / 2.f - fb.top)
+            );
+            window.draw(ft);
+        }
+
+        if (btnQuickAddMovie) btnQuickAddMovie->draw(window);
+
+        // Table Header (tblHeaderY = 296.f, height = 42.f)
+        float tblHeaderY = cardY + 64.f;
+        sf::RectangleShape thDivTop(sf::Vector2f(leftColW - 32.f, 1.f));
+        thDivTop.setPosition(leftColX + 16.f, tblHeaderY);
+        thDivTop.setFillColor(sf::Color(241, 245, 249));
+        window.draw(thDivTop);
+
+        sf::RectangleShape thDivBot(sf::Vector2f(leftColW - 32.f, 1.f));
+        thDivBot.setPosition(leftColX + 16.f, tblHeaderY + 40.f);
+        thDivBot.setFillColor(sf::Color(226, 232, 240));
+        window.draw(thDivBot);
+
+        std::vector<std::string> cols = {"MÃ PHIM", "TÊN PHIM", "THỂ LOẠI", "THỜI LƯỢNG", "NGÀY CHIẾU", "NHÃN TUỔI", "TRẠNG THÁI", "THAO TÁC"};
+        std::vector<float> colX = {
+            leftColX + 24.f,
+            leftColX + 90.f,
+            leftColX + 350.f,
+            leftColX + 468.f,
+            leftColX + 560.f,
+            leftColX + 662.f,
+            leftColX + 748.f,
+            leftColX + 846.f
+        };
 
         for (size_t c = 0; c < cols.size(); ++c) {
             sf::Text ch;
             ch.setFont(Theme::FontPrimary);
-            ch.setCharacterSize(15);
+            ch.setCharacterSize(12);
             ch.setStyle(sf::Text::Bold);
-            ch.setFillColor(sf::Color(15, 23, 42));
+            ch.setFillColor(sf::Color(71, 85, 105));
             ch.setString(toSfString(cols[c]));
-            ch.setPosition(colX[c], tblHeaderY + 11.f);
+            ch.setPosition(colX[c], tblHeaderY + 12.f);
             window.draw(ch);
         }
 
-        // Table Rows
-        float rowStartY = tblHeaderY + 44.f;
-        float rowH = 50.f;
+        // Table Rows (rowStartY = 338.f, rowH = 66.f)
+        float rowStartY = tblHeaderY + 42.f;
+        float rowH = 66.f;
         std::string query = movieSearchInput ? movieSearchInput->getText() : "";
         std::transform(query.begin(), query.end(), query.begin(), ::tolower);
 
         size_t displayCount = 0;
-        for (size_t i = 0; i < movieList.size() && displayCount < 14; ++i) {
+        for (size_t i = 0; i < movieList.size() && displayCount < 8; ++i) {
             std::string pName = movieList[i].getTenPhim();
             std::string pCode = movieList[i].getMaPhim();
             std::string pGenre = db.layTheLoaiCuaPhim(pCode);
-            if (pGenre.empty()) pGenre = "Hành Động, Khoa...";
+            if (pGenre.empty()) pGenre = "Tâm Lý, Hành Động";
+            int pAge = movieList[i].getNhanDoTuoi();
 
-            // Filter check
+            if (!movieAgeFilter.empty()) {
+                if (movieAgeFilter == "P" && pAge > 0) continue;
+                if (movieAgeFilter == "K" && pAge > 12) continue;
+                if (movieAgeFilter == "13" && pAge != 13) continue;
+                if (movieAgeFilter == "18" && pAge < 16) continue;
+            }
+
             if (!query.empty()) {
                 std::string pNameLower = pName;
+                std::string pCodeLower = pCode;
+                std::string pGenreLower = pGenre;
                 std::transform(pNameLower.begin(), pNameLower.end(), pNameLower.begin(), ::tolower);
-                if (pNameLower.find(query) == std::string::npos && pCode.find(query) == std::string::npos) {
+                std::transform(pCodeLower.begin(), pCodeLower.end(), pCodeLower.begin(), ::tolower);
+                std::transform(pGenreLower.begin(), pGenreLower.end(), pGenreLower.begin(), ::tolower);
+                if (pNameLower.find(query) == std::string::npos &&
+                    pCodeLower.find(query) == std::string::npos &&
+                    pGenreLower.find(query) == std::string::npos) {
                     continue;
                 }
             }
@@ -3138,150 +3985,534 @@ void CinemaUIApp::renderMoviesView() {
             float ry = rowStartY + static_cast<float>(displayCount) * rowH;
             bool isSelected = (selectedMovieRowIdx == static_cast<int>(i));
 
-            sf::RectangleShape rBg(sf::Vector2f(leftColW - 40.f, rowH - 2.f));
-            rBg.setPosition(leftColX + 20.f, ry);
             if (isSelected) {
-                rBg.setFillColor(sf::Color(224, 242, 254)); // Light Cyan #e0f2fe
-            } else if (displayCount % 2 == 1) {
-                rBg.setFillColor(sf::Color(248, 250, 252));
-            } else {
-                rBg.setFillColor(sf::Color::White);
+                RoundedRectRenderer::render(
+                    window,
+                    sf::Vector2f(leftColX + 12.f, ry + 2.f),
+                    sf::Vector2f(leftColW - 24.f, rowH - 4.f),
+                    8.f,
+                    sf::Color(224, 242, 254)
+                );
             }
-            window.draw(rBg);
 
-            // Row text - Crisp, large 14px Segoe UI
-            sf::Color rowTxtColor = isSelected ? sf::Color(3, 105, 161) : sf::Color(15, 23, 42);
+            // 1. Mã Phim
+            sf::Text cCode;
+            cCode.setFont(Theme::FontPrimary);
+            cCode.setCharacterSize(13);
+            cCode.setStyle(sf::Text::Bold);
+            cCode.setFillColor(isSelected ? sf::Color(3, 105, 161) : sf::Color(71, 85, 105));
+            cCode.setString(toSfString(pCode));
+            cCode.setPosition(colX[0], ry + 23.f);
+            window.draw(cCode);
 
-            auto drawCell = [&](const std::string& val, float x) {
-                sf::Text cText;
-                cText.setFont(Theme::FontPrimary);
-                cText.setCharacterSize(14);
-                cText.setFillColor(rowTxtColor);
-                std::string disp = val;
-                if (disp.length() > 30) disp = disp.substr(0, 27) + "...";
-                cText.setString(toSfString(disp));
-                cText.setPosition(x, ry + 15.f);
-                window.draw(cText);
-            };
+            // 2. Poster Slot (36x50) + Tên Phim + Mô tả ngắn
+            drawPosterBox(pCode, movieList[i].getPoster(), colX[1], ry + 8.f, 36.f, 50.f);
 
-            drawCell(pCode, colX[0]);
-            drawCell(pName, colX[1]);
-            drawCell(pGenre, colX[2]);
-            drawCell(std::to_string(movieList[i].getThoiLuong()) + " phút", colX[3]);
-            drawCell(movieList[i].getNgayKhoiChieu(), colX[4]);
-            drawCell("T" + std::to_string(movieList[i].getNhanDoTuoi()), colX[5]);
+            sf::Text cName;
+            cName.setFont(Theme::FontPrimary);
+            cName.setCharacterSize(14);
+            cName.setStyle(sf::Text::Bold);
+            cName.setFillColor(isSelected ? sf::Color(3, 105, 161) : sf::Color(15, 23, 42));
+            std::string dispTitle = pName;
+            if (dispTitle.length() > 26) dispTitle = dispTitle.substr(0, 23) + "...";
+            cName.setString(toSfString(dispTitle));
+            cName.setPosition(colX[1] + 46.f, ry + 13.f);
+            window.draw(cName);
 
-            // Bottom border
-            sf::RectangleShape rBorder(sf::Vector2f(leftColW - 40.f, 1.f));
-            rBorder.setPosition(leftColX + 20.f, ry + rowH - 2.f);
+            sf::Text cStudio;
+            cStudio.setFont(Theme::FontPrimary);
+            cStudio.setCharacterSize(12);
+            cStudio.setFillColor(sf::Color(100, 116, 139));
+            std::string subDesc = movieList[i].getMoTa();
+            if (subDesc.empty()) subDesc = "CineStar Distribution";
+            if (subDesc.length() > 28) subDesc = subDesc.substr(0, 25) + "...";
+            cStudio.setString(toSfString(subDesc));
+            cStudio.setPosition(colX[1] + 46.f, ry + 34.f);
+            window.draw(cStudio);
+
+            // 3. Thể Loại
+            sf::Text cGenre;
+            cGenre.setFont(Theme::FontPrimary);
+            cGenre.setCharacterSize(12);
+            cGenre.setFillColor(sf::Color(71, 85, 105));
+            std::string gDisp = pGenre;
+            if (gDisp.length() > 16) gDisp = gDisp.substr(0, 14) + "...";
+            cGenre.setString(toSfString(gDisp));
+            cGenre.setPosition(colX[2], ry + 23.f);
+            window.draw(cGenre);
+
+            // 4. Thời lượng
+            sf::Text cDur;
+            cDur.setFont(Theme::FontPrimary);
+            cDur.setCharacterSize(13);
+            cDur.setStyle(sf::Text::Bold);
+            cDur.setFillColor(isSelected ? sf::Color(3, 105, 161) : sf::Color(30, 41, 59));
+            cDur.setString(toSfString(std::to_string(movieList[i].getThoiLuong()) + " phút"));
+            cDur.setPosition(colX[3], ry + 23.f);
+            window.draw(cDur);
+
+            // 5. Ngày chiếu
+            sf::Text cDate;
+            cDate.setFont(Theme::FontPrimary);
+            cDate.setCharacterSize(13);
+            cDate.setStyle(isSelected ? sf::Text::Bold : sf::Text::Regular);
+            cDate.setFillColor(isSelected ? sf::Color(3, 105, 161) : sf::Color(30, 41, 59));
+            cDate.setString(toSfString(movieList[i].getNgayKhoiChieu()));
+            cDate.setPosition(colX[4], ry + 23.f);
+            window.draw(cDate);
+
+            // 6. Nhãn tuổi pill
+            std::string ageBadgeStr = (pAge <= 0) ? "P" : ("T" + std::to_string(pAge));
+            sf::Color ageBg = (pAge >= 16) ? sf::Color(254, 226, 226) : ((pAge >= 13) ? sf::Color(224, 231, 255) : sf::Color(220, 252, 231));
+            sf::Color ageFg = (pAge >= 16) ? sf::Color(220, 38, 38) : ((pAge >= 13) ? sf::Color(67, 56, 202) : sf::Color(21, 128, 61));
+            RoundedRectRenderer::render(window, sf::Vector2f(colX[5], ry + 19.f), sf::Vector2f(42.f, 26.f), 6.f, ageBg);
+
+            sf::Text cAge;
+            cAge.setFont(Theme::FontPrimary);
+            cAge.setCharacterSize(12);
+            cAge.setStyle(sf::Text::Bold);
+            cAge.setFillColor(ageFg);
+            cAge.setString(toSfString(ageBadgeStr));
+            sf::FloatRect ab = cAge.getLocalBounds();
+            cAge.setPosition(colX[5] + (42.f - ab.width) / 2.f, ry + 24.f);
+            window.draw(cAge);
+
+            // 7. Trạng thái pill (Đang chiếu / Sắp chiếu)
+            int relKey = DateFormat::dateKey(DateFormat::normalizeDate(movieList[i].getNgayKhoiChieu()));
+            bool isComingSoon = (todayKey > 0 && relKey > todayKey);
+            sf::Color stBg = isComingSoon ? sf::Color(224, 231, 255) : sf::Color(187, 247, 208);
+            sf::Color stFg = isComingSoon ? sf::Color(55, 48, 163) : sf::Color(21, 128, 61);
+            RoundedRectRenderer::render(window, sf::Vector2f(colX[6] - 8.f, ry + 17.f), sf::Vector2f(82.f, 30.f), 15.f, stBg);
+
+            sf::Text cSt;
+            cSt.setFont(Theme::FontPrimary);
+            cSt.setCharacterSize(11);
+            cSt.setStyle(sf::Text::Bold);
+            cSt.setFillColor(stFg);
+            cSt.setString(toSfString(isComingSoon ? "Sắp chiếu" : "Đang chiếu"));
+            sf::FloatRect sb = cSt.getLocalBounds();
+            cSt.setPosition(colX[6] - 8.f + (82.f - sb.width) / 2.f, ry + 24.f);
+            window.draw(cSt);
+
+            // 8. Thao tác icons (16x supersampled Edit Pencil & Delete Trash Can)
+            static sf::Texture pencilTex, trashTex;
+            static bool actionIconsReady = false;
+            if (!actionIconsReady) {
+                const int icS = 26;
+                sf::Image pImg, tImg;
+                pImg.create(icS, icS, sf::Color(0, 0, 0, 0));
+                tImg.create(icS, icS, sf::Color(0, 0, 0, 0));
+
+                auto distSeg = [](float px, float py, float ax, float ay, float bx, float by) -> float {
+                    float vx = bx - ax, vy = by - ay;
+                    float wx = px - ax, wy = py - ay;
+                    float c1 = vx * wx + vy * wy;
+                    if (c1 <= 0.f) return std::sqrt(wx * wx + wy * wy);
+                    float c2 = vx * vx + vy * vy;
+                    if (c2 <= c1) return std::sqrt((px - bx) * (px - bx) + (py - by) * (py - by));
+                    float b = c1 / c2;
+                    float pbx = ax + b * vx, pby = ay + b * vy;
+                    return std::sqrt((px - pbx) * (px - pbx) + (py - pby) * (py - pby));
+                };
+
+                for (int py = 0; py < icS; ++py) {
+                    for (int px = 0; px < icS; ++px) {
+                        int pHits = 0, tHits = 0;
+                        for (int sy = 0; sy < 4; ++sy) {
+                            for (int sx = 0; sx < 4; ++sx) {
+                                float fx = (px + (sx + 0.5f) * 0.25f) - icS * 0.5f;
+                                float fy = (py + (sy + 0.5f) * 0.25f) - icS * 0.5f;
+
+                                // Pencil: rotated 45 deg (top-right eraser to bottom-left tip)
+                                float u = (fx - fy) * 0.70710678f;
+                                float v = (fx + fy) * 0.70710678f;
+                                bool inPencil = false;
+                                // Shaft outline & eraser collar
+                                if (u >= -3.2f && u <= 5.2f && std::fabs(v) <= 2.1f) {
+                                    bool border = (std::fabs(v) >= 1.0f) || (u >= 4.1f) || (std::fabs(u - 2.4f) <= 0.55f) || (std::fabs(u + 3.0f) <= 0.5f);
+                                    if (border) inPencil = true;
+                                }
+                                // Pointed nib tapering to (-6.2, 0)
+                                if (u >= -6.2f && u < -3.2f) {
+                                    float maxV = ((u + 6.2f) / 3.0f) * 2.1f;
+                                    if (std::fabs(v) <= maxV && (std::fabs(v) >= maxV - 1.1f || u <= -4.8f)) {
+                                        inPencil = true;
+                                    }
+                                }
+                                if (inPencil) pHits++;
+
+                                // Trash can: lid, top handle, tapered bin outline, and 2 vertical inner bars
+                                bool inTrash = false;
+                                // Lid bar
+                                if (distSeg(fx, fy, -5.8f, -4.6f, 5.8f, -4.6f) <= 0.75f) inTrash = true;
+                                // Top handle arch
+                                if (fy >= -7.0f && fy <= -4.6f && std::fabs(fx) <= 2.4f) {
+                                    if (fy <= -5.8f || std::fabs(fx) >= 1.25f) inTrash = true;
+                                }
+                                // Bin outline (left, right, bottom)
+                                if (distSeg(fx, fy, -4.5f, -4.2f, -3.8f, 6.2f) <= 0.7f) inTrash = true;
+                                if (distSeg(fx, fy,  4.5f, -4.2f,  3.8f, 6.2f) <= 0.7f) inTrash = true;
+                                if (distSeg(fx, fy, -3.8f,  6.2f,  3.8f, 6.2f) <= 0.7f) inTrash = true;
+                                // Inner vertical slats
+                                if (distSeg(fx, fy, -1.5f, -1.8f, -1.3f, 3.8f) <= 0.6f) inTrash = true;
+                                if (distSeg(fx, fy,  1.5f, -1.8f,  1.3f, 3.8f) <= 0.6f) inTrash = true;
+
+                                if (inTrash) tHits++;
+                            }
+                        }
+                        if (pHits > 0) {
+                            pImg.setPixel(px, py, sf::Color(51, 65, 85, static_cast<sf::Uint8>((pHits * 255) / 16)));
+                        }
+                        if (tHits > 0) {
+                            tImg.setPixel(px, py, sf::Color(220, 38, 38, static_cast<sf::Uint8>((tHits * 255) / 16)));
+                        }
+                    }
+                }
+                pencilTex.loadFromImage(pImg);
+                pencilTex.setSmooth(true);
+                trashTex.loadFromImage(tImg);
+                trashTex.setSmooth(true);
+                actionIconsReady = true;
+            }
+
+            RoundedRectRenderer::render(window, sf::Vector2f(colX[7], ry + 19.f), sf::Vector2f(26.f, 26.f), 6.f, sf::Color(241, 245, 249));
+            sf::Sprite editSpr(pencilTex);
+            editSpr.setPosition(colX[7], ry + 19.f);
+            window.draw(editSpr);
+
+            RoundedRectRenderer::render(window, sf::Vector2f(colX[7] + 32.f, ry + 19.f), sf::Vector2f(26.f, 26.f), 6.f, sf::Color(254, 242, 242));
+            sf::Sprite delSpr(trashTex);
+            delSpr.setPosition(colX[7] + 32.f, ry + 19.f);
+            window.draw(delSpr);
+
+            // Row divider
+            sf::RectangleShape rBorder(sf::Vector2f(leftColW - 32.f, 1.f));
+            rBorder.setPosition(leftColX + 16.f, ry + rowH - 1.f);
             rBorder.setFillColor(sf::Color(241, 245, 249));
             window.draw(rBorder);
 
             displayCount++;
         }
+
+        // Table Footer (Pagination & Record count)
+        float footerY = cardY + cardH - 42.f;
+        sf::Text footInfo;
+        footInfo.setFont(Theme::FontPrimary);
+        footInfo.setCharacterSize(13);
+        footInfo.setFillColor(sf::Color(100, 116, 139));
+        footInfo.setString(toSfString("Hiển thị 1 - " + std::to_string(displayCount) + " trên " + std::to_string(movieList.size()) + " bản ghi"));
+        footInfo.setPosition(leftColX + 20.f, footerY + 6.f);
+        window.draw(footInfo);
+
+        // Pagination buttons [Trước] [1] [Sau]
+        RoundedRectRenderer::render(window, sf::Vector2f(leftColX + leftColW - 165.f, footerY), sf::Vector2f(54.f, 28.f), 6.f, sf::Color(241, 245, 249));
+        sf::Text pPrev;
+        pPrev.setFont(Theme::FontPrimary);
+        pPrev.setCharacterSize(12);
+        pPrev.setFillColor(sf::Color(148, 163, 184));
+        pPrev.setString(toSfString("Trước"));
+        pPrev.setPosition(leftColX + leftColW - 155.f, footerY + 6.f);
+        window.draw(pPrev);
+
+        RoundedRectRenderer::render(window, sf::Vector2f(leftColX + leftColW - 105.f, footerY), sf::Vector2f(28.f, 28.f), 6.f, sf::Color(3, 105, 161));
+        sf::Text pOne;
+        pOne.setFont(Theme::FontPrimary);
+        pOne.setCharacterSize(12);
+        pOne.setStyle(sf::Text::Bold);
+        pOne.setFillColor(sf::Color::White);
+        pOne.setString("1");
+        pOne.setPosition(leftColX + leftColW - 95.f, footerY + 6.f);
+        window.draw(pOne);
+
+        RoundedRectRenderer::render(window, sf::Vector2f(leftColX + leftColW - 71.f, footerY), sf::Vector2f(50.f, 28.f), 6.f, sf::Color(241, 245, 249));
+        sf::Text pNext;
+        pNext.setFont(Theme::FontPrimary);
+        pNext.setCharacterSize(12);
+        pNext.setFillColor(sf::Color(148, 163, 184));
+        pNext.setString(toSfString("Sau"));
+        pNext.setPosition(leftColX + leftColW - 57.f, footerY + 6.f);
+        window.draw(pNext);
     } else {
-        // Genre Table
-        float tblHeaderY = cardY + 20.f;
-        sf::RectangleShape thBg(sf::Vector2f(leftColW - 40.f, 42.f));
-        thBg.setPosition(leftColX + 20.f, tblHeaderY);
+        // Genre Table (Matching Reference Design 100%)
+        // 1. Card Header: "Danh Sách Thể Loại Phim (Áp dụng trên toàn hệ thống rạp)" + "Sắp xếp theo: [Mã thể loại ↓↑]"
+        sf::Text gHdrTitle;
+        gHdrTitle.setFont(Theme::FontPrimary);
+        gHdrTitle.setCharacterSize(17);
+        gHdrTitle.setStyle(sf::Text::Bold);
+        gHdrTitle.setFillColor(sf::Color(15, 23, 42));
+        gHdrTitle.setString(toSfString("Danh Sách Thể Loại Phim"));
+        gHdrTitle.setPosition(leftColX + 24.f, cardY + 18.f);
+        window.draw(gHdrTitle);
+
+        sf::FloatRect ghtB = gHdrTitle.getLocalBounds();
+        sf::Text gHdrSub;
+        gHdrSub.setFont(Theme::FontPrimary);
+        gHdrSub.setCharacterSize(13);
+        gHdrSub.setFillColor(sf::Color(100, 116, 139));
+        gHdrSub.setString(toSfString("(Áp dụng trên toàn hệ thống rạp)"));
+        gHdrSub.setPosition(leftColX + 34.f + ghtB.width, cardY + 21.f);
+        window.draw(gHdrSub);
+
+        sf::Text sortLbl;
+        sortLbl.setFont(Theme::FontPrimary);
+        sortLbl.setCharacterSize(13);
+        sortLbl.setFillColor(sf::Color(100, 116, 139));
+        sortLbl.setString(toSfString("Sắp xếp theo:"));
+        sortLbl.setPosition(leftColX + leftColW - 228.f, cardY + 20.f);
+        window.draw(sortLbl);
+
+        RoundedRectRenderer::render(
+            window,
+            sf::Vector2f(leftColX + leftColW - 138.f, cardY + 15.f),
+            sf::Vector2f(114.f, 28.f),
+            6.f,
+            sf::Color(248, 250, 252),
+            1.f,
+            sf::Color(226, 232, 240)
+        );
+        sf::Text sortBtnTxt;
+        sortBtnTxt.setFont(Theme::FontPrimary);
+        sortBtnTxt.setCharacterSize(12);
+        sortBtnTxt.setStyle(sf::Text::Bold);
+        sortBtnTxt.setFillColor(sf::Color(30, 41, 59));
+        sortBtnTxt.setString(toSfString(genreSortAsc ? "Mã thể loại ↓↑" : "Mã thể loại ↑↓"));
+        sf::FloatRect sbB = sortBtnTxt.getLocalBounds();
+        sortBtnTxt.setPosition(
+            std::round(leftColX + leftColW - 138.f + (114.f - sbB.width) / 2.f - sbB.left),
+            std::round(cardY + 15.f + (28.f - sbB.height) / 2.f - sbB.top)
+        );
+        window.draw(sortBtnTxt);
+
+        // 2. Table Column Header Strip
+        float tblHeaderY = cardY + 58.f;
+        sf::RectangleShape thBg(sf::Vector2f(leftColW - 2.f, 40.f));
+        thBg.setPosition(leftColX + 1.f, tblHeaderY);
         thBg.setFillColor(sf::Color(248, 250, 252));
         window.draw(thBg);
 
-        std::vector<std::string> cols = {"Mã thể loại", "Tên thể loại", "Số lượng phim sử dụng"};
-        std::vector<float> colX = {leftColX + 40.f, leftColX + 240.f, leftColX + 560.f};
+        sf::RectangleShape thTopLine(sf::Vector2f(leftColW - 2.f, 1.f));
+        thTopLine.setPosition(leftColX + 1.f, tblHeaderY);
+        thTopLine.setFillColor(sf::Color(241, 245, 249));
+        window.draw(thTopLine);
+
+        sf::RectangleShape thBotLine(sf::Vector2f(leftColW - 2.f, 1.f));
+        thBotLine.setPosition(leftColX + 1.f, tblHeaderY + 39.f);
+        thBotLine.setFillColor(sf::Color(241, 245, 249));
+        window.draw(thBotLine);
+
+        std::vector<std::string> cols = {"MÃ THỂ LOẠI", "TÊN THỂ LOẠI"};
+        std::vector<float> colX = {leftColX + 36.f, leftColX + 210.f};
 
         for (size_t c = 0; c < cols.size(); ++c) {
             sf::Text ch;
             ch.setFont(Theme::FontPrimary);
-            ch.setCharacterSize(15);
+            ch.setCharacterSize(12);
             ch.setStyle(sf::Text::Bold);
-            ch.setFillColor(sf::Color(15, 23, 42));
+            ch.setFillColor(sf::Color(100, 116, 139));
             ch.setString(toSfString(cols[c]));
-            ch.setPosition(colX[c], tblHeaderY + 11.f);
+            ch.setPosition(colX[c], tblHeaderY + 12.f);
             window.draw(ch);
         }
 
-        float rowStartY = tblHeaderY + 44.f;
-        float rowH = 50.f;
-        for (size_t i = 0; i < genreList.size() && i < 15; ++i) {
-            float ry = rowStartY + static_cast<float>(i) * rowH;
-            bool isSelected = (selectedGenreRowIdx == static_cast<int>(i));
+        // Palette of indicator dot colors matching reference screenshot
+        const sf::Color dotColors[] = {
+            sf::Color(239, 68, 68),   // 0: Red (Hành Động)
+            sf::Color(139, 92, 246),  // 1: Purple (Kinh Dị)
+            sf::Color(236, 72, 153),  // 2: Pink (Tình Cảm)
+            sf::Color(245, 158, 11),  // 3: Amber (Hoạt Hình)
+            sf::Color(59, 130, 246),  // 4: Blue (Tâm Lý)
+            sf::Color(16, 185, 129),  // 5: Emerald (Gia Đình)
+            sf::Color(6, 182, 212),   // 6: Cyan (Viễn Tưởng)
+            sf::Color(249, 115, 22),  // 7: Orange (Kịch Tính)
+            sf::Color(220, 38, 38)    // 8: Crimson (Gay Cấn)
+        };
 
-            sf::RectangleShape rBg(sf::Vector2f(leftColW - 40.f, rowH - 2.f));
-            rBg.setPosition(leftColX + 20.f, ry);
-            rBg.setFillColor(isSelected ? sf::Color(224, 242, 254) : (i % 2 == 1 ? sf::Color(248, 250, 252) : sf::Color::White));
+        std::string q = genreSearchInput ? genreSearchInput->getText() : "";
+        std::transform(q.begin(), q.end(), q.begin(), ::tolower);
+
+        std::vector<int> visibleIndices;
+        for (size_t i = 0; i < genreList.size(); ++i) {
+            if (!q.empty()) {
+                std::string cLow = genreList[i].first;
+                std::string nLow = genreList[i].second;
+                std::transform(cLow.begin(), cLow.end(), cLow.begin(), ::tolower);
+                std::transform(nLow.begin(), nLow.end(), nLow.begin(), ::tolower);
+                if (cLow.find(q) == std::string::npos && nLow.find(q) == std::string::npos) {
+                    continue;
+                }
+            }
+            visibleIndices.push_back(static_cast<int>(i));
+        }
+        if (!genreSortAsc) {
+            std::reverse(visibleIndices.begin(), visibleIndices.end());
+        }
+
+        float rowStartY = tblHeaderY + 40.f;
+        float rowH = 56.f;
+        int shownGenres = 0;
+        for (size_t v = 0; v < visibleIndices.size() && v < 10; ++v) {
+            int idx = visibleIndices[v];
+            float ry = rowStartY + static_cast<float>(v) * rowH;
+            bool isSelected = (selectedGenreRowIdx == idx);
+
+            sf::RectangleShape rBg(sf::Vector2f(leftColW - 2.f, rowH - 1.f));
+            rBg.setPosition(leftColX + 1.f, ry);
+            rBg.setFillColor(isSelected ? sf::Color(240, 249, 255) : sf::Color::White);
             window.draw(rBg);
 
-            sf::Color rowTxtColor = isSelected ? sf::Color(3, 105, 161) : sf::Color(15, 23, 42);
+            if (isSelected) {
+                sf::RectangleShape leftAccent(sf::Vector2f(4.f, rowH - 1.f));
+                leftAccent.setPosition(leftColX + 1.f, ry);
+                leftAccent.setFillColor(sf::Color(2, 132, 199));
+                window.draw(leftAccent);
+            }
+
+            sf::RectangleShape rowDiv(sf::Vector2f(leftColW - 2.f, 1.f));
+            rowDiv.setPosition(leftColX + 1.f, ry + rowH - 1.f);
+            rowDiv.setFillColor(sf::Color(241, 245, 249));
+            window.draw(rowDiv);
+
+            // Code Pill Badge [TL01]
+            sf::Color pillBg = isSelected ? sf::Color(224, 242, 254) : sf::Color(241, 245, 249);
+            sf::Color pillFg = isSelected ? sf::Color(2, 132, 199) : sf::Color(71, 85, 105);
+            RoundedRectRenderer::render(window, sf::Vector2f(colX[0], ry + 15.f), sf::Vector2f(54.f, 26.f), 6.f, pillBg);
 
             sf::Text tId;
             tId.setFont(Theme::FontPrimary);
-            tId.setCharacterSize(14);
-            tId.setFillColor(rowTxtColor);
-            tId.setString(genreList[i].first);
-            tId.setPosition(colX[0], ry + 15.f);
+            tId.setCharacterSize(12);
+            tId.setStyle(sf::Text::Bold);
+            tId.setFillColor(pillFg);
+            tId.setString(genreList[idx].first);
+            sf::FloatRect idB = tId.getLocalBounds();
+            tId.setPosition(
+                std::round(colX[0] + (54.f - idB.width) / 2.f - idB.left),
+                std::round(ry + 15.f + (26.f - idB.height) / 2.f - idB.top)
+            );
             window.draw(tId);
+
+            // Colored Dot + Genre Name
+            int cIdx = genreColorMap.count(genreList[idx].first) ? genreColorMap[genreList[idx].first] : idx;
+            sf::CircleShape gDot(4.5f);
+            gDot.setFillColor(dotColors[cIdx % 9]);
+            gDot.setPosition(colX[1], ry + 23.5f);
+            window.draw(gDot);
 
             sf::Text tName;
             tName.setFont(Theme::FontPrimary);
             tName.setCharacterSize(14);
-            tName.setFillColor(rowTxtColor);
-            tName.setString(toSfString(genreList[i].second));
-            tName.setPosition(colX[1], ry + 15.f);
+            tName.setStyle(sf::Text::Bold);
+            tName.setFillColor(isSelected ? sf::Color(15, 23, 42) : sf::Color(30, 41, 59));
+            tName.setString(toSfString(genreList[idx].second));
+            tName.setPosition(colX[1] + 18.f, ry + 18.f);
             window.draw(tName);
 
-            sf::Text tCnt;
-            tCnt.setFont(Theme::FontPrimary);
-            tCnt.setCharacterSize(14);
-            tCnt.setFillColor(rowTxtColor);
-            tCnt.setString(toSfString(std::to_string(i * 2 + 1) + " phim"));
-            tCnt.setPosition(colX[2], ry + 15.f);
-            window.draw(tCnt);
+            shownGenres++;
         }
+
+        // 3. Genre Table Footer ("Hiển thị 9 trên 9 thể loại phim" + [<] [1] [>])
+        float footerY = cardY + cardH - 44.f;
+        sf::RectangleShape footLine(sf::Vector2f(leftColW - 2.f, 1.f));
+        footLine.setPosition(leftColX + 1.f, footerY - 10.f);
+        footLine.setFillColor(sf::Color(241, 245, 249));
+        window.draw(footLine);
+
+        sf::Text gFootTxt;
+        gFootTxt.setFont(Theme::FontPrimary);
+        gFootTxt.setCharacterSize(13);
+        gFootTxt.setFillColor(sf::Color(100, 116, 139));
+        gFootTxt.setString(toSfString("Hiển thị " + std::to_string(shownGenres) + " trên " + std::to_string(genreList.size()) + " thể loại phim"));
+        gFootTxt.setPosition(leftColX + 24.f, footerY + 4.f);
+        window.draw(gFootTxt);
+
+        // Pagination [<] [1] [>]
+        float pgX = leftColX + leftColW - 118.f;
+        RoundedRectRenderer::render(window, sf::Vector2f(pgX, footerY), sf::Vector2f(28.f, 28.f), 6.f, sf::Color::White, 1.f, sf::Color(226, 232, 240));
+        sf::Text pgPrev;
+        pgPrev.setFont(Theme::FontPrimary);
+        pgPrev.setCharacterSize(13);
+        pgPrev.setStyle(sf::Text::Bold);
+        pgPrev.setFillColor(sf::Color(148, 163, 184));
+        pgPrev.setString("<");
+        pgPrev.setPosition(pgX + 10.f, footerY + 5.f);
+        window.draw(pgPrev);
+
+        RoundedRectRenderer::render(window, sf::Vector2f(pgX + 34.f, footerY), sf::Vector2f(28.f, 28.f), 6.f, sf::Color(2, 132, 199));
+        sf::Text pgOne;
+        pgOne.setFont(Theme::FontPrimary);
+        pgOne.setCharacterSize(13);
+        pgOne.setStyle(sf::Text::Bold);
+        pgOne.setFillColor(sf::Color::White);
+        pgOne.setString("1");
+        pgOne.setPosition(pgX + 44.f, footerY + 5.f);
+        window.draw(pgOne);
+
+        RoundedRectRenderer::render(window, sf::Vector2f(pgX + 68.f, footerY), sf::Vector2f(28.f, 28.f), 6.f, sf::Color::White, 1.f, sf::Color(226, 232, 240));
+        sf::Text pgNext;
+        pgNext.setFont(Theme::FontPrimary);
+        pgNext.setCharacterSize(13);
+        pgNext.setStyle(sf::Text::Bold);
+        pgNext.setFillColor(sf::Color(148, 163, 184));
+        pgNext.setString(">");
+        pgNext.setPosition(pgX + 78.f, footerY + 5.f);
+        window.draw(pgNext);
     }
 
-    // 5. RIGHT CARD: Form Card (White)
+    // 7. RIGHT CARD: Form Card (White, cardY = 232.f, cardH = 716.f)
     RoundedRectRenderer::render(
         window,
         sf::Vector2f(rightColX, cardY),
         sf::Vector2f(rightColW, cardH),
-        8.f,
+        12.f,
         sf::Color::White,
         1.f,
         sf::Color(226, 232, 240)
     );
 
     if (movieSubTab == 0) {
-        // Title
+        // Title "Thông tin Phim" + Status Badge "● Đang sửa: P01"
         sf::Text formTitle;
         formTitle.setFont(Theme::FontPrimary);
-        formTitle.setCharacterSize(17);
+        formTitle.setCharacterSize(18);
         formTitle.setStyle(sf::Text::Bold);
         formTitle.setFillColor(sf::Color(15, 23, 42));
         formTitle.setString(toSfString("Thông tin Phim"));
         formTitle.setPosition(rightColX + 20.f, cardY + 18.f);
         window.draw(formTitle);
 
-        sf::RectangleShape fDiv(sf::Vector2f(rightColW - 40.f, 1.f));
-        fDiv.setPosition(rightColX + 20.f, cardY + 46.f);
-        fDiv.setFillColor(sf::Color(226, 232, 240));
-        window.draw(fDiv);
+        std::string curIdBadge = (selectedMovieRowIdx >= 0 && selectedMovieRowIdx < static_cast<int>(movieList.size()))
+                                 ? ("Đang sửa: " + movieList[selectedMovieRowIdx].getMaPhim())
+                                 : "Tạo phim mới";
+        RoundedRectRenderer::render(window, sf::Vector2f(rightColX + rightColW - 138.f, cardY + 16.f), sf::Vector2f(118.f, 26.f), 13.f, sf::Color(224, 242, 254));
+        sf::CircleShape editDot(3.5f);
+        editDot.setFillColor(sf::Color(3, 105, 161));
+        editDot.setPosition(rightColX + rightColW - 128.f, cardY + 25.f);
+        window.draw(editDot);
 
-        // Labels (Bold 14px Segoe UI, aligned with inputs)
+        sf::Text editBadgeTxt;
+        editBadgeTxt.setFont(Theme::FontPrimary);
+        editBadgeTxt.setCharacterSize(12);
+        editBadgeTxt.setStyle(sf::Text::Bold);
+        editBadgeTxt.setFillColor(sf::Color(3, 105, 161));
+        editBadgeTxt.setString(toSfString(curIdBadge));
+        editBadgeTxt.setPosition(rightColX + rightColW - 116.f, cardY + 21.f);
+        window.draw(editBadgeTxt);
+
+        // Labels (Bold 13px Segoe UI)
         std::vector<std::pair<std::string, float>> formLabels = {
-            {"Mã Phim:", 183.f},
-            {"Tên Phim:", 232.f},
-            {"Thời lượng:", 281.f},
-            {"Ngày chiếu:", 330.f},
-            {"Nhãn tuổi (Độ):", 379.f},
-            {"Thể loại:", 428.f},
-            {"Mô tả:", 480.f}
+            {"Mã Phim: *", 294.f},
+            {"Tên Phim: *", 339.f},
+            {"Thời lượng:", 384.f},
+            {"Ngày chiếu:", 429.f},
+            {"Nhãn tuổi (Độ):", 474.f},
+            {"Thể loại:", 519.f},
+            {"Poster Phim:", 566.f},
+            {"Mô tả:", 626.f}
         };
 
         for (const auto& fl : formLabels) {
             sf::Text lText;
             lText.setFont(Theme::FontPrimary);
-            lText.setCharacterSize(14);
+            lText.setCharacterSize(13);
             lText.setStyle(sf::Text::Bold);
             lText.setFillColor(sf::Color(51, 65, 85));
             lText.setString(toSfString(fl.first));
@@ -3289,54 +4520,347 @@ void CinemaUIApp::renderMoviesView() {
             window.draw(lText);
         }
 
-        // Inputs
+        // Draw Form Inputs
         if (inputMovieId) inputMovieId->draw(window);
         if (inputMovieTitle) inputMovieTitle->draw(window);
         if (inputMovieDuration) inputMovieDuration->draw(window);
         if (inputMovieReleaseDate) inputMovieReleaseDate->draw(window);
-        if (inputMovieAgeRating) inputMovieAgeRating->draw(window);
         if (inputMovieGenre) inputMovieGenre->draw(window);
         if (btnSelectGenre) btnSelectGenre->draw(window);
+        if (inputMoviePoster) inputMoviePoster->draw(window);
         if (inputMovieDesc) inputMovieDesc->draw(window);
 
-        // Buttons
+        // "phút" suffix inside Thời lượng input
+        sf::Text unitTxt;
+        unitTxt.setFont(Theme::FontPrimary);
+        unitTxt.setCharacterSize(13);
+        unitTxt.setStyle(sf::Text::Bold);
+        unitTxt.setFillColor(sf::Color(100, 116, 139));
+        unitTxt.setString(toSfString("phút"));
+        unitTxt.setPosition(rightColX + rightColW - 60.f, 384.f);
+        window.draw(unitTxt);
+
+        // Segmented Age Rating Selector (P | K | T13 | T18) on y = 466.f
+        float inputX = rightColX + 136.f;
+        RoundedRectRenderer::render(window, sf::Vector2f(inputX, 466.f), sf::Vector2f(330.f, 35.f), 8.f, sf::Color(241, 245, 249), 1.f, sf::Color(226, 232, 240));
+        std::string curAgeStr = inputMovieAgeRating ? inputMovieAgeRating->getText() : "T18";
+        const char* ageOpts[] = {"P", "K", "T13", "T18"};
+        for (int a = 0; a < 4; ++a) {
+            float segW = 330.f / 4.f;
+            float sx = inputX + a * segW;
+            bool isSel = (curAgeStr == ageOpts[a]) ||
+                         (a == 2 && (curAgeStr == "C13" || curAgeStr == "T13")) ||
+                         (a == 3 && (curAgeStr == "C18" || curAgeStr == "T18" || curAgeStr == "C16"));
+            if (isSel) {
+                RoundedRectRenderer::render(window, sf::Vector2f(sx + 4.f, 470.f), sf::Vector2f(segW - 8.f, 27.f), 6.f, sf::Color(254, 226, 226));
+            }
+            sf::Text at;
+            at.setFont(Theme::FontPrimary);
+            at.setCharacterSize(12);
+            at.setStyle(sf::Text::Bold);
+            at.setFillColor(isSel ? sf::Color(220, 38, 38) : sf::Color(71, 85, 105));
+            at.setString(ageOpts[a]);
+            sf::FloatRect ab = at.getLocalBounds();
+            at.setPosition(
+                std::round(sx + (segW - ab.width) / 2.f - ab.left),
+                std::round(466.f + (35.f - ab.height) / 2.f - ab.top)
+            );
+            window.draw(at);
+        }
+
+        // Dedicated Poster Preview Box (48x64) + Hint text for adding poster images
+        std::string previewCode = inputMovieId ? inputMovieId->getText() : "P01";
+        std::string previewPath = inputMoviePoster ? inputMoviePoster->getText() : "";
+        drawPosterBox(previewCode, previewPath, inputX, 554.f, 48.f, 64.f);
+
+        sf::Text posterHint;
+        posterHint.setFont(Theme::FontPrimary);
+        posterHint.setCharacterSize(11);
+        posterHint.setFillColor(sf::Color(100, 116, 139));
+        posterHint.setString(toSfString("Đặt ảnh vào thư mục assets/posters/<MãPhim>.jpg hoặc nhập đường dẫn"));
+        posterHint.setPosition(inputX + 58.f, 604.f);
+        window.draw(posterHint);
+
+        // POS Schedule Activation Toggle Card (y = 736.f)
+        RoundedRectRenderer::render(window, sf::Vector2f(rightColX + 20.f, 736.f), sf::Vector2f(rightColW - 40.f, 48.f), 8.f, sf::Color(240, 249, 255), 1.f, sf::Color(224, 242, 254));
+        sf::Text posTitle;
+        posTitle.setFont(Theme::FontPrimary);
+        posTitle.setCharacterSize(13);
+        posTitle.setStyle(sf::Text::Bold);
+        posTitle.setFillColor(sf::Color(15, 23, 42));
+        posTitle.setString(toSfString("Kích hoạt lịch chiếu POS"));
+        posTitle.setPosition(rightColX + 34.f, 742.f);
+        window.draw(posTitle);
+
+        sf::Text posSub;
+        posSub.setFont(Theme::FontPrimary);
+        posSub.setCharacterSize(11);
+        posSub.setFillColor(sf::Color(100, 116, 139));
+        posSub.setString(toSfString("Cho phép mở bán vé trực tiếp tại quầy"));
+        posSub.setPosition(rightColX + 34.f, 761.f);
+        window.draw(posSub);
+
+        // Toggle pill
+        float togX = rightColX + rightColW - 76.f;
+        float togY = 748.f;
+        RoundedRectRenderer::render(window, sf::Vector2f(togX, togY), sf::Vector2f(44.f, 24.f), 12.f, moviePosActive ? sf::Color(22, 163, 74) : sf::Color(203, 213, 225));
+        sf::CircleShape togKnob(9.f);
+        togKnob.setFillColor(sf::Color::White);
+        togKnob.setPosition(moviePosActive ? (togX + 23.f) : (togX + 3.f), togY + 3.f);
+        window.draw(togKnob);
+
+        // 4 Action Buttons
         if (btnMovieCreate) btnMovieCreate->draw(window);
         if (btnMovieUpdate) btnMovieUpdate->draw(window);
         if (btnMovieDelete) btnMovieDelete->draw(window);
         if (btnMovieClear) btnMovieClear->draw(window);
     } else {
-        // Genre Form
+        // Genre Form (Right Card: Matching Reference UI 100%)
+        // 1. Header Icon Badge + Title & Subtitle + Mode Pill Badge
+        RoundedRectRenderer::render(
+            window,
+            sf::Vector2f(rightColX + 24.f, cardY + 20.f),
+            sf::Vector2f(38.f, 38.f),
+            10.f,
+            sf::Color(224, 242, 254)
+        );
+        // Tag / label vector icon inside badge
+        sf::ConvexShape tagIcon(5);
+        tagIcon.setPoint(0, sf::Vector2f(rightColX + 35.f, cardY + 31.f));
+        tagIcon.setPoint(1, sf::Vector2f(rightColX + 44.f, cardY + 31.f));
+        tagIcon.setPoint(2, sf::Vector2f(rightColX + 51.f, cardY + 38.f));
+        tagIcon.setPoint(3, sf::Vector2f(rightColX + 43.f, cardY + 46.f));
+        tagIcon.setPoint(4, sf::Vector2f(rightColX + 35.f, cardY + 39.f));
+        tagIcon.setFillColor(sf::Color(2, 132, 199));
+        window.draw(tagIcon);
+        sf::CircleShape tagHole(2.f);
+        tagHole.setFillColor(sf::Color(224, 242, 254));
+        tagHole.setPosition(rightColX + 37.5f, cardY + 33.5f);
+        window.draw(tagHole);
+
         sf::Text formTitle;
         formTitle.setFont(Theme::FontPrimary);
         formTitle.setCharacterSize(17);
         formTitle.setStyle(sf::Text::Bold);
         formTitle.setFillColor(sf::Color(15, 23, 42));
         formTitle.setString(toSfString("Thông tin Thể loại"));
-        formTitle.setPosition(rightColX + 20.f, cardY + 18.f);
+        formTitle.setPosition(rightColX + 74.f, cardY + 19.f);
         window.draw(formTitle);
 
+        sf::Text formSub;
+        formSub.setFont(Theme::FontPrimary);
+        formSub.setCharacterSize(12);
+        formSub.setFillColor(sf::Color(100, 116, 139));
+        formSub.setString(toSfString("Xem hoặc cập nhật dữ liệu"));
+        formSub.setPosition(rightColX + 74.f, cardY + 42.f);
+        window.draw(formSub);
+
+        bool isEditMode = (selectedGenreRowIdx >= 0 && selectedGenreRowIdx < static_cast<int>(genreList.size()));
+        RoundedRectRenderer::render(
+            window,
+            sf::Vector2f(rightColX + rightColW - 148.f, cardY + 23.f),
+            sf::Vector2f(124.f, 28.f),
+            8.f,
+            isEditMode ? sf::Color(240, 249, 255) : sf::Color(240, 253, 244),
+            1.f,
+            isEditMode ? sf::Color(186, 230, 253) : sf::Color(187, 247, 208)
+        );
+        sf::Text modeTxt;
+        modeTxt.setFont(Theme::FontPrimary);
+        modeTxt.setCharacterSize(11);
+        modeTxt.setStyle(sf::Text::Bold);
+        modeTxt.setFillColor(isEditMode ? sf::Color(2, 132, 199) : sf::Color(21, 128, 61));
+        modeTxt.setString(toSfString(isEditMode ? "Chế độ: Xem / Sửa" : "Chế độ: Thêm mới"));
+        sf::FloatRect mdB = modeTxt.getLocalBounds();
+        modeTxt.setPosition(
+            std::round(rightColX + rightColW - 148.f + (124.f - mdB.width) / 2.f - mdB.left),
+            std::round(cardY + 23.f + (28.f - mdB.height) / 2.f - mdB.top)
+        );
+        window.draw(modeTxt);
+
+        sf::RectangleShape hdrLine(sf::Vector2f(rightColW - 48.f, 1.f));
+        hdrLine.setPosition(rightColX + 24.f, cardY + 74.f);
+        hdrLine.setFillColor(sf::Color(241, 245, 249));
+        window.draw(hdrLine);
+
+        // 2. Field 1: MÃ THỂ LOẠI * + "🔒 Tự động khóa"
         sf::Text l1;
         l1.setFont(Theme::FontPrimary);
-        l1.setCharacterSize(14);
+        l1.setCharacterSize(12);
         l1.setStyle(sf::Text::Bold);
         l1.setFillColor(sf::Color(51, 65, 85));
-        l1.setString(toSfString("Mã thể loại:"));
-        l1.setPosition(rightColX + 20.f, 183.f);
+        l1.setString(toSfString("MÃ THỂ LOẠI"));
+        l1.setPosition(rightColX + 24.f, 326.f);
         window.draw(l1);
 
-        sf::Text l2;
-        l2.setFont(Theme::FontPrimary);
-        l2.setCharacterSize(14);
-        l2.setStyle(sf::Text::Bold);
-        l2.setFillColor(sf::Color(51, 65, 85));
-        l2.setString(toSfString("Tên thể loại:"));
-        l2.setPosition(rightColX + 20.f, 233.f);
-        window.draw(l2);
+        sf::Text star1;
+        star1.setFont(Theme::FontPrimary);
+        star1.setCharacterSize(13);
+        star1.setStyle(sf::Text::Bold);
+        star1.setFillColor(sf::Color(239, 68, 68));
+        star1.setString("*");
+        star1.setPosition(rightColX + 108.f, 325.f);
+        window.draw(star1);
+
+        // Lock icon + "Tự động khóa"
+        RoundedRectRenderer::render(window, sf::Vector2f(rightColX + rightColW - 112.f, 331.f), sf::Vector2f(9.f, 8.f), 2.f, sf::Color(148, 163, 184));
+        sf::CircleShape lockArch(2.5f);
+        lockArch.setPosition(rightColX + rightColW - 110.f, 327.f);
+        lockArch.setFillColor(sf::Color::Transparent);
+        lockArch.setOutlineThickness(1.3f);
+        lockArch.setOutlineColor(sf::Color(148, 163, 184));
+        window.draw(lockArch);
+
+        sf::Text lockTxt;
+        lockTxt.setFont(Theme::FontPrimary);
+        lockTxt.setCharacterSize(11);
+        lockTxt.setFillColor(sf::Color(148, 163, 184));
+        lockTxt.setString(toSfString("Tự động khóa"));
+        lockTxt.setPosition(rightColX + rightColW - 98.f, 326.f);
+        window.draw(lockTxt);
 
         if (inputGenreId) inputGenreId->draw(window);
+
+        // Shield icon inside right edge of inputGenreId
+        sf::ConvexShape idShield(6);
+        float shX = rightColX + rightColW - 46.f;
+        float shY = 367.f;
+        idShield.setPoint(0, sf::Vector2f(shX + 6.f, shY));
+        idShield.setPoint(1, sf::Vector2f(shX + 12.f, shY + 2.f));
+        idShield.setPoint(2, sf::Vector2f(shX + 11.f, shY + 9.f));
+        idShield.setPoint(3, sf::Vector2f(shX + 6.f, shY + 14.f));
+        idShield.setPoint(4, sf::Vector2f(shX + 1.f, shY + 9.f));
+        idShield.setPoint(5, sf::Vector2f(shX, shY + 2.f));
+        idShield.setFillColor(sf::Color(148, 163, 184));
+        window.draw(idShield);
+
+        // 3. Field 2: TÊN THỂ LOẠI * + helper text
+        sf::Text l2;
+        l2.setFont(Theme::FontPrimary);
+        l2.setCharacterSize(12);
+        l2.setStyle(sf::Text::Bold);
+        l2.setFillColor(sf::Color(51, 65, 85));
+        l2.setString(toSfString("TÊN THỂ LOẠI"));
+        l2.setPosition(rightColX + 24.f, 416.f);
+        window.draw(l2);
+
+        sf::Text star2;
+        star2.setFont(Theme::FontPrimary);
+        star2.setCharacterSize(13);
+        star2.setStyle(sf::Text::Bold);
+        star2.setFillColor(sf::Color(239, 68, 68));
+        star2.setString("*");
+        star2.setPosition(rightColX + 112.f, 415.f);
+        window.draw(star2);
+
         if (inputGenreName) inputGenreName->draw(window);
+
+        // Keyboard icon inside right edge of inputGenreName
+        RoundedRectRenderer::render(window, sf::Vector2f(rightColX + rightColW - 50.f, 458.f), sf::Vector2f(16.f, 11.f), 2.f, sf::Color::Transparent, 1.2f, sf::Color(148, 163, 184));
+        for (int kx = 0; kx < 3; ++kx) {
+            sf::RectangleShape kDot(sf::Vector2f(2.f, 2.f));
+            kDot.setPosition(rightColX + rightColW - 47.f + kx * 4.f, 461.f);
+            kDot.setFillColor(sf::Color(148, 163, 184));
+            window.draw(kDot);
+        }
+        sf::RectangleShape kSpace(sf::Vector2f(8.f, 1.5f));
+        kSpace.setPosition(rightColX + rightColW - 46.f, 465.f);
+        kSpace.setFillColor(sf::Color(148, 163, 184));
+        window.draw(kSpace);
+
+        sf::Text helperTxt;
+        helperTxt.setFont(Theme::FontPrimary);
+        helperTxt.setCharacterSize(11);
+        helperTxt.setFillColor(sf::Color(148, 163, 184));
+        helperTxt.setString(toSfString("Ví dụ: Hành Động, Khoa Học Viễn Tưởng, Tâm Lý..."));
+        helperTxt.setPosition(rightColX + 24.f, 494.f);
+        window.draw(helperTxt);
+
+        // 4. Field 3: MÀU SẮC BIỂU THỊ + 5 Swatch Circles
+        sf::Text l3;
+        l3.setFont(Theme::FontPrimary);
+        l3.setCharacterSize(12);
+        l3.setStyle(sf::Text::Bold);
+        l3.setFillColor(sf::Color(51, 65, 85));
+        l3.setString(toSfString("MÀU SẮC BIỂU THỊ"));
+        l3.setPosition(rightColX + 24.f, 532.f);
+        window.draw(l3);
+
+        const sf::Color swatchColors[5] = {
+            sf::Color(239, 68, 68),   // Red
+            sf::Color(139, 92, 246),  // Purple
+            sf::Color(236, 72, 153),  // Pink
+            sf::Color(245, 158, 11),  // Amber
+            sf::Color(2, 132, 199)    // Blue
+        };
+        const char* swatchNames[5] = {
+            "Màu Đỏ (Hành Động)",
+            "Màu Tím (Kinh Dị)",
+            "Màu Hồng (Tình Cảm)",
+            "Màu Cam (Hoạt Hình)",
+            "Màu Xanh (Tâm Lý)"
+        };
+
+        int activeSwatch = (selectedGenreColorIdx >= 0 && selectedGenreColorIdx < 5) ? selectedGenreColorIdx : 0;
+        for (int c = 0; c < 5; ++c) {
+            float cx = rightColX + 42.f + c * 40.f;
+            float cy = 574.f;
+            if (c == activeSwatch) {
+                sf::CircleShape ring(16.5f);
+                ring.setPosition(cx - 16.5f, cy - 16.5f);
+                ring.setFillColor(sf::Color::Transparent);
+                ring.setOutlineThickness(1.8f);
+                ring.setOutlineColor(swatchColors[c]);
+                window.draw(ring);
+            }
+            sf::CircleShape sw(13.f);
+            sw.setPosition(cx - 13.f, cy - 13.f);
+            sw.setFillColor(swatchColors[c]);
+            window.draw(sw);
+        }
+
+        sf::Text swLabel;
+        swLabel.setFont(Theme::FontPrimary);
+        swLabel.setCharacterSize(12);
+        swLabel.setFillColor(sf::Color(100, 116, 139));
+        swLabel.setString(toSfString(swatchNames[activeSwatch]));
+        swLabel.setPosition(rightColX + 234.f, 566.f);
+        window.draw(swLabel);
+
+        // 5. Action Buttons
         if (btnGenreCreate) btnGenreCreate->draw(window);
-        if (btnGenreDelete) btnGenreDelete->draw(window);
+        if (btnGenreDelete) {
+            btnGenreDelete->draw(window);
+            // Trash icon on btnGenreDelete
+            float tx = rightColX + 24.f + (rightColW - 62.f) / 2.f + 14.f + 44.f;
+            float ty = 631.f;
+            RoundedRectRenderer::render(window, sf::Vector2f(tx, ty + 3.f), sf::Vector2f(10.f, 11.f), 1.5f, sf::Color::Transparent, 1.3f, sf::Color::White);
+            sf::RectangleShape tLid(sf::Vector2f(12.f, 1.5f));
+            tLid.setPosition(tx - 1.f, ty + 1.f);
+            tLid.setFillColor(sf::Color::White);
+            window.draw(tLid);
+        }
+        if (btnGenreUpdate) {
+            btnGenreUpdate->draw(window);
+            // Save floppy icon on btnGenreUpdate
+            float sx = rightColX + 172.f;
+            float sy = 687.f;
+            RoundedRectRenderer::render(window, sf::Vector2f(sx, sy), sf::Vector2f(13.f, 13.f), 2.f, sf::Color::Transparent, 1.4f, sf::Color::White);
+            sf::RectangleShape sTop(sf::Vector2f(7.f, 4.f));
+            sTop.setPosition(sx + 3.f, sy + 1.f);
+            sTop.setFillColor(sf::Color::White);
+            window.draw(sTop);
+        }
+        if (btnGenreClear) {
+            btnGenreClear->draw(window);
+            // Refresh circle arrow icon on btnGenreClear
+            sf::CircleShape refArc(5.5f);
+            refArc.setPosition(rightColX + 164.f, 742.f);
+            refArc.setFillColor(sf::Color::Transparent);
+            refArc.setOutlineThickness(1.4f);
+            refArc.setOutlineColor(sf::Color(71, 85, 105));
+            window.draw(refArc);
+        }
     }
 }
 
@@ -3710,7 +5234,7 @@ void CinemaUIApp::renderConcessionsView() {
     title.setFont(Theme::FontTitle);
     title.setCharacterSize(Theme::SizeTitle);
     title.setFillColor(Theme::TextPrimary);
-    title.setString(toSfString("QUẦY BẮP NƯỚC (giao_dich_fnb.csv)"));
+    title.setString(toSfString("QUẦY BẮP NƯỚC (SQLite cinema.db)"));
     title.setPosition(contentX, contentY);
     window.draw(title);
 
@@ -3934,7 +5458,7 @@ void CinemaUIApp::renderLogsView() {
     title.setFont(Theme::FontTitle);
     title.setCharacterSize(Theme::SizeTitle);
     title.setFillColor(Theme::TextPrimary);
-    title.setString(toSfString("NHẬT KÝ HOẠT ĐỘNG VÀ VẬN HÀNH HỆ THỐNG (nhat_ky_hoat_dong.csv)"));
+    title.setString(toSfString("NHẬT KÝ HOẠT ĐỘNG VÀ VẬN HÀNH HỆ THỐNG (SQLite cinema.db)"));
     title.setPosition(contentX, contentY);
     window.draw(title);
 
@@ -3951,7 +5475,7 @@ void CinemaUIApp::renderCRMView() {
     title.setFont(Theme::FontTitle);
     title.setCharacterSize(24);
     title.setFillColor(Theme::TextPrimary);
-    title.setString(toSfString("QUẢN LÝ KHÁCH HÀNG & HỘI VIÊN (CRM)"));
+    title.setString(toSfString("QUẢN LÝ KHÁCH HÀNG & HỘI VIÊN (CRM - SQLite cinema.db)"));
     title.setPosition(contentX, contentY);
     window.draw(title);
 
@@ -3961,15 +5485,27 @@ void CinemaUIApp::renderCRMView() {
     sub.setFont(Theme::FontSecondary);
     sub.setCharacterSize(13);
     sub.setFillColor(Theme::TextSecondary);
-    sub.setString(toSfString("Chương trình hội viên C-Friend, tích lũy điểm thưởng và dữ liệu khách hàng thân thiết"));
+    sub.setString(toSfString("Dữ liệu hội viên đọc trực tiếp từ bảng users & customers trong DATA/cinema.db"));
     sub.setPosition(contentX, contentY + 34.f);
     window.draw(sub);
 
+    int countStandard = 0, countVip = 0, countDiamond = 0;
+    for (const auto& kh : customerList) {
+        std::string tier = kh.getHangThanhVien();
+        if (tier.find("Kim") != std::string::npos || tier.find("Diamond") != std::string::npos || tier.find("Vang") != std::string::npos) {
+            countDiamond++;
+        } else if (tier.find("VIP") != std::string::npos || tier.find("Bac") != std::string::npos) {
+            countVip++;
+        } else {
+            countStandard++;
+        }
+    }
+
     // 3 Tier Cards
     std::vector<std::tuple<std::string, std::string, std::string, sf::Color>> tiers = {
-        {"C-FRIEND TIÊU CHUẨN", "1,240 Hội Viên", "Tích lũy 5% điểm chi tiêu - Tặng bắp sinh nhật", sf::Color(6, 182, 212)},
-        {"C-VIP THÂN THIẾT", "480 Hội Viên", "Tích lũy 10% điểm - Giảm 10% F&B - 02 Vé mời 2D", sf::Color(245, 158, 11)},
-        {"C-DIAMOND THƯỢNG KHÁCH", "125 Hội Viên", "Tích lũy 15% điểm - Vé mời Premiere - Phòng VIP", sf::Color(168, 85, 247)}
+        {"HỘI VIÊN TIÊU CHUẨN / ĐỒNG", std::to_string(countStandard) + " Hội Viên", "Tích lũy điểm thưởng trực tiếp trên cinema.db", sf::Color(6, 182, 212)},
+        {"HỘI VIÊN BẠC / VIP", std::to_string(countVip) + " Hội Viên", "Tích lũy điểm & ưu đãi giảm giá F&B", sf::Color(245, 158, 11)},
+        {"HỘI VIÊN VÀNG / KIM CƯƠNG", std::to_string(countDiamond) + " Hội Viên", "Tổng số khách hàng hệ thống: " + std::to_string(customerList.size()), sf::Color(168, 85, 247)}
     };
 
     float cardW = 440.f;
@@ -4017,7 +5553,7 @@ void CinemaUIApp::renderCRMView() {
     tblTitle.setFont(Theme::FontTitle);
     tblTitle.setCharacterSize(16);
     tblTitle.setFillColor(Theme::TextPrimary);
-    tblTitle.setString(toSfString("DANH SÁCH GIAO DỊCH KHÁCH HÀNG GẦN ĐÂY"));
+    tblTitle.setString(toSfString("DANH SÁCH KHÁCH HÀNG TRONG CƠ SỞ DỮ LIỆU SQLITE"));
     tblTitle.setPosition(contentX + 24.f, tblY + 18.f);
     window.draw(tblTitle);
 
@@ -4027,8 +5563,8 @@ void CinemaUIApp::renderCRMView() {
     thBg.setFillColor(sf::Color(15, 23, 42));
     window.draw(thBg);
 
-    std::vector<std::string> cols = {"SỐ ĐIỆN THOẠI", "TÊN KHÁCH HÀNG", "HẠNG THẺ", "ĐIỂM TÍCH LŨY", "TỔNG CHI TIÊU", "TRẠNG THÁI"};
-    std::vector<float> colX = {contentX + 40.f, contentX + 220.f, contentX + 480.f, contentX + 720.f, contentX + 960.f, contentX + 1180.f};
+    std::vector<std::string> cols = {"MÃ KH / SĐT", "TÊN KHÁCH HÀNG", "HẠNG THẺ", "ĐIỂM TÍCH LŨY", "TỔNG CHI TIÊU", "EMAIL"};
+    std::vector<float> colX = {contentX + 40.f, contentX + 240.f, contentX + 520.f, contentX + 720.f, contentX + 920.f, contentX + 1120.f};
 
     for (size_t c = 0; c < cols.size(); ++c) {
         sf::Text ch;
@@ -4041,31 +5577,27 @@ void CinemaUIApp::renderCRMView() {
         window.draw(ch);
     }
 
-    // Sample data rows
-    struct CrmRow {
-        std::string phone, name, tier, pts, spend, status;
-    };
-    std::vector<CrmRow> rows = {
-        {"0905123456", "Khách Hàng Thành Viên #01", "C-Diamond", "1,850 Pts", "8.450.000 đ", "Đang Hoạt Động"},
-        {"0912345678", "Khách Hàng Thành Viên #02", "C-VIP", "920 Pts", "4.200.000 đ", "Đang Hoạt Động"},
-        {"0987654321", "Khách Hàng Thành Viên #03", "C-Friend", "340 Pts", "1.650.000 đ", "Đang Hoạt Động"},
-        {"0933221100", "Khách Hàng Thành Viên #04", "C-VIP", "780 Pts", "3.900.000 đ", "Đang Hoạt Động"},
-        {"0977889900", "Khách Hàng Thành Viên #05", "C-Friend", "150 Pts", "850.000 đ", "Đang Hoạt Động"}
-    };
-
-    for (size_t r = 0; r < rows.size(); ++r) {
+    for (size_t r = 0; r < customerList.size() && r < 7; ++r) {
         float ry = tblY + 102.f + r * 44.f;
         sf::RectangleShape rLine(sf::Vector2f(tblW - 48.f, 1.f));
         rLine.setPosition(contentX + 24.f, ry + 36.f);
         rLine.setFillColor(sf::Color(51, 65, 85, 80));
         window.draw(rLine);
 
-        std::vector<std::string> vals = {rows[r].phone, rows[r].name, rows[r].tier, rows[r].pts, rows[r].spend, rows[r].status};
+        const auto& kh = customerList[r];
+        std::vector<std::string> vals = {
+            kh.getMaKH() + " - " + kh.getSoDienThoai(),
+            kh.getHoTen(),
+            kh.getHangThanhVien(),
+            std::to_string(kh.getDiemTichLuy()) + " Điểm",
+            std::to_string(kh.getTongChiTieu()) + " đ",
+            kh.getEmail()
+        };
         for (size_t c = 0; c < vals.size(); ++c) {
             sf::Text cv;
             cv.setFont(Theme::FontPrimary);
             cv.setCharacterSize(12);
-            cv.setFillColor((c == 2) ? Theme::Cyan : ((c == 5) ? Theme::Success : Theme::TextPrimary));
+            cv.setFillColor((c == 2) ? Theme::Cyan : ((c == 4) ? Theme::Success : Theme::TextPrimary));
             cv.setString(toSfString(vals[c]));
             cv.setPosition(colX[c], ry + 8.f);
             window.draw(cv);
@@ -4374,7 +5906,7 @@ void CinemaUIApp::renderShiftReportView() {
     title.setFont(Theme::FontTitle);
     title.setCharacterSize(24);
     title.setFillColor(Theme::TextPrimary);
-    title.setString(toSfString("BÁO CÁO DOANH THU & KẾT TOÁN CA"));
+    title.setString(toSfString("BÁO CÁO DOANH THU & KẾT TOÁN CA (SQLite cinema.db)"));
     title.setPosition(contentX, contentY);
     window.draw(title);
 
@@ -4385,15 +5917,22 @@ void CinemaUIApp::renderShiftReportView() {
     sub.setFont(Theme::FontSecondary);
     sub.setCharacterSize(13);
     sub.setFillColor(Theme::TextSecondary);
-    sub.setString(toSfString("Tổng hợp doanh thu vé, bắp nước F&B và tiền mặt thực tế trong ca trực"));
+    sub.setString(toSfString("Dữ liệu ca trực đọc trực tiếp từ bảng shift_managements trong DATA/cinema.db"));
     sub.setPosition(contentX, contentY + 34.f);
     window.draw(sub);
 
+    long long totalSysRev = 0, totalActualCash = 0, totalDiff = 0;
+    for (const auto& s : shiftList) {
+        totalSysRev += s.getDoanhThuHeThong();
+        totalActualCash += s.getTienThucTe();
+        totalDiff += s.getChenhLech();
+    }
+
     // 3 Summary Cards
     std::vector<std::tuple<std::string, std::string, std::string, sf::Color>> shifts = {
-        {"DOANH THU VÉ TRONG CA", "42.500.000 VNĐ", "Tổng số vé bán ra: 560 vé (POS & Online)", Theme::Cyan},
-        {"DOANH THU QUẦY BẮP NƯỚC", "18.250.000 VNĐ", "Tổng số đơn hàng: 210 combo F&B", Theme::Warning},
-        {"TỔNG TIỀN MẶT KẾT TOÁN", "60.750.000 VNĐ", "Khớp 100% két tiền mặt ca trực - Đã bàn giao", Theme::Success}
+        {"TỔNG DOANH THU HỆ THỐNG", std::to_string(totalSysRev) + " VNĐ", "Tổng số ca ghi nhận: " + std::to_string(shiftList.size()) + " ca", Theme::Cyan},
+        {"TỔNG TIỀN MẶT THỰC TẾ", std::to_string(totalActualCash) + " VNĐ", "Tiền mặt kiểm kê trong ngăn kéo", Theme::Warning},
+        {"CHÊNH LỆCH KẾT TOÁN", std::to_string(totalDiff) + " VNĐ", (totalDiff == 0 ? "Khớp 100% két tiền mặt" : "Có chênh lệch cần đối soát"), Theme::Success}
     };
 
     float cardW = 440.f;
@@ -4430,6 +5969,58 @@ void CinemaUIApp::renderShiftReportView() {
         tDesc.setPosition(cx + 20.f, startY + 90.f);
         window.draw(tDesc);
     }
+
+    // Shift table from SQLite
+    float tblY = startY + cardH + 28.f;
+    float tblW = 1360.f;
+    float tblH = 420.f;
+    RoundedRectRenderer::render(window, sf::Vector2f(contentX, tblY), sf::Vector2f(tblW, tblH), Theme::RadiusMedium, Theme::CardBg, 1.f, Theme::CardBorder);
+
+    sf::RectangleShape thBg(sf::Vector2f(tblW - 48.f, 36.f));
+    thBg.setPosition(contentX + 24.f, tblY + 20.f);
+    thBg.setFillColor(sf::Color(15, 23, 42));
+    window.draw(thBg);
+
+    std::vector<std::string> cols = {"MÃ CA", "NHÂN VIÊN", "NGÀY LÀM", "KHUNG GIỜ", "DOANH THU HT", "TIỀN THỰC TẾ", "TRẠNG THÁI"};
+    std::vector<float> colX = {contentX + 40.f, contentX + 160.f, contentX + 420.f, contentX + 580.f, contentX + 760.f, contentX + 980.f, contentX + 1180.f};
+    for (size_t c = 0; c < cols.size(); ++c) {
+        sf::Text ch;
+        ch.setFont(Theme::FontPrimary);
+        ch.setCharacterSize(11);
+        ch.setStyle(sf::Text::Bold);
+        ch.setFillColor(Theme::TextSecondary);
+        ch.setString(toSfString(cols[c]));
+        ch.setPosition(colX[c], tblY + 30.f);
+        window.draw(ch);
+    }
+
+    for (size_t r = 0; r < shiftList.size() && r < 7; ++r) {
+        float ry = tblY + 68.f + r * 44.f;
+        sf::RectangleShape rLine(sf::Vector2f(tblW - 48.f, 1.f));
+        rLine.setPosition(contentX + 24.f, ry + 36.f);
+        rLine.setFillColor(sf::Color(51, 65, 85, 80));
+        window.draw(rLine);
+
+        const auto& s = shiftList[r];
+        std::vector<std::string> vals = {
+            s.getMaCa(),
+            s.getMaNhanVien() + " - " + s.getTenNhanVien(),
+            s.getNgayLam(),
+            s.getGioBatDau() + " - " + s.getGioKetThuc(),
+            std::to_string(s.getDoanhThuHeThong()) + " đ",
+            std::to_string(s.getTienThucTe()) + " đ",
+            s.getTrangThai()
+        };
+        for (size_t c = 0; c < vals.size(); ++c) {
+            sf::Text cv;
+            cv.setFont(Theme::FontPrimary);
+            cv.setCharacterSize(12);
+            cv.setFillColor((c == 0) ? Theme::Cyan : ((c == 6) ? Theme::Success : Theme::TextPrimary));
+            cv.setString(toSfString(vals[c]));
+            cv.setPosition(colX[c], ry + 8.f);
+            window.draw(cv);
+        }
+    }
 }
 
 void CinemaUIApp::renderPromotionsView() {
@@ -4440,7 +6031,7 @@ void CinemaUIApp::renderPromotionsView() {
     title.setFont(Theme::FontTitle);
     title.setCharacterSize(24);
     title.setFillColor(Theme::TextPrimary);
-    title.setString(toSfString("CHƯƠNG TRÌNH KHUYẾN MÃI & SỰ KIỆN"));
+    title.setString(toSfString("CHƯƠNG TRÌNH KHUYẾN MÃI & VOUCHER (SQLite cinema.db)"));
     title.setPosition(contentX, contentY);
     window.draw(title);
 
@@ -4450,15 +6041,15 @@ void CinemaUIApp::renderPromotionsView() {
     sub.setFont(Theme::FontSecondary);
     sub.setCharacterSize(13);
     sub.setFillColor(Theme::TextSecondary);
-    sub.setString(toSfString("Các ưu đãi giá vé học sinh - sinh viên, ngày vàng và voucher giảm giá tại rạp"));
+    sub.setString(toSfString("Danh sách khuyến mãi đọc trực tiếp từ bảng promotions trong DATA/cinema.db"));
     sub.setPosition(contentX, contentY + 34.f);
     window.draw(sub);
 
-    std::vector<std::tuple<std::string, std::string, std::string, sf::Color>> promos = {
-        {"C-STUDENT 55.000 Đ", "Đồng giá vé 55.000đ cho Học sinh - Sinh viên từ Thứ 2 đến Thứ 6", "Mã áp dụng: CSTUDENT | Áp dụng mọi phim 2D", sf::Color(6, 182, 212)},
-        {"HAPPY WEDNESDAY", "Thứ Tư Vui Vẻ - Giá vé chỉ 50.000đ cho tất cả khách hàng", "Mã áp dụng: HAPPYWED | Áp dụng cả ngày Thứ Tư", sf::Color(16, 185, 129)},
-        {"COMBO BẮP NƯỚC VIP", "Giảm ngay 25% khi mua vé online kèm Combo bắp nước lớn", "Mã áp dụng: COMBODIAL | Áp dụng tại quầy F&B", sf::Color(245, 158, 11)},
-        {"ƯU ĐÃI SINH NHẬT", "Tặng 01 vé xem phim 2D + 01 Bắp ngọt trong tuần sinh nhật", "Mã áp dụng: BIRTHDAY | Dành riêng cho hội viên", sf::Color(236, 72, 153)}
+    std::vector<sf::Color> palette = {
+        sf::Color(6, 182, 212),
+        sf::Color(16, 185, 129),
+        sf::Color(245, 158, 11),
+        sf::Color(236, 72, 153)
     };
 
     float cardW = 660.f;
@@ -4466,28 +6057,33 @@ void CinemaUIApp::renderPromotionsView() {
     float gap = 20.f;
     float startY = contentY + 70.f;
 
-    for (size_t i = 0; i < promos.size(); ++i) {
+    for (size_t i = 0; i < promoList.size() && i < 8; ++i) {
         int r = static_cast<int>(i / 2);
         int c = static_cast<int>(i % 2);
         float cx = contentX + c * (cardW + gap);
         float cy = startY + r * (cardH + gap);
+        sf::Color accent = palette[i % palette.size()];
 
         RoundedRectRenderer::render(window, sf::Vector2f(cx, cy), sf::Vector2f(cardW, cardH), Theme::RadiusMedium, Theme::CardBg, 1.f, Theme::CardBorder);
-        RoundedRectRenderer::render(window, sf::Vector2f(cx, cy), sf::Vector2f(cardW, 4.f), 2.f, std::get<3>(promos[i]));
+        RoundedRectRenderer::render(window, sf::Vector2f(cx, cy), sf::Vector2f(cardW, 4.f), 2.f, accent);
 
+        const auto& pr = promoList[i];
         sf::Text pName;
         pName.setFont(Theme::FontTitle);
         pName.setCharacterSize(18);
-        pName.setFillColor(std::get<3>(promos[i]));
-        pName.setString(toSfString(std::get<0>(promos[i])));
+        pName.setFillColor(accent);
+        pName.setString(toSfString(pr.getMaKhuyenMai() + " - " + pr.getTenKhuyenMai()));
         pName.setPosition(cx + 24.f, cy + 20.f);
         window.draw(pName);
 
+        std::ostringstream descOss;
+        descOss << "Giảm " << static_cast<int>(pr.getPhanTramGiam()) << "% (Tối đa "
+                << static_cast<long long>(pr.getMucGiamToiDa()) << " đ) | Phạm vi: " << pr.getPhamViApDung();
         sf::Text pDesc;
         pDesc.setFont(Theme::FontPrimary);
         pDesc.setCharacterSize(13);
         pDesc.setFillColor(Theme::TextPrimary);
-        pDesc.setString(toSfString(std::get<1>(promos[i])));
+        pDesc.setString(toSfString(descOss.str()));
         pDesc.setPosition(cx + 24.f, cy + 54.f);
         window.draw(pDesc);
 
@@ -4495,7 +6091,7 @@ void CinemaUIApp::renderPromotionsView() {
         pCode.setFont(Theme::FontSecondary);
         pCode.setCharacterSize(12);
         pCode.setFillColor(Theme::TextSecondary);
-        pCode.setString(toSfString(std::get<2>(promos[i])));
+        pCode.setString(toSfString("Mã Code: " + pr.getMaCode() + " | Thời hạn: " + pr.getNgayBatDau() + " -> " + pr.getNgayKetThuc()));
         pCode.setPosition(cx + 24.f, cy + 96.f);
         window.draw(pCode);
     }
@@ -4509,7 +6105,7 @@ void CinemaUIApp::renderStaffView() {
     title.setFont(Theme::FontTitle);
     title.setCharacterSize(24);
     title.setFillColor(Theme::TextPrimary);
-    title.setString(toSfString("QUẢN LÝ NHÂN SỰ & CÁN BỘ ĐIỀU HÀNH"));
+    title.setString(toSfString("QUẢN LÝ NHÂN SỰ & CÁN BỘ ĐIỀU HÀNH (SQLite cinema.db)"));
     title.setPosition(contentX, contentY);
     window.draw(title);
 
@@ -4519,7 +6115,7 @@ void CinemaUIApp::renderStaffView() {
     sub.setFont(Theme::FontSecondary);
     sub.setCharacterSize(13);
     sub.setFillColor(Theme::TextSecondary);
-    sub.setString(toSfString("Danh sách cán bộ quản trị và nhân sự vận hành cụm rạp CineStar Cinema"));
+    sub.setString(toSfString("Danh sách nhân sự đọc trực tiếp từ bảng users trong DATA/cinema.db"));
     sub.setPosition(contentX, contentY + 34.f);
     window.draw(sub);
 
@@ -4534,8 +6130,8 @@ void CinemaUIApp::renderStaffView() {
     thBg.setFillColor(sf::Color(15, 23, 42));
     window.draw(thBg);
 
-    std::vector<std::string> cols = {"MÃ NHÂN VIÊN", "VAI TRÒ / CHỨC VỤ", "SỐ ĐIỆN THOẠI", "EMAIL LIÊN HỆ", "CA TRỰC", "TRẠNG THÁI"};
-    std::vector<float> colX = {contentX + 40.f, contentX + 220.f, contentX + 500.f, contentX + 750.f, contentX + 1020.f, contentX + 1180.f};
+    std::vector<std::string> cols = {"MÃ NV", "HỌ VÀ TÊN", "VAI TRÒ", "SỐ ĐIỆN THOẠI", "EMAIL LIÊN HỆ", "TÀI KHOẢN / TRẠNG THÁI"};
+    std::vector<float> colX = {contentX + 40.f, contentX + 160.f, contentX + 420.f, contentX + 580.f, contentX + 780.f, contentX + 1060.f};
 
     for (size_t c = 0; c < cols.size(); ++c) {
         sf::Text ch;
@@ -4548,24 +6144,22 @@ void CinemaUIApp::renderStaffView() {
         window.draw(ch);
     }
 
-    struct StaffRow {
-        std::string code, role, phone, email, shift, status;
-    };
-    std::vector<StaffRow> staff = {
-        {"U001", "Quản Trị Viên (Admin)", "0905123456", "admin01@cinestar.vn", "Toàn Thời Gian", "Đang Làm Việc"},
-        {"U002", "Nhân Viên Thu Ngân POS", "0905234567", "staff01@cinestar.vn", "Ca Sáng (08:00 - 16:00)", "Đang Làm Việc"},
-        {"U003", "Nhân Viên Quầy Bắp Nước", "0905345678", "fnb01@cinestar.vn", "Ca Chiều (16:00 - 23:00)", "Đang Làm Việc"},
-        {"U004", "Kỹ Thuật Viên Máy Chiếu", "0905456789", "tech01@cinestar.vn", "Ca Sáng (08:00 - 16:00)", "Đang Làm Việc"}
-    };
-
-    for (size_t r = 0; r < staff.size(); ++r) {
+    for (size_t r = 0; r < staffUserList.size() && r < 9; ++r) {
         float ry = tblY + 68.f + r * 44.f;
         sf::RectangleShape rLine(sf::Vector2f(tblW - 48.f, 1.f));
         rLine.setPosition(contentX + 24.f, ry + 36.f);
         rLine.setFillColor(sf::Color(51, 65, 85, 80));
         window.draw(rLine);
 
-        std::vector<std::string> vals = {staff[r].code, staff[r].role, staff[r].phone, staff[r].email, staff[r].shift, staff[r].status};
+        const auto& st = staffUserList[r];
+        std::vector<std::string> vals = {
+            st.maNguoiDung,
+            st.hoTen,
+            st.vaiTro,
+            st.soDienThoai,
+            st.email,
+            st.taiKhoan + " (" + st.trangThaiLamViec + ")"
+        };
         for (size_t c = 0; c < vals.size(); ++c) {
             sf::Text cv;
             cv.setFont(Theme::FontPrimary);
@@ -4586,7 +6180,7 @@ void CinemaUIApp::renderAccountsView() {
     title.setFont(Theme::FontTitle);
     title.setCharacterSize(24);
     title.setFillColor(Theme::TextPrimary);
-    title.setString(toSfString("QUẢN LÝ TÀI KHOẢN & PHÂN QUYỀN"));
+    title.setString(toSfString("QUẢN LÝ TÀI KHOẢN & PHÂN QUYỀN (SQLite cinema.db)"));
     title.setPosition(contentX, contentY);
     window.draw(title);
 
@@ -4596,70 +6190,51 @@ void CinemaUIApp::renderAccountsView() {
     sub.setFont(Theme::FontSecondary);
     sub.setCharacterSize(13);
     sub.setFillColor(Theme::TextSecondary);
-    sub.setString(toSfString("Quản trị tài khoản đăng nhập, bảo mật nội bộ và cấp quyền quản trị cụm rạp"));
+    sub.setString(toSfString("Tài khoản đăng nhập đồng bộ trực tiếp từ bảng users trong DATA/cinema.db"));
     sub.setPosition(contentX, contentY + 34.f);
     window.draw(sub);
 
-    // 2 Big Account Cards
     float cardW = 660.f;
-    float cardH = 220.f;
+    float cardH = 160.f;
+    float gap = 20.f;
     float startY = contentY + 70.f;
 
-    // Card 1: Admin
-    RoundedRectRenderer::render(window, sf::Vector2f(contentX, startY), sf::Vector2f(cardW, cardH), Theme::RadiusMedium, Theme::CardBg, 1.f, Theme::CardBorder);
-    RoundedRectRenderer::render(window, sf::Vector2f(contentX, startY), sf::Vector2f(cardW, 4.f), 2.f, Theme::Primary);
+    for (size_t i = 0; i < staffUserList.size() && i < 6; ++i) {
+        int r = static_cast<int>(i / 2);
+        int c = static_cast<int>(i % 2);
+        float cx = contentX + c * (cardW + gap);
+        float cy = startY + r * (cardH + gap);
+        const auto& acc = staffUserList[i];
+        bool isAdmin = (acc.vaiTro == "Admin");
+        sf::Color accent = isAdmin ? Theme::Primary : Theme::Cyan;
 
-    sf::Text a1Title;
-    a1Title.setFont(Theme::FontTitle);
-    a1Title.setCharacterSize(18);
-    a1Title.setFillColor(Theme::Primary);
-    a1Title.setString(toSfString("TÀI KHOẢN QUẢN TRỊ VIÊN (ADMIN)"));
-    a1Title.setPosition(contentX + 24.f, startY + 20.f);
-    window.draw(a1Title);
+        RoundedRectRenderer::render(window, sf::Vector2f(cx, cy), sf::Vector2f(cardW, cardH), Theme::RadiusMedium, Theme::CardBg, 1.f, Theme::CardBorder);
+        RoundedRectRenderer::render(window, sf::Vector2f(cx, cy), sf::Vector2f(cardW, 4.f), 2.f, accent);
 
-    sf::Text a1Desc;
-    a1Desc.setFont(Theme::FontPrimary);
-    a1Desc.setCharacterSize(13);
-    a1Desc.setFillColor(Theme::TextPrimary);
-    a1Desc.setString(toSfString("Tài khoản: admin01 | Trạng thái: Đang kích hoạt"));
-    a1Desc.setPosition(contentX + 24.f, startY + 56.f);
-    window.draw(a1Desc);
+        sf::Text aTitle;
+        aTitle.setFont(Theme::FontTitle);
+        aTitle.setCharacterSize(17);
+        aTitle.setFillColor(accent);
+        aTitle.setString(toSfString(acc.maNguoiDung + " - " + acc.hoTen + " (" + acc.vaiTro + ")"));
+        aTitle.setPosition(cx + 24.f, cy + 18.f);
+        window.draw(aTitle);
 
-    sf::Text a1Perm;
-    a1Perm.setFont(Theme::FontSecondary);
-    a1Perm.setCharacterSize(12);
-    a1Perm.setFillColor(Theme::TextSecondary);
-    a1Perm.setString(toSfString("Quyền hạn: Toàn quyền quản trị hệ thống, quản lý doanh thu, xem nhật ký, thêm/sửa/xóa phim"));
-    a1Perm.setPosition(contentX + 24.f, startY + 90.f);
-    window.draw(a1Perm);
+        sf::Text aDesc;
+        aDesc.setFont(Theme::FontPrimary);
+        aDesc.setCharacterSize(13);
+        aDesc.setFillColor(Theme::TextPrimary);
+        aDesc.setString(toSfString("Tài khoản: " + acc.taiKhoan + " | Email: " + acc.email));
+        aDesc.setPosition(cx + 24.f, cy + 54.f);
+        window.draw(aDesc);
 
-    // Card 2: Staff
-    RoundedRectRenderer::render(window, sf::Vector2f(contentX + cardW + 20.f, startY), sf::Vector2f(cardW, cardH), Theme::RadiusMedium, Theme::CardBg, 1.f, Theme::CardBorder);
-    RoundedRectRenderer::render(window, sf::Vector2f(contentX + cardW + 20.f, startY), sf::Vector2f(cardW, 4.f), 2.f, Theme::Cyan);
-
-    sf::Text a2Title;
-    a2Title.setFont(Theme::FontTitle);
-    a2Title.setCharacterSize(18);
-    a2Title.setFillColor(Theme::Cyan);
-    a2Title.setString(toSfString("TÀI KHOẢN NHÂN VIÊN VẬN HÀNH (STAFF)"));
-    a2Title.setPosition(contentX + cardW + 44.f, startY + 20.f);
-    window.draw(a2Title);
-
-    sf::Text a2Desc;
-    a2Desc.setFont(Theme::FontPrimary);
-    a2Desc.setCharacterSize(13);
-    a2Desc.setFillColor(Theme::TextPrimary);
-    a2Desc.setString(toSfString("Tài khoản: staff01 | Trạng thái: Đang kích hoạt"));
-    a2Desc.setPosition(contentX + cardW + 44.f, startY + 56.f);
-    window.draw(a2Desc);
-
-    sf::Text a2Perm;
-    a2Perm.setFont(Theme::FontSecondary);
-    a2Perm.setCharacterSize(12);
-    a2Perm.setFillColor(Theme::TextSecondary);
-    a2Perm.setString(toSfString("Quyền hạn: Bán vé POS tại quầy, bán bắp nước F&B, tra cứu lịch chiếu và in hóa đơn khách hàng"));
-    a2Perm.setPosition(contentX + cardW + 44.f, startY + 90.f);
-    window.draw(a2Perm);
+        sf::Text aPerm;
+        aPerm.setFont(Theme::FontSecondary);
+        aPerm.setCharacterSize(12);
+        aPerm.setFillColor(Theme::TextSecondary);
+        aPerm.setString(toSfString("Trạng thái làm việc: " + acc.trangThaiLamViec + " | Trạng thái TK: " + acc.trangThaiTaiKhoan));
+        aPerm.setPosition(cx + 24.f, cy + 92.f);
+        window.draw(aPerm);
+    }
 }
 
 } // namespace UI
