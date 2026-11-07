@@ -1,1 +1,18 @@
-/cinema.exe
+# Executables and Dynamic Libraries
+*.exe
+*.dll
+*.ddl
+*.so
+*.dylib
+
+# Build directories and object files
+build/
+bin/
+obj/
+*.o
+*.obj
+
+# Temporary files
+*.tmp
+*.old.exe
+*.tmp.exe

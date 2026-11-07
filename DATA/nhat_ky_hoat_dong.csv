@@ -12,3 +12,41 @@ thoiGian,maNguoiDung,vaiTro,hanhDong,chiTiet
 30/10/2026 21:11:10,U002,Staff,CHECK_IN_VE,"Ma ve: V_SC08_VIP4, ma suat chieu: SC08, ma ghe: VIP4"
 30/10/2026 21:13:31,U002,Staff,CHOT_CA,"Ma ca: CA02, doanh thu he thong: 159000 VND, tien thuc te: 159000 VND"
 30/10/2026 21:13:36,U002,Staff,DANG_XUAT,Dang xuat thanh cong
+31/10/2026 09:26:17,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+31/10/2026 09:27:08,U001,Admin,DANG_XUAT,Dang xuat khoi he thong
+31/10/2026 09:53:25,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+31/10/2026 10:16:21,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+31/10/2026 10:17:28,U001,Admin,DANG_XUAT,Dang xuat khoi he thong
+31/10/2026 10:40:54,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+31/10/2026 10:40:56,U001,Admin,DANG_XUAT,Dang xuat khoi he thong
+31/10/2026 10:40:57,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+31/10/2026 10:40:58,U001,Admin,DANG_XUAT,Dang xuat khoi he thong
+31/10/2026 10:41:01,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+31/10/2026 10:41:02,U001,Admin,DANG_XUAT,Dang xuat khoi he thong
+31/10/2026 10:55:46,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+31/10/2026 10:56:01,U001,Admin,DANG_XUAT,Dang xuat khoi he thong
+31/10/2026 10:57:12,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+31/10/2026 10:57:17,U001,Admin,DANG_XUAT,Dang xuat khoi he thong
+31/10/2026 11:09:03,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+31/10/2026 11:09:23,U001,Admin,DANG_XUAT,Dang xuat khoi he thong
+06/11/2026 08:08:53,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+06/11/2026 08:09:50,U001,Admin,DANG_XUAT,Dang xuat khoi he thong
+06/11/2026 08:10:13,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+06/11/2026 08:26:34,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+06/11/2026 08:50:33,U001,Admin,DANG_XUAT,Dang xuat khoi he thong
+06/11/2026 08:51:10,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+06/11/2026 08:51:37,U001,Admin,BAN_VE,Xuat 1 ve (B2 ) suat SC01
+06/11/2026 08:51:41,U001,Admin,BAN_VE,Xuat 0 ve () suat SC01
+06/11/2026 08:51:52,U001,Admin,BAN_VE,Xuat 1 ve (A4 ) suat SC01
+06/11/2026 10:08:03,U001,Admin,DANG_XUAT,Dang xuat khoi he thong
+06/11/2026 10:08:24,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+07/11/2026 07:45:12,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+07/11/2026 07:57:39,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+07/11/2026 08:13:45,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+07/11/2026 08:47:10,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+07/11/2026 09:01:39,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+07/11/2026 09:18:18,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+07/11/2026 09:21:35,U001,Admin,THEM_PHIM,Them phim moi: Spiderman (P07)
+07/11/2026 09:30:27,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
+07/11/2026 09:36:34,U001,Admin,SUA_PHIM,Cap nhat thong tin phim: spiderman
+07/11/2026 09:40:06,U001,Admin,DANG_NHAP,Dang nhap thanh cong qua giao dien UI
