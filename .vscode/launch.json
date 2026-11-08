@@ -1,19 +1,19 @@
 {
     "version": "0.2.0",
     "configurations": [
-        
+
         {
             "name": "(gdb) Launch Cinema App",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/cinema.exe",
+            "program": "${workspaceFolder}/CinemaUI.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": true,
             "MIMode": "gdb",
-            "miDebuggerPath": "gdb.exe",
+            "miDebuggerPath": "C:\\msys64\\ucrt64\\bin\\gdb.exe",
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
@@ -21,7 +21,7 @@
                     "ignoreThisFile": false
                 }
             ],
-            "preLaunchTask": "C/C++: g++ build project"
+            "preLaunchTask": "Build Cinema UI (SFML)"
         }
     ]
 }

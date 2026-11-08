@@ -536,7 +536,7 @@ void menuAdmin(Database& db, const string& maAdmin, SysLog& sysLog, User& user) 
                         cout << "Nhap ma ca can duyet: ";
                         cin >> maCaDuyet;
                         if (shiftMgr.duyetBaoCao(maCaDuyet, db)) {
-                            ActivityLog::ghiNhan(maAdmin, "Admin", "DUYET_CA", "Ma ca: " + maCaDuyet);
+                            ActivityLog::ghiNhan(maAdmin, "Admin", "DUYET_CA", "Mã ca: " + maCaDuyet);
                         }
                     }
                     else if (subShift == 3) {
@@ -544,7 +544,7 @@ void menuAdmin(Database& db, const string& maAdmin, SysLog& sysLog, User& user) 
                         cout << "Nhap ma ca can khoa bao cao: ";
                         cin >> maCaKhoa;
                         if (shiftMgr.khoaBaoCao(maCaKhoa, db)) {
-                            ActivityLog::ghiNhan(maAdmin, "Admin", "KHOA_BAO_CAO_CA", "Ma ca: " + maCaKhoa);
+                            ActivityLog::ghiNhan(maAdmin, "Admin", "KHOA_BAO_CAO_CA", "Mã ca: " + maCaKhoa);
                         }
                     }
                     else if (subShift == 4) {
@@ -701,7 +701,7 @@ void menuStaff(Database& db, const string& maNV, SysLog& sysLog, User& user) {
                 if (!shiftMgr.daChotCaHomNay(maNV)) {
                     cout << "Khong the dang xuat: vui long chot ca hom nay truoc.\n";
                     ActivityLog::ghiNhan(maNV, "Staff", "DANG_XUAT_TU_CHOI",
-                                         "Nhan vien chua chot ca hom nay");
+                                         "Nhân viên chưa chốt ca hôm nay");
                     choice = -1;
                 } else {
                     cout << "Dang xuat khoi tai khoan Staff...\n";
@@ -729,7 +729,7 @@ int main() {
         if (currentUser != NULL) {
             string vaiTro = currentUser->getVaiTro();
             string maNV = currentUser->getMaNguoiDung();
-            ActivityLog::ghiNhan(maNV, vaiTro, "DANG_NHAP", "Dang nhap thanh cong");
+            ActivityLog::ghiNhan(maNV, vaiTro, "DANG_NHAP", "Đăng nhập thành công");
 
             system("cls");
             if (vaiTro == "Admin") {
@@ -738,7 +738,7 @@ int main() {
                 menuStaff(db, maNV, sysLog, *currentUser);
             }
 
-            ActivityLog::ghiNhan(maNV, vaiTro, "DANG_XUAT", "Dang xuat thanh cong");
+            ActivityLog::ghiNhan(maNV, vaiTro, "DANG_XUAT", "Đăng xuất thành công");
             delete currentUser;
         }
     }

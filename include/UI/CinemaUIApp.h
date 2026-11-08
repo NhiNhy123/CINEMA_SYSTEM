@@ -104,10 +104,6 @@ private:
     std::unique_ptr<RoundRectButton> btnQuickAdmin;
     std::unique_ptr<RoundRectButton> btnQuickStaff;
     std::unique_ptr<RoundRectButton> btnLogout;
-    sf::Texture loginBackgroundTexture;
-    sf::Sprite loginBackgroundSprite;
-    float loginBackgroundScale;
-    sf::Vector2f loginBackgroundOffset;
     sf::Texture cinemaLogoTexture;
     sf::Sprite cinemaLogoSprite;
 

@@ -25,8 +25,6 @@ CinemaUIApp::CinemaUIApp()
       currentUserName("Chưa đăng nhập"),
       currentUserRole("Admin"),
       loginErrorMsg(""),
-      loginBackgroundScale(1.f),
-      loginBackgroundOffset(0.f, 0.f),
       currentTab(ActiveTab::Reports),
       sidebarWidth(250.f),
       topbarHeight(68.f),
@@ -57,28 +55,10 @@ bool CinemaUIApp::init() {
     );
     window.setFramerateLimit(60);
 
-    if (!loginBackgroundTexture.loadFromFile("assets/login_clean_bg.jpg") &&
-        !loginBackgroundTexture.loadFromFile("assets/login_bg.jpg") &&
-        !loginBackgroundTexture.loadFromFile("assets/login_reference.jpg")) {
-        std::cerr << "Không thể mở ảnh nền đăng nhập!\n";
-    }
     if (cinemaLogoTexture.loadFromFile("assets/cinema_logo.png")) {
         cinemaLogoTexture.setSmooth(true);
         cinemaLogoSprite.setTexture(cinemaLogoTexture);
     }
-    sf::Vector2u backgroundSize = loginBackgroundTexture.getSize();
-    loginBackgroundScale = std::max(
-        1728.f / static_cast<float>(backgroundSize.x),
-        972.f / static_cast<float>(backgroundSize.y)
-    );
-    loginBackgroundOffset = sf::Vector2f(
-        (1728.f - static_cast<float>(backgroundSize.x) * loginBackgroundScale) / 2.f,
-        (972.f - static_cast<float>(backgroundSize.y) * loginBackgroundScale) / 2.f
-    );
-    loginBackgroundSprite.setTexture(loginBackgroundTexture);
-    loginBackgroundTexture.setSmooth(true);
-    loginBackgroundSprite.setScale(loginBackgroundScale, loginBackgroundScale);
-    loginBackgroundSprite.setPosition(loginBackgroundOffset);
 
     loadDataFromDatabase();
     setupLoginView();
@@ -160,6 +140,18 @@ void CinemaUIApp::reloadMoviePosterTextures() {
         std::vector<std::string> candidates;
         if (!dbPath.empty() && dbPath != "assets/posters/poster_default.jpg") {
             candidates.push_back(dbPath);
+            const size_t separator = dbPath.find_last_of("/\\");
+            const std::string fileName = dbPath.substr(
+                separator == std::string::npos ? 0 : separator + 1
+            );
+            candidates.push_back("assets/posters/" + fileName);
+            const size_t extension = fileName.find_last_of('.');
+            if (extension != std::string::npos &&
+                fileName.substr(extension) == ".jgp") {
+                candidates.push_back(
+                    "assets/posters/" + fileName.substr(0, extension) + ".jpg"
+                );
+            }
         }
         candidates.push_back("assets/posters/" + id + ".jpg");
         candidates.push_back("assets/posters/" + id + ".png");
@@ -332,7 +324,7 @@ bool CinemaUIApp::authenticateUser(const std::string& inputUser, const std::stri
         setupNavigation();
 
         // Record real activity log into SQLite DATA/cinema.db
-        ActivityLog::ghiNhan(currentUserId, currentUserRole, "DANG_NHAP", "Dang nhap thanh cong qua giao dien UI");
+        ActivityLog::ghiNhan(currentUserId, currentUserRole, "DANG_NHAP", "Đăng nhập thành công qua giao diện UI");
         setupLogsView(); // refresh log table
         return true;
     } else {
@@ -375,7 +367,7 @@ void CinemaUIApp::setupUIComponents() {
             "Đóng"
         );
         confirmPopup->setOnConfirm([this]() {
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "CHECKIN_VE", "Soat ve thanh cong cho phong chieu");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "CHECKIN_VE", "Soát vé thành công cho phòng chiếu");
         });
     });
 
@@ -396,7 +388,7 @@ void CinemaUIApp::setupUIComponents() {
             "Hủy"
         );
         confirmPopup->setOnConfirm([this]() {
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "DANG_KY_CRM", "Dang ky hoi vien C-Friend thanh cong");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "DANG_KY_CRM", "Đăng ký hội viên C-Friend thành công");
         });
     });
 
@@ -439,10 +431,10 @@ void CinemaUIApp::setupUIComponents() {
             "Hủy"
         );
         confirmPopup->setOnConfirm([this]() {
-            Room r("R08", "Phong Chieu 8", "2D", 120, "HoatDong");
+            Room r("R08", "Phòng Chiếu 8", "2D", 120, "HoatDong");
             roomList.push_back(r);
             db.ghiDanhSachPhong(roomList);
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_PHONG", "Them phong chieu moi: R08");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_PHONG", "Thêm phòng chiếu mới: R08");
         });
     });
 
@@ -463,7 +455,7 @@ void CinemaUIApp::setupUIComponents() {
             "Hủy"
         );
         confirmPopup->setOnConfirm([this]() {
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "TAO_GHE_TU_DONG", "Khoi tao so do ghe phong chieu thanh cong");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "TAO_GHE_TU_DONG", "Khởi tạo sơ đồ ghế phòng chiếu thành công");
         });
     });
 
@@ -487,7 +479,7 @@ void CinemaUIApp::setupUIComponents() {
             Showtime sc("SC99", "P01", "R01", "21:00", "23:15", "10/11/2026", 85000.0);
             showtimeList.push_back(sc);
             db.ghiDanhSachSuatChieu(showtimeList);
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_SUAT_CHIEU", "Them suat chieu moi: SC99");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_SUAT_CHIEU", "Thêm suất chiếu mới: SC99");
         });
     });
 
@@ -508,7 +500,7 @@ void CinemaUIApp::setupUIComponents() {
             "Đóng"
         );
         confirmPopup->setOnConfirm([this]() {
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "QUAN_LY_THE_LOAI", "Cap nhat the loai phim thanh cong");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "QUAN_LY_THE_LOAI", "Cập nhật thể loại phim thành công");
         });
     });
 
@@ -529,11 +521,11 @@ void CinemaUIApp::setupUIComponents() {
             "Hủy"
         );
         confirmPopup->setOnConfirm([this]() {
-            FoodAndBeverage f("FB99", "Bap Rang Bo Pho Mai Dac Biet", "Bap", 75000.0, "DangKinhDoanh");
+            FoodAndBeverage f("FB99", "Bắp Rang Bơ Phô Mai Đặc Biệt", "Bap", 75000.0, "DangKinhDoanh");
             fnbList.push_back(f);
             fnbQuantities.push_back(0);
             db.ghiDanhSachFAndB(fnbList);
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_FNB", "Them san pham F&B: FB99");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_FNB", "Thêm sản phẩm F&B: FB99");
         });
     });
 
@@ -554,7 +546,7 @@ void CinemaUIApp::setupUIComponents() {
             "Đóng"
         );
         confirmPopup->setOnConfirm([this]() {
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "DUYET_BAO_CAO_CA", "Phe duyet bao cao ca truc thanh cong");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "DUYET_BAO_CAO_CA", "Phê duyệt báo cáo ca trực thành công");
         });
     });
 
@@ -575,7 +567,7 @@ void CinemaUIApp::setupUIComponents() {
             "Hủy"
         );
         confirmPopup->setOnConfirm([this]() {
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "CHOT_CA", "Chot ca lam viec va nop tien thanh cong");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "CHOT_CA", "Chốt ca làm việc và nộp tiền thành công");
         });
     });
 
@@ -596,7 +588,7 @@ void CinemaUIApp::setupUIComponents() {
             "Hủy"
         );
         confirmPopup->setOnConfirm([this]() {
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_KHUYEN_MAI", "Tao chuong trinh khuyen mai moi thanh cong");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_KHUYEN_MAI", "Tạo chương trình khuyến mãi mới thành công");
         });
     });
 
@@ -617,7 +609,7 @@ void CinemaUIApp::setupUIComponents() {
             "Hủy"
         );
         confirmPopup->setOnConfirm([this]() {
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_NHAN_SU", "Tao nhan su moi thanh cong");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_NHAN_SU", "Tạo nhân sự mới thành công");
         });
     });
 
@@ -638,7 +630,7 @@ void CinemaUIApp::setupUIComponents() {
             "Hủy"
         );
         confirmPopup->setOnConfirm([this]() {
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "DOI_MAT_KHAU", "Doi mat khau tai khoan thanh cong");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "DOI_MAT_KHAU", "Đổi mật khẩu tài khoản thành công");
         });
     });
 
@@ -728,7 +720,7 @@ void CinemaUIApp::setupNavigation() {
 
     btnLogout->setOnClick([this]() {
         if (isLoggedIn) {
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "DANG_XUAT", "Dang xuat khoi he thong");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "DANG_XUAT", "Đăng xuất khỏi hệ thống");
         }
         isLoggedIn = false;
         loginInputUser->setText("");
@@ -751,7 +743,7 @@ void CinemaUIApp::setupDashboardView() {
         sf::Vector2f(cardW, cardH),
         "PHIM ĐANG CHIẾU (CSV)",
         std::to_string(movieList.size()) + " Tác Phẩm",
-        "Lat Mat 7, Mai, Avatar 3...",
+        "Lật Mặt 7, Mai, Avatar 3...",
         Theme::Primary
     )));
 
@@ -1133,7 +1125,7 @@ void CinemaUIApp::setupMoviesView() {
         }
         db.docDanhSachPhim(movieList);
         reloadMoviePosterTextures();
-        ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_PHIM", "Them phim moi: " + title + " (" + id + ")");
+        ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_PHIM", "Thêm phim mới: " + title + " (" + id + ")");
         confirmPopup->show("Thành công", "Đã thêm phim mới!", ButtonStyle::Primary, "Đóng", "Quay lại");
     });
 
@@ -1263,7 +1255,7 @@ void CinemaUIApp::setupMoviesView() {
             db.docDanhSachPhim(movieList);
             reloadMoviePosterTextures();
 
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "SUA_PHIM", "Cap nhat thong tin phim: " + title + " (" + mId + ")");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "SUA_PHIM", "Cập nhật thông tin phim: " + title + " (" + mId + ")");
             confirmPopup->show("Thành công", "Đã cập nhật thông tin!", ButtonStyle::Primary, "Đóng", "Quay lại");
         } else {
             confirmPopup->show("Thông báo", "Vui lòng chọn 1 phim từ danh sách để cập nhật!", ButtonStyle::Primary, "Đóng", "Hủy");
@@ -1289,7 +1281,7 @@ void CinemaUIApp::setupMoviesView() {
                 movieList.erase(movieList.begin() + selectedMovieRowIdx);
                 db.ghiDanhSachPhim(movieList);
                 reloadMoviePosterTextures();
-                ActivityLog::ghiNhan(currentUserId, currentUserRole, "XOA_PHIM", "Xoa phim: " + pName);
+                ActivityLog::ghiNhan(currentUserId, currentUserRole, "XOA_PHIM", "Xóa phim: " + pName);
                 selectedMovieRowIdx = -1;
             });
         }
@@ -1379,7 +1371,7 @@ void CinemaUIApp::setupMoviesView() {
             }
             out.close();
         }
-        ActivityLog::ghiNhan(currentUserId, currentUserRole, "XUAT_THE_LOAI", "Xuat danh sach the loai phim");
+        ActivityLog::ghiNhan(currentUserId, currentUserRole, "XUAT_THE_LOAI", "Xuất danh sách thể loại phim");
         confirmPopup->show("Thành công", "Đã xuất danh sách thể loại!", ButtonStyle::Primary, "Đóng", "Quay lại");
     });
 
@@ -1440,7 +1432,7 @@ void CinemaUIApp::setupMoviesView() {
                 inputGenreId->setText(newId);
                 inputGenreName->setText(genreList.back().second);
             }
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_THE_LOAI", "Them the loai: " + gName);
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_THE_LOAI", "Thêm thể loại: " + gName);
             confirmPopup->show("Thành công", "Đã thêm thể loại mới!", ButtonStyle::Primary, "Đóng", "Quay lại");
         } else {
             confirmPopup->show("Thông báo", "Thể loại này đã tồn tại trong hệ thống!", ButtonStyle::Primary, "Đóng", "Quay lại");
@@ -1474,7 +1466,7 @@ void CinemaUIApp::setupMoviesView() {
                         inputGenreId->setText("TL01");
                         inputGenreName->setText("");
                     }
-                    ActivityLog::ghiNhan(currentUserId, currentUserRole, "XOA_THE_LOAI", "Xoa the loai: " + gName + " (" + gId + ")");
+                    ActivityLog::ghiNhan(currentUserId, currentUserRole, "XOA_THE_LOAI", "Xóa thể loại: " + gName + " (" + gId + ")");
                 }
             });
         } else {
@@ -1520,7 +1512,7 @@ void CinemaUIApp::setupMoviesView() {
             db.docDanhSachTheLoai(genreList);
         }
         genreColorMap[gId] = selectedGenreColorIdx;
-        ActivityLog::ghiNhan(currentUserId, currentUserRole, "SUA_THE_LOAI", "Cap nhat the loai: " + gName + " (" + gId + ")");
+        ActivityLog::ghiNhan(currentUserId, currentUserRole, "SUA_THE_LOAI", "Cập nhật thể loại: " + gName + " (" + gId + ")");
         confirmPopup->show("Thành công", "Đã cập nhật thông tin!", ButtonStyle::Primary, "Đóng", "Quay lại");
     });
 
@@ -1759,7 +1751,7 @@ void CinemaUIApp::setupSeatBookingView() {
                     db.capNhatTrangThaiGheSuatChieu(currentShowtimeId, s.maGhe, "DaDat");
                 }
             }
-            std::string logMsg = "Xuat ve POS (" + std::to_string(selectedSeatCodes.size()) + " ve), F&B (" + std::to_string(posSelectedFnb.size()) + " mon), Thu: " + std::to_string((long long)posGrandTotal) + " VND";
+            std::string logMsg = "Xuất vé POS (" + std::to_string(selectedSeatCodes.size()) + " vé), F&B (" + std::to_string(posSelectedFnb.size()) + " món), thu: " + std::to_string((long long)posGrandTotal) + " VND";
             ActivityLog::ghiNhan(currentUserId, currentUserRole, "BAN_VE_POS", logMsg);
             setupLogsView();
 
@@ -1934,7 +1926,7 @@ void CinemaUIApp::setupConcessionsView() {
 
         confirmPopup->show("Thanh Toán Bắp Nước", oss.str(), ButtonStyle::Success, "Xác nhận", "Hủy bỏ");
         confirmPopup->setOnConfirm([this, itemsCount, total]() {
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "BAN_FNB", "Ban " + std::to_string(itemsCount) + " mon bap nuoc, thu " + std::to_string((long long)total) + " d");
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "BAN_FNB", "Bán " + std::to_string(itemsCount) + " món bắp nước, thu " + std::to_string((long long)total) + " đ");
             setupLogsView();
             for (auto& q : fnbQuantities) q = 0;
         });
@@ -1980,7 +1972,7 @@ void CinemaUIApp::setupLogsView() {
     }
 
     if (tRows.empty()) {
-        tRows.push_back({"07/11/2026 09:00:00", "U001", "Admin", "DANG_NHAP", "Dang nhap he thong thanh cong"});
+        tRows.push_back({"07/11/2026 09:00:00", "U001", "Admin", "DANG_NHAP", "Đăng nhập hệ thống thành công"});
     }
 
     // Display newest logs first
@@ -5413,7 +5405,7 @@ void CinemaUIApp::renderReportsView() {
         chartData.push_back({m.getTenPhim(), static_cast<double>(m.getThoiLuong() * 350000)});
     }
     if (chartData.empty()) {
-        chartData.push_back({"Lat Mat 7", 85000000.0});
+        chartData.push_back({"Lật Mặt 7", 85000000.0});
         chartData.push_back({"Mai", 62000000.0});
     }
 
