@@ -251,8 +251,15 @@ void CinemaUIApp::setupLoginView() {
         authenticateUser(u, p);
     });
 
+    loginInputUser->setOnEnter([this](const std::string&) {
+        if (loginInputPass) {
+            loginInputUser->setFocused(false);
+            loginInputPass->setFocused(true);
+        }
+    });
+
     loginInputPass->setOnEnter([this](const std::string& p) {
-        std::string u = loginInputUser->getText();
+        std::string u = loginInputUser ? loginInputUser->getText() : "";
         authenticateUser(u, p);
     });
 }
@@ -871,10 +878,11 @@ void CinemaUIApp::setupMoviesView() {
     movieSearchInput = std::unique_ptr<UIInputBox>(new UIInputBox(
         sf::Vector2f(leftColX + 108.f, 248.f),
         sf::Vector2f(305.f, 36.f),
-        "     Tìm theo Mã, Tên, Thể loại...",
+        "Tìm theo Mã, Tên, Thể loại...",
         Theme::SizeBody
     ));
     movieSearchInput->setCornerRadius(8.f);
+    movieSearchInput->setTextInset(35.f);
     movieSearchInput->setColors(
         sf::Color(241, 245, 249),
         sf::Color(226, 232, 240),
@@ -1013,6 +1021,7 @@ void CinemaUIApp::setupMoviesView() {
     ));
     inputMovieDesc->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(51, 65, 85), sf::Color(148, 163, 184));
     inputMovieDesc->setCornerRadius(8.f);
+    inputMovieDesc->setMultiLine(true);
 
     // Form Action Buttons matching reference image
     float btnW = (rightColW - 40.f - 12.f) / 2.0f; // 217.f
@@ -1345,11 +1354,12 @@ void CinemaUIApp::setupMoviesView() {
     genreSearchInput = std::unique_ptr<UIInputBox>(new UIInputBox(
         sf::Vector2f(rightColX - 40.f, 180.f),
         sf::Vector2f(310.f, 40.f),
-        "     Tìm tên hoặc mã thể loại...",
+        "Tìm tên hoặc mã thể loại...",
         13
     ));
     genreSearchInput->setColors(sf::Color::White, sf::Color(226, 232, 240), focusBlue, sf::Color(15, 23, 42), sf::Color(148, 163, 184));
     genreSearchInput->setCornerRadius(20.f);
+    genreSearchInput->setTextInset(35.f);
 
     btnExportGenres = std::unique_ptr<RoundRectButton>(new RoundRectButton(
         "    Xuất danh sách",
@@ -2007,6 +2017,12 @@ void CinemaUIApp::handleEvents() {
         // 1. IF NOT LOGGED IN -> ONLY PROCESS LOGIN
         // ==========================================
         if (!isLoggedIn) {
+            if (event.type == sf::Event::KeyPressed && (event.key.code == sf::Keyboard::Return || event.key.code == sf::Keyboard::Enter)) {
+                std::string u = loginInputUser ? loginInputUser->getText() : "";
+                std::string p = loginInputPass ? loginInputPass->getText() : "";
+                authenticateUser(u, p);
+                continue;
+            }
             if (loginInputUser) {
                 if (event.type == sf::Event::MouseButtonPressed) loginInputUser->handleMouseButtonPressed(event.mouseButton.button, mousePos);
                 else if (event.type == sf::Event::TextEntered) loginInputUser->handleTextEntered(event.text.unicode);
@@ -3870,6 +3886,12 @@ void CinemaUIApp::renderMoviesView() {
         magGlass.setPosition(leftColX + 120.f, 259.f);
         window.draw(magGlass);
 
+        sf::RectangleShape magHandle(sf::Vector2f(4.5f, 1.6f));
+        magHandle.setPosition(leftColX + 128.f, 269.f);
+        magHandle.setRotation(45.f);
+        magHandle.setFillColor(sf::Color(100, 116, 139));
+        window.draw(magHandle);
+
         // Age Rating Filter Bar (Tất cả | P | K | T13 | T18)
         float filterBarX = leftColX + 422.f;
         float filterBarY = 248.f;
@@ -3944,6 +3966,52 @@ void CinemaUIApp::renderMoviesView() {
         float rowH = 66.f;
         std::string query = movieSearchInput ? movieSearchInput->getText() : "";
         std::transform(query.begin(), query.end(), query.begin(), ::tolower);
+
+        if (!query.empty()) {
+            bool currentMatches = false;
+            if (selectedMovieRowIdx >= 0 && selectedMovieRowIdx < static_cast<int>(movieList.size())) {
+                std::string sName = movieList[selectedMovieRowIdx].getTenPhim();
+                std::string sCode = movieList[selectedMovieRowIdx].getMaPhim();
+                std::string sGenre = db.layTheLoaiCuaPhim(sCode);
+                std::transform(sName.begin(), sName.end(), sName.begin(), ::tolower);
+                std::transform(sCode.begin(), sCode.end(), sCode.begin(), ::tolower);
+                std::transform(sGenre.begin(), sGenre.end(), sGenre.begin(), ::tolower);
+                if (sName.find(query) != std::string::npos ||
+                    sCode.find(query) != std::string::npos ||
+                    sGenre.find(query) != std::string::npos) {
+                    currentMatches = true;
+                }
+            }
+            if (!currentMatches) {
+                for (size_t i = 0; i < movieList.size(); ++i) {
+                    std::string mName = movieList[i].getTenPhim();
+                    std::string mCode = movieList[i].getMaPhim();
+                    std::string mGenre = db.layTheLoaiCuaPhim(mCode);
+                    std::transform(mName.begin(), mName.end(), mName.begin(), ::tolower);
+                    std::transform(mCode.begin(), mCode.end(), mCode.begin(), ::tolower);
+                    std::transform(mGenre.begin(), mGenre.end(), mGenre.begin(), ::tolower);
+                    if (mName.find(query) != std::string::npos ||
+                        mCode.find(query) != std::string::npos ||
+                        mGenre.find(query) != std::string::npos) {
+                        selectedMovieRowIdx = static_cast<int>(i);
+                        if (inputMovieId) inputMovieId->setText(movieList[i].getMaPhim());
+                        if (inputMovieTitle) inputMovieTitle->setText(movieList[i].getTenPhim());
+                        if (inputMovieDuration) inputMovieDuration->setText(std::to_string(movieList[i].getThoiLuong()));
+                        if (inputMovieReleaseDate) inputMovieReleaseDate->setText(movieList[i].getNgayKhoiChieu());
+                        int aVal = movieList[i].getNhanDoTuoi();
+                        if (inputMovieAgeRating) inputMovieAgeRating->setText(aVal <= 0 ? "P" : ("T" + std::to_string(aVal)));
+                        if (inputMovieGenre) inputMovieGenre->setText(db.layTheLoaiCuaPhim(movieList[i].getMaPhim()));
+                        std::string pPath = movieList[i].getPoster();
+                        if (pPath.empty() || pPath == "assets/posters/poster_default.jpg") {
+                            pPath = "assets/posters/" + movieList[i].getMaPhim() + ".jpg";
+                        }
+                        if (inputMoviePoster) inputMoviePoster->setText(pPath);
+                        if (inputMovieDesc) inputMovieDesc->setText(movieList[i].getMoTa());
+                        break;
+                    }
+                }
+            }
+        }
 
         size_t displayCount = 0;
         for (size_t i = 0; i < movieList.size() && displayCount < 8; ++i) {
@@ -4186,8 +4254,193 @@ void CinemaUIApp::renderMoviesView() {
             displayCount++;
         }
 
-        // Table Footer (Pagination & Record count)
+        // Spotlight Showcase Card khi tìm kiếm hoặc có phim được chọn và bảng còn nhiều khoảng trống
         float footerY = cardY + cardH - 42.f;
+        if (selectedMovieRowIdx >= 0 && selectedMovieRowIdx < static_cast<int>(movieList.size()) && displayCount <= 4) {
+            float spotlightY = rowStartY + static_cast<float>(displayCount) * rowH + 14.f;
+            float spotlightH = (footerY - 10.f) - spotlightY;
+            if (spotlightH >= 200.f) {
+                float spotlightX = leftColX + 16.f;
+                float spotlightW = leftColW - 32.f;
+
+                const Movie& selM = movieList[selectedMovieRowIdx];
+                std::string selCode = selM.getMaPhim();
+                std::string selTitle = selM.getTenPhim();
+                std::string selGenre = db.layTheLoaiCuaPhim(selCode);
+                if (selGenre.empty()) selGenre = "Tâm Lý, Hành Động";
+                int selAge = selM.getNhanDoTuoi();
+                std::string selAgeStr = (selAge <= 0) ? "P" : ("T" + std::to_string(selAge));
+                std::string selPoster = selM.getPoster();
+                if (selPoster.empty() || selPoster == "assets/posters/poster_default.jpg") {
+                    selPoster = "assets/posters/" + selCode + ".jpg";
+                }
+
+                // Nền Spotlight Card
+                RoundedRectRenderer::render(
+                    window,
+                    sf::Vector2f(spotlightX, spotlightY),
+                    sf::Vector2f(spotlightW, spotlightH),
+                    12.f,
+                    sf::Color(248, 250, 252),
+                    1.5f,
+                    sf::Color(219, 234, 254)
+                );
+
+                // Dải tiêu đề trên cùng
+                RoundedRectRenderer::render(
+                    window,
+                    sf::Vector2f(spotlightX + 1.f, spotlightY + 1.f),
+                    sf::Vector2f(spotlightW - 2.f, 38.f),
+                    11.f,
+                    sf::Color(240, 249, 255)
+                );
+
+                sf::CircleShape dotIcon(4.5f);
+                dotIcon.setFillColor(sf::Color(2, 132, 199));
+                dotIcon.setPosition(spotlightX + 18.f, spotlightY + 14.5f);
+                window.draw(dotIcon);
+
+                sf::Text sHdr;
+                sHdr.setFont(Theme::FontPrimary);
+                sHdr.setCharacterSize(12);
+                sHdr.setStyle(sf::Text::Bold);
+                sHdr.setFillColor(sf::Color(3, 105, 161));
+                sHdr.setString(toSfString("THÔNG TIN CHI TIẾT BỘ PHIM (SPOTLIGHT SHOWCASE)"));
+                sHdr.setPosition(spotlightX + 34.f, spotlightY + 11.f);
+                window.draw(sHdr);
+
+                // Poster lớn chất lượng cao
+                float pw = 160.f;
+                float ph = std::min(spotlightH - 64.f, 235.f);
+                if (ph < 150.f) ph = 150.f;
+                float px = spotlightX + 22.f;
+                float py = spotlightY + 50.f;
+
+                drawPosterBox(selCode, selPoster, px, py, pw, ph);
+
+                // Khối thông tin bên phải Poster
+                float infoX = px + pw + 26.f;
+                float infoW = (spotlightX + spotlightW - 22.f) - infoX;
+                float curY = py;
+
+                // Tên phim kích thước lớn (22px Bold)
+                sf::Text bTitle;
+                bTitle.setFont(Theme::FontPrimary);
+                bTitle.setCharacterSize(22);
+                bTitle.setStyle(sf::Text::Bold);
+                bTitle.setFillColor(sf::Color(15, 23, 42));
+                std::string titleDisp = selTitle;
+                if (titleDisp.length() > 38) titleDisp = titleDisp.substr(0, 35) + "...";
+                bTitle.setString(toSfString(titleDisp));
+                bTitle.setPosition(infoX, curY);
+                window.draw(bTitle);
+
+                curY += 34.f;
+
+                // Hàng Badges thông số
+                // 1. Mã Phim Pill
+                RoundedRectRenderer::render(window, sf::Vector2f(infoX, curY), sf::Vector2f(72.f, 26.f), 6.f, sf::Color(224, 242, 254));
+                sf::Text bCode;
+                bCode.setFont(Theme::FontPrimary);
+                bCode.setCharacterSize(12);
+                bCode.setStyle(sf::Text::Bold);
+                bCode.setFillColor(sf::Color(3, 105, 161));
+                bCode.setString(toSfString(selCode));
+                sf::FloatRect cb = bCode.getLocalBounds();
+                bCode.setPosition(infoX + (72.f - cb.width) / 2.f, curY + 4.f);
+                window.draw(bCode);
+
+                // 2. Độ tuổi Pill
+                sf::Color ageBg = (selAge >= 16) ? sf::Color(254, 226, 226) : ((selAge >= 13) ? sf::Color(224, 231, 255) : sf::Color(220, 252, 231));
+                sf::Color ageFg = (selAge >= 16) ? sf::Color(220, 38, 38) : ((selAge >= 13) ? sf::Color(67, 56, 202) : sf::Color(21, 128, 61));
+                RoundedRectRenderer::render(window, sf::Vector2f(infoX + 80.f, curY), sf::Vector2f(44.f, 26.f), 6.f, ageBg);
+                sf::Text bAge;
+                bAge.setFont(Theme::FontPrimary);
+                bAge.setCharacterSize(12);
+                bAge.setStyle(sf::Text::Bold);
+                bAge.setFillColor(ageFg);
+                bAge.setString(toSfString(selAgeStr));
+                sf::FloatRect ab = bAge.getLocalBounds();
+                bAge.setPosition(infoX + 80.f + (44.f - ab.width) / 2.f, curY + 4.f);
+                window.draw(bAge);
+
+                // 3. Thể loại Pill
+                RoundedRectRenderer::render(window, sf::Vector2f(infoX + 132.f, curY), sf::Vector2f(130.f, 26.f), 6.f, sf::Color(241, 245, 249));
+                sf::Text bGenre;
+                bGenre.setFont(Theme::FontPrimary);
+                bGenre.setCharacterSize(12);
+                bGenre.setStyle(sf::Text::Bold);
+                bGenre.setFillColor(sf::Color(71, 85, 105));
+                std::string gDisp = selGenre;
+                if (gDisp.length() > 18) gDisp = gDisp.substr(0, 16) + "..";
+                bGenre.setString(toSfString(gDisp));
+                sf::FloatRect gb = bGenre.getLocalBounds();
+                bGenre.setPosition(infoX + 132.f + (130.f - gb.width) / 2.f, curY + 4.f);
+                window.draw(bGenre);
+
+                // 4. Trạng thái chiếu Pill
+                int relKey = DateFormat::dateKey(DateFormat::normalizeDate(selM.getNgayKhoiChieu()));
+                bool isComing = (todayKey > 0 && relKey > todayKey);
+                sf::Color stBg = isComing ? sf::Color(224, 231, 255) : sf::Color(187, 247, 208);
+                sf::Color stFg = isComing ? sf::Color(55, 48, 163) : sf::Color(21, 128, 61);
+                RoundedRectRenderer::render(window, sf::Vector2f(infoX + 270.f, curY), sf::Vector2f(96.f, 26.f), 6.f, stBg);
+                sf::Text bSt;
+                bSt.setFont(Theme::FontPrimary);
+                bSt.setCharacterSize(11);
+                bSt.setStyle(sf::Text::Bold);
+                bSt.setFillColor(stFg);
+                bSt.setString(toSfString(isComing ? "Sắp chiếu" : "Đang chiếu"));
+                sf::FloatRect sb = bSt.getLocalBounds();
+                bSt.setPosition(infoX + 270.f + (96.f - sb.width) / 2.f, curY + 5.f);
+                window.draw(bSt);
+
+                curY += 36.f;
+
+                // Thông số kỹ thuật
+                std::string durStr = std::to_string(selM.getThoiLuong()) + " phút (" + std::to_string(selM.getThoiLuong() / 60) + "h " + std::to_string(selM.getThoiLuong() % 60) + "m)";
+                std::string specsLine1 = "Thời lượng: " + durStr + "   |   Khởi chiếu: " + selM.getNgayKhoiChieu();
+                if (!selM.getNgayKetThuc().empty()) specsLine1 += "   |   Kết thúc: " + selM.getNgayKetThuc();
+
+                sf::Text bSpecs;
+                bSpecs.setFont(Theme::FontPrimary);
+                bSpecs.setCharacterSize(13);
+                bSpecs.setStyle(sf::Text::Bold);
+                bSpecs.setFillColor(sf::Color(51, 65, 85));
+                bSpecs.setString(toSfString(specsLine1));
+                bSpecs.setPosition(infoX, curY);
+                window.draw(bSpecs);
+
+                curY += 28.f;
+
+                // Tóm tắt nội dung phim
+                sf::Text bDescHdr;
+                bDescHdr.setFont(Theme::FontPrimary);
+                bDescHdr.setCharacterSize(13);
+                bDescHdr.setStyle(sf::Text::Bold);
+                bDescHdr.setFillColor(sf::Color(100, 116, 139));
+                bDescHdr.setString(toSfString("Tóm tắt nội dung phim:"));
+                bDescHdr.setPosition(infoX, curY);
+                window.draw(bDescHdr);
+
+                curY += 22.f;
+
+                std::string fullDesc = selM.getMoTa();
+                if (fullDesc.empty()) fullDesc = "Chưa có nội dung tóm tắt cho bộ phim này.";
+                std::vector<sf::String> descLines = UI::UIInputBox::wrapText(toSfString(fullDesc), infoW - 10.f, Theme::FontPrimary, 13);
+                size_t maxShowLines = static_cast<size_t>(std::max(2, static_cast<int>((spotlightY + spotlightH - curY - 10.f) / 20.f)));
+                for (size_t l = 0; l < descLines.size() && l < maxShowLines; ++l) {
+                    sf::Text dl;
+                    dl.setFont(Theme::FontPrimary);
+                    dl.setCharacterSize(13);
+                    dl.setFillColor(sf::Color(71, 85, 105));
+                    dl.setString(descLines[l]);
+                    dl.setPosition(infoX, curY + l * 20.f);
+                    window.draw(dl);
+                }
+            }
+        }
+
+        // Table Footer (Pagination & Record count)
         sf::Text footInfo;
         footInfo.setFont(Theme::FontPrimary);
         footInfo.setCharacterSize(13);
