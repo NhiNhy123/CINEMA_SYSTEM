@@ -218,7 +218,7 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& s
             }
 
             if (diemMuonDoi > 0) {
-                if (khachHangTimThay->doiDiem(diemMuonDoi, "Doi diem khi thanh toan", thoiGian)) {
+                if (khachHangTimThay->doiDiem(diemMuonDoi, "Đổi điểm khi thanh toán", thoiGian)) {
                     daDoiDiem = true;
                     soDiemDaDoi = diemMuonDoi;
                     soTienDoiDiem = diemMuonDoi * 100.0;
@@ -279,7 +279,7 @@ Customer xuLyThongTinKhachHangCRM(Database& db, double tongTienHoaDon, double& s
         stringstream ssGD;
         ssGD << "GD0" << (danhSachGDCapNhat.size() + 1);
         danhSachGDCapNhat.push_back(GiaoDichDiem(ssGD.str(), maKHThaoTac, "DoiDiem",
-                                                soDiemDaDoi, "Doi diem khi thanh toan", thoiGian));
+                                                soDiemDaDoi, "Đổi điểm khi thanh toán", thoiGian));
     }
     if (khachHangTimThay != NULL) {
         return *khachHangTimThay;
@@ -738,8 +738,8 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
         danhSachKHCapNhat[i].themChiTieu(static_cast<long long>(soTienThanhToan));
         if (soDiemThuong > 0) {
             string noiDung = khachHangMoi
-                           ? "Tich diem hoa don dau tien"
-                           : "Tich diem tu hoa don ban ve";
+                           ? "Tích điểm hóa đơn đầu tiên"
+                           : "Tích điểm từ hóa đơn bán vé";
             danhSachKHCapNhat[i].tichDiem(soDiemThuong, noiDung, thoiGianThanhToan);
 
             stringstream ssGD;
@@ -777,10 +777,10 @@ void TicketManager::quyTrinhBanVe(Database& db, const string& maNV) {
 
     db.hoanTatGiaoDichBanVe();
     std::ostringstream chiTietNhatKy;
-    chiTietNhatKy << "Ma hoa don: " << maHD
-                  << ", ma khach hang: " << (maKH.empty() ? "KhachLe" : maKH)
-                  << ", tong tien: " << fixed << setprecision(0) << soTienThanhToan
-                  << " VND, phuong thuc: " << phuongThucThanhToan;
+    chiTietNhatKy << "Mã hóa đơn: " << maHD
+                  << ", mã khách hàng: " << (maKH.empty() ? "Khách lẻ" : maKH)
+                  << ", tổng tiền: " << fixed << setprecision(0) << soTienThanhToan
+                  << " VND, phương thức: " << phuongThucThanhToan;
     ActivityLog::ghiNhan(maNV, "Staff", "THANH_TOAN_HOA_DON", chiTietNhatKy.str());
 
     cout << "\n===================================================================\n";
@@ -925,9 +925,9 @@ void TicketManager::checkInVe(Database& db, const string& maNhanVien) {
         }
 
         ActivityLog::ghiNhan(maNhanVien, "Staff", "CHECK_IN_VE",
-                             "Ma ve: " + ve.getMaVe() +
-                             ", ma suat chieu: " + ve.getMaSuatChieu() +
-                             ", ma ghe: " + ve.getMaGhe());
+                             "Mã vé: " + ve.getMaVe() +
+                             ", mã suất chiếu: " + ve.getMaSuatChieu() +
+                             ", mã ghế: " + ve.getMaGhe());
         cout << "[THANH CONG]: Check-in hop le! Moi khach vao phong chieu ghe ["
              << ve.getMaGhe() << "].\n";
         return;
