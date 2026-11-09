@@ -213,6 +213,27 @@ private:
     // View 3: F&B Concessions Components
     std::vector<int> fnbQuantities;
     std::unique_ptr<RoundRectButton> btnCheckoutFnb;
+    int fnbSubTab;
+    int selectedFnbRowIdx;
+    bool fnbSortAsc;
+    std::string fnbFormLoai;
+    bool fnbFormActive;
+    std::unique_ptr<RoundRectButton> btnFnbTabAll;
+    std::unique_ptr<RoundRectButton> btnFnbTabCombo;
+    std::unique_ptr<UIInputBox> fnbSearchInput;
+    std::unique_ptr<RoundRectButton> btnFnbExport;
+    std::unique_ptr<RoundRectButton> btnFnbQuickAdd;
+    std::unique_ptr<UIInputBox> inputFnbId;
+    std::unique_ptr<UIInputBox> inputFnbName;
+    std::unique_ptr<UIInputBox> inputFnbPrice;
+    std::unique_ptr<UIInputBox> inputFnbNote;
+    std::unique_ptr<UIInputBox> inputFnbImage;
+    std::map<std::string, std::shared_ptr<sf::Texture>> fnbImageTextures;
+    std::map<std::string, std::string> fnbImagePaths;
+    std::unique_ptr<RoundRectButton> btnFnbCreate;
+    std::unique_ptr<RoundRectButton> btnFnbDelete;
+    std::unique_ptr<RoundRectButton> btnFnbUpdate;
+    std::unique_ptr<RoundRectButton> btnFnbClear;
 
     // View 5: Logs Components
     std::unique_ptr<EditableTable> logsTable;
@@ -238,6 +259,44 @@ private:
     std::unique_ptr<RoundRectButton> btnChangePassword;
     std::unique_ptr<RoundRectButton> btnRefreshLogs;
 
+    // Showtime Management UI Components (CineOS v3.2 Design)
+    int showtimeSubTab; // 0: Bảng danh sách, 1: Timeline lịch theo phòng, 2: Lịch chiếu theo phim
+    int selectedShowtimeRowIdx;
+    int showtimeCurrentPage;
+    std::unique_ptr<RoundRectButton> btnStTabList;
+    std::unique_ptr<RoundRectButton> btnStTabTimeline;
+    std::unique_ptr<RoundRectButton> btnStTabByMovie;
+    std::unique_ptr<RoundRectButton> btnStExport;
+    std::unique_ptr<RoundRectButton> btnStNew;
+
+    std::unique_ptr<UIInputBox> stSearchInput;
+    std::unique_ptr<DropdownBox> stDateDropdown;
+    std::unique_ptr<RoundRectButton> btnStTodayQuick;
+    std::unique_ptr<DropdownBox> stRoomDropdown;
+    std::unique_ptr<RoundRectButton> btnStConfig;
+    std::string stDateFilterVal;
+    std::string stRoomFilterVal;
+
+    // Right Card Form Components
+    int stFormMovieIdx;
+    int stFormRoomIdx;
+    std::unique_ptr<DropdownBox> stMovieDropdown;
+    std::unique_ptr<DropdownBox> stRoomFormDropdown;
+    std::unique_ptr<UIInputBox> inputStDate;
+    std::unique_ptr<DropdownBox> stDatePickerDropdown;
+    std::unique_ptr<UIInputBox> inputStTime;
+    std::unique_ptr<DropdownBox> stTimePickerDropdown;
+    int stCleaningMinutes; // 10, 15, 20
+    std::unique_ptr<RoundRectButton> btnStCleanMinus;
+    std::unique_ptr<RoundRectButton> btnStCleanPlus;
+    std::unique_ptr<RoundRectButton> btnStPreset10;
+    std::unique_ptr<RoundRectButton> btnStPreset15;
+    std::unique_ptr<RoundRectButton> btnStPreset20;
+    std::unique_ptr<RoundRectButton> btnStSave;
+    std::unique_ptr<RoundRectButton> btnStCreate;
+    std::unique_ptr<RoundRectButton> btnStDelete;
+    std::unique_ptr<RoundRectButton> btnStReset;
+
 public:
     CinemaUIApp();
     ~CinemaUIApp() = default;
@@ -248,6 +307,7 @@ public:
 private:
     void loadDataFromDatabase();
     void reloadMoviePosterTextures();
+    void reloadFnbImageTextures();
     void setupUIComponents();
     void setupLoginView();
     bool authenticateUser(const std::string& u, const std::string& p);
@@ -257,6 +317,7 @@ private:
     void setupMoviesView();
     void setupSeatBookingView();
     void setupConcessionsView();
+    void setupShowtimesView();
     void setupLogsView();
 
     void refreshSeatsForShowtime(const std::string& maSuatChieu);

@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <map>
 
 namespace UI {
 
@@ -35,6 +36,7 @@ private:
     RoundRectButton btnNext;
 
     std::function<void(int)> onSelectMovie;
+    std::map<std::string, sf::Texture> posterCache;
 
 public:
     PosterSlider(
@@ -168,16 +170,66 @@ public:
             Theme::Cyan
         );
 
-        // Poster Film icon / text
-        sf::Text posterText;
-        posterText.setFont(Theme::FontTitle);
-        posterText.setCharacterSize(Theme::SizeHeader);
-        posterText.setFillColor(Theme::TextPrimary);
-        posterText.setString("CINEMA\nPOSTER");
-        sf::FloatRect ptb = posterText.getLocalBounds();
-        posterText.setPosition(posterX + (posterW - ptb.width) / 2.f - ptb.left,
-                               posterY + (posterH - ptb.height) / 2.f - ptb.top);
-        target.draw(posterText);
+        bool hasTexture = false;
+        if (!cur.posterPath.empty()) {
+            if (posterCache.find(cur.posterPath) == posterCache.end()) {
+                sf::Texture tex;
+                if (tex.loadFromFile(cur.posterPath)) {
+                    tex.setSmooth(true);
+                    posterCache[cur.posterPath] = tex;
+                }
+            }
+            if (posterCache.find(cur.posterPath) != posterCache.end()) {
+                sf::Sprite sp(posterCache[cur.posterPath]);
+                float pad = 2.f;
+                float sx = (posterW - pad * 2.f) / static_cast<float>(posterCache[cur.posterPath].getSize().x);
+                float sy = (posterH - pad * 2.f) / static_cast<float>(posterCache[cur.posterPath].getSize().y);
+                sp.setScale(sx, sy);
+                sp.setPosition(posterX + pad, posterY + pad);
+                target.draw(sp);
+                hasTexture = true;
+            }
+        }
+
+        if (!hasTexture) {
+            // Synchronized Photo Frame Placeholder Icon (same style as F&B image frame)
+            float icW = 54.f;
+            float icH = 40.f;
+            float icX = posterX + (posterW - icW) / 2.f;
+            float icY = posterY + (posterH - icH) / 2.f - 12.f;
+            RoundedRectRenderer::render(
+                target,
+                sf::Vector2f(icX, icY),
+                sf::Vector2f(icW, icH),
+                6.f,
+                sf::Color::White,
+                2.f,
+                sf::Color(6, 182, 212)
+            );
+            sf::CircleShape sunDot(4.5f);
+            sunDot.setFillColor(sf::Color(56, 189, 248));
+            sunDot.setPosition(icX + 8.f, icY + 7.f);
+            target.draw(sunDot);
+
+            sf::ConvexShape mtn(4);
+            mtn.setPoint(0, sf::Vector2f(icX + 4.f, icY + icH - 4.f));
+            mtn.setPoint(1, sf::Vector2f(icX + 22.f, icY + 16.f));
+            mtn.setPoint(2, sf::Vector2f(icX + 35.f, icY + 23.f));
+            mtn.setPoint(3, sf::Vector2f(icX + icW - 4.f, icY + icH - 4.f));
+            mtn.setFillColor(sf::Color(125, 211, 252));
+            target.draw(mtn);
+
+            sf::Text posterText;
+            posterText.setFont(Theme::FontPrimary);
+            posterText.setCharacterSize(12);
+            posterText.setStyle(sf::Text::Bold);
+            posterText.setFillColor(sf::Color(148, 163, 184));
+            posterText.setString(toSfString("POSTER PHIM"));
+            sf::FloatRect ptb = posterText.getLocalBounds();
+            posterText.setPosition(posterX + (posterW - ptb.width) / 2.f - ptb.left,
+                                   icY + icH + 12.f);
+            target.draw(posterText);
+        }
 
         // Movie Info (Right side of poster)
         float infoX = posterX + posterW + 30.f;

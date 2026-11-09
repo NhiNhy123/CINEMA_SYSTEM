@@ -26,6 +26,7 @@ protected:
 
     float cornerRadius;
     float textInset;
+    float rightInset;
     sf::Color backgroundColor;
     sf::Color borderColor;
     sf::Color focusColor;
@@ -40,6 +41,16 @@ protected:
         return std::string(utf8.begin(), utf8.end());
     }
 
+    void normalizePlaceholderAndInset() {
+        std::size_t firstNonSpace = placeholder.find_first_not_of(' ');
+        if (firstNonSpace != std::string::npos && firstNonSpace >= 2) {
+            placeholder = placeholder.substr(firstNonSpace);
+            if (textInset < 38.f) {
+                textInset = 38.f;
+            }
+        }
+    }
+
 public:
     UIInputBox(
         sf::Vector2f pos = sf::Vector2f(0.f, 0.f),
@@ -49,16 +60,21 @@ public:
     ) : position(pos), size(sz), placeholder(holder), fontSize(fSize),
         font(&Theme::FontPrimary), isFocused(false), isVisible(true),
         isEnabled(true), showCursor(true), cornerRadius(Theme::RadiusMedium),
-        textInset(14.f), backgroundColor(Theme::InputBg),
+        textInset(14.f), rightInset(14.f), backgroundColor(Theme::InputBg),
         borderColor(Theme::InputBorder), focusColor(Theme::InputFocus),
         textColor(Theme::TextPrimary), placeholderColor(Theme::TextPlaceholder),
-        onTextChanged(nullptr), onEnter(nullptr) {}
+        onTextChanged(nullptr), onEnter(nullptr) {
+        normalizePlaceholderAndInset();
+    }
 
     virtual ~UIInputBox() = default;
 
     void setPosition(sf::Vector2f pos) { position = pos; }
     void setSize(sf::Vector2f sz) { size = sz; }
-    void setPlaceholder(const std::string& holder) { placeholder = holder; }
+    void setPlaceholder(const std::string& holder) {
+        placeholder = holder;
+        normalizePlaceholderAndInset();
+    }
     void setFont(const sf::Font& f) { font = &f; }
     void setFontSize(unsigned int sz) { fontSize = sz; }
     void setFocused(bool focused) {
@@ -70,6 +86,7 @@ public:
     void setEnabled(bool en) { isEnabled = en; }
     void setCornerRadius(float r) { cornerRadius = r; }
     void setTextInset(float inset) { textInset = inset; }
+    void setRightInset(float inset) { rightInset = inset; }
     void setColors(
         sf::Color background,
         sf::Color border,
@@ -132,7 +149,12 @@ public:
 
         // Enter
         if (unicode == 13) {
-            if (onEnter) onEnter(getText());
+            if (onEnter) {
+                onEnter(getText());
+            } else if (size.y >= 60.f) {
+                unicodeText += '\n';
+                if (onTextChanged) onTextChanged(getText());
+            }
             return true;
         }
 
@@ -176,29 +198,82 @@ public:
 
         sf::Text sfText;
         sfText.setFont(*font);
-        sfText.setCharacterSize(fontSize);
 
         float textX = position.x + textInset;
-        float textY = position.y + (size.y - fontSize) / 2.0f - 2.f;
+        float maxTextW = std::max(24.f, size.x - textInset - rightInset);
 
         if (unicodeText.isEmpty() && !placeholder.empty() && !isFocused) {
-            sfText.setString(toSfString(placeholder));
+            sfText.setCharacterSize(fontSize);
+            sf::String holderSf = wrapSfTextString(*font, toSfString(placeholder), fontSize, maxTextW, 1);
+            sfText.setString(holderSf);
             sfText.setFillColor(placeholderColor);
-            sfText.setPosition(textX, textY);
+            float textY = (size.y >= 60.f)
+                ? (position.y + 10.f)
+                : (position.y + (size.y - static_cast<float>(fontSize)) / 2.0f - 2.f);
+            sfText.setPosition(std::round(textX), std::round(textY));
             target.draw(sfText);
         } else {
-            sfText.setString(getDisplayText());
+            sf::String rawDisplay = getDisplayText();
+            unsigned int renderFontSize = fontSize;
+            std::vector<sf::String> lines = wrapSfTextLines(*font, rawDisplay, renderFontSize, maxTextW);
+
+            std::size_t maxLines = (size.y >= 60.f)
+                ? std::max<std::size_t>(2, static_cast<std::size_t>((size.y - 12.f) / (static_cast<float>(fontSize) + 4.f)))
+                : 2;
+
+            if (lines.size() > 1 && size.y < 60.f) {
+                renderFontSize = (size.y < 40.f)
+                    ? std::max(11u, fontSize - 2u)
+                    : std::max(12u, fontSize - 1u);
+                lines = wrapSfTextLines(*font, rawDisplay, renderFontSize, maxTextW);
+                sfText.setLineSpacing(0.86f);
+            } else {
+                sfText.setLineSpacing(1.0f);
+            }
+
+            if (lines.size() > maxLines) {
+                lines.erase(lines.begin(), lines.end() - static_cast<std::ptrdiff_t>(maxLines));
+            }
+
+            sf::String wrappedDisplay;
+            for (std::size_t i = 0; i < lines.size(); ++i) {
+                if (i > 0) wrappedDisplay += "\n";
+                wrappedDisplay += lines[i];
+            }
+
+            sfText.setCharacterSize(renderFontSize);
+            sfText.setString(wrappedDisplay);
             sfText.setFillColor(textColor);
-            sfText.setPosition(textX, textY);
+
+            float textY = position.y + (size.y - static_cast<float>(renderFontSize)) / 2.0f - 2.f;
+            if (size.y >= 60.f) {
+                textY = position.y + 8.f;
+            } else if (lines.size() > 1) {
+                sf::FloatRect totalB = sfText.getLocalBounds();
+                textY = position.y + (size.y - totalB.height) / 2.0f - totalB.top;
+            }
+
+            sfText.setPosition(std::round(textX), std::round(textY));
             target.draw(sfText);
 
             // Draw cursor
             if (isFocused && showCursor) {
-                sf::FloatRect bounds = sfText.getLocalBounds();
-                float cursorX = textX + (unicodeText.isEmpty() ? 0.f : (bounds.left + bounds.width + 2.f));
-                sf::RectangleShape cursor(sf::Vector2f(2.f, static_cast<float>(fontSize) + 4.f));
+                float cursorX = textX;
+                float cursorY = textY - 1.f;
+                if (!wrappedDisplay.isEmpty()) {
+                    if (lines.size() <= 1) {
+                        sf::FloatRect bounds = sfText.getLocalBounds();
+                        cursorX = textX + bounds.left + bounds.width + 2.f;
+                        cursorY = textY - 1.f;
+                    } else {
+                        sf::Vector2f endPos = sfText.findCharacterPos(wrappedDisplay.getSize());
+                        cursorX = endPos.x + 1.5f;
+                        cursorY = endPos.y;
+                    }
+                }
+                sf::RectangleShape cursor(sf::Vector2f(2.f, static_cast<float>(renderFontSize) + 3.f));
                 cursor.setFillColor(focusColor);
-                cursor.setPosition(cursorX, textY - 2.f);
+                cursor.setPosition(std::round(cursorX), std::round(cursorY));
                 target.draw(cursor);
             }
         }

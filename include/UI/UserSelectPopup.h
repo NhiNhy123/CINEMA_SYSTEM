@@ -197,18 +197,28 @@ public:
         );
         target.draw(titleText);
 
-        // Centered Message
-        sf::Text msgText;
-        msgText.setFont(Theme::FontPrimary);
-        msgText.setCharacterSize(15);
-        msgText.setFillColor(sf::Color(71, 85, 105));
-        msgText.setString(toSfString(message));
-        sf::FloatRect mb = msgText.getLocalBounds();
-        msgText.setPosition(
-            std::round(cardPos.x + (cardSize.x - mb.width) / 2.0f - mb.left),
-            std::round(cardPos.y + 82.f - mb.top)
+        // Centered Message (with automatic line wrapping inside card)
+        std::vector<sf::String> msgLines = wrapSfTextLines(
+            Theme::FontPrimary,
+            toSfString(message),
+            15,
+            cardSize.x - 48.f
         );
-        target.draw(msgText);
+        if (msgLines.size() > 3) msgLines.resize(3);
+        float startMsgY = (msgLines.size() <= 1) ? (cardPos.y + 84.f) : (cardPos.y + 72.f);
+        for (std::size_t idx = 0; idx < msgLines.size(); ++idx) {
+            sf::Text msgText;
+            msgText.setFont(Theme::FontPrimary);
+            msgText.setCharacterSize(15);
+            msgText.setFillColor(sf::Color(71, 85, 105));
+            msgText.setString(msgLines[idx]);
+            sf::FloatRect mb = msgText.getLocalBounds();
+            msgText.setPosition(
+                std::round(cardPos.x + (cardSize.x - mb.width) / 2.0f - mb.left),
+                std::round(startMsgY + static_cast<float>(idx) * 22.f - mb.top)
+            );
+            target.draw(msgText);
+        }
 
         // Centered Buttons
         btnCancel.draw(target);

@@ -19,6 +19,97 @@ inline sf::String toSfString(const std::string& utf8Str) {
     return sf::String::fromUtf8(utf8Str.begin(), utf8Str.end());
 }
 
+inline std::vector<sf::String> wrapSfTextLines(
+    const sf::Font& font,
+    const sf::String& input,
+    unsigned int charSize,
+    float maxWidth,
+    sf::Uint32 style = sf::Text::Regular
+) {
+    std::vector<sf::String> lines;
+    if (input.isEmpty()) {
+        lines.push_back(sf::String());
+        return lines;
+    }
+
+    sf::Text measureTxt;
+    measureTxt.setFont(font);
+    measureTxt.setCharacterSize(charSize);
+    measureTxt.setStyle(style);
+
+    auto measureWidth = [&](const sf::String& s) -> float {
+        if (s.isEmpty()) return 0.f;
+        measureTxt.setString(s);
+        sf::FloatRect b = measureTxt.getLocalBounds();
+        return b.left + b.width;
+    };
+
+    sf::String currentLine;
+    for (std::size_t i = 0; i < input.getSize(); ++i) {
+        sf::Uint32 ch = input[i];
+        if (ch == '\r') continue;
+        if (ch == '\n') {
+            lines.push_back(currentLine);
+            currentLine.clear();
+            continue;
+        }
+
+        sf::String candidate = currentLine + ch;
+        if (!currentLine.isEmpty() && measureWidth(candidate) > maxWidth) {
+            // Try breaking at the last space, slash, or hyphen
+            int breakIdx = -1;
+            for (int k = static_cast<int>(currentLine.getSize()) - 1; k > 0; --k) {
+                sf::Uint32 c = currentLine[static_cast<std::size_t>(k)];
+                if (c == ' ' || c == '/' || c == '-') {
+                    breakIdx = k;
+                    break;
+                }
+            }
+
+            if (ch == ' ') {
+                lines.push_back(currentLine);
+                currentLine.clear();
+            } else if (breakIdx > 0) {
+                sf::Uint32 brkChar = currentLine[static_cast<std::size_t>(breakIdx)];
+                std::size_t headLen = (brkChar == ' ')
+                    ? static_cast<std::size_t>(breakIdx)
+                    : static_cast<std::size_t>(breakIdx + 1);
+                lines.push_back(currentLine.substring(0, headLen));
+                currentLine = currentLine.substring(static_cast<std::size_t>(breakIdx + 1)) + ch;
+            } else {
+                lines.push_back(currentLine);
+                currentLine = sf::String(ch);
+            }
+        } else {
+            currentLine = candidate;
+        }
+    }
+    lines.push_back(currentLine);
+    return lines;
+}
+
+inline sf::String wrapSfTextString(
+    const sf::Font& font,
+    const sf::String& input,
+    unsigned int charSize,
+    float maxWidth,
+    std::size_t maxLines = 2,
+    sf::Uint32 style = sf::Text::Regular,
+    std::size_t* outLineCount = nullptr
+) {
+    std::vector<sf::String> lines = wrapSfTextLines(font, input, charSize, maxWidth, style);
+    if (maxLines > 0 && lines.size() > maxLines) {
+        lines.resize(maxLines);
+    }
+    if (outLineCount) *outLineCount = lines.size();
+    sf::String joined;
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        if (i > 0) joined += "\n";
+        joined += lines[i];
+    }
+    return joined;
+}
+
 class Theme {
 public:
     // Main Palette (Modern Cinema Dark Navy & Vibrant Accents)

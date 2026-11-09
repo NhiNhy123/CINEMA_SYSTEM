@@ -1079,6 +1079,18 @@ void Database::docDanhSachFAndB(vector<FoodAndBeverage>& ds) {
     ds.clear();
     vector<vector<string> > rows;
     if (!readTable("food_and_beverages", rows)) return;
+    if (rows.size() <= 4 && !rows.empty() && rows[0].size() >= 2 && rows[0][1] == "Bap ngot") {
+        rows.clear();
+        rows.push_back(makeRow("FB01", "CoCa CoLa", "Nuoc", "25000", "NgungBan"));
+        rows.push_back(makeRow("FB02", "Nước có Gas (Sprite/Fanta)", "Nuoc", "20000", "DangBan"));
+        rows.push_back(makeRow("FB03", "Bắp Caramel Thơm Ngọt", "Bap", "20000", "DangBan"));
+        rows.push_back(makeRow("PRD001", "Bắp Rang Lớn (Bơ / Phô mai)", "Bap", "55000", "DangBan"));
+        rows.push_back(makeRow("PRD002", "Bắp Rang Nhỏ", "Bap", "40000", "DangBan"));
+        rows.push_back(makeRow("PRD003", "Nước Ngọt Lớn (Coke / Sprite)", "Nuoc", "35000", "DangBan"));
+        rows.push_back(makeRow("PRD004", "Nước Ngọt Nhỏ", "Nuoc", "25000", "DangBan"));
+        rows.push_back(makeRow("PRD005", "Combo Bắp + Nước Cinema", "Combo", "80000", "NgungBan"));
+        writeTable("food_and_beverages", rows);
+    }
     for (size_t i = 0; i < rows.size(); ++i) {
         const vector<string>& p = rows[i];
         if (p.size() >= 5) {
