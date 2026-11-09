@@ -5094,12 +5094,6 @@ void CinemaUIApp::renderMoviesView() {
         magHandle.setFillColor(sf::Color(100, 116, 139));
         window.draw(magHandle);
 
-        sf::RectangleShape magHandle(sf::Vector2f(4.5f, 1.6f));
-        magHandle.setPosition(leftColX + 128.f, 269.f);
-        magHandle.setRotation(45.f);
-        magHandle.setFillColor(sf::Color(100, 116, 139));
-        window.draw(magHandle);
-
         // Age Rating Filter Bar (Tất cả | P | K | T13 | T18)
         float filterBarX = leftColX + 422.f;
         float filterBarY = 248.f;
