@@ -69,6 +69,26 @@ struct VisualSeat {
     bool isSelected;
 };
 
+struct SeatTypeItem {
+    std::string maLoai;
+    std::string tenLoai;
+    double donGia;
+    std::string moTa;
+    sf::Color mauSac;
+    bool kichHoatBan;
+};
+
+struct SeatMapBox {
+    std::string maGhe;
+    std::string label;
+    char rowChar;
+    int colStart;
+    int colEnd;
+    std::string loaiGhe;
+    bool isBooked;
+    sf::FloatRect bounds;
+};
+
 struct StaffAccountInfo {
     std::string maNguoiDung;
     std::string hoTen;
@@ -143,6 +163,9 @@ private:
     int selectedGenreChoiceIdx;
     std::string movieAgeFilter; // "", "P", "T13", "T18", "C18"
     bool moviePosActive;
+    int movieCurrentPage;
+    bool showMovieSpotlight;
+    int spotlightMovieIdx;
     std::map<std::string, std::shared_ptr<sf::Texture>> moviePosterTextures;
 
     std::unique_ptr<RoundRectButton> btnSubTabMovies;
@@ -156,6 +179,13 @@ private:
     std::unique_ptr<UIInputBox> inputMovieDuration;
     std::unique_ptr<UIInputBox> inputMovieReleaseDate;
     std::unique_ptr<UIInputBox> inputMovieAgeRating;
+    std::unique_ptr<DropdownBox> movieFormAgeDropdown;
+    std::unique_ptr<DropdownBox> movieAgeFilterDropdown;
+    std::vector<std::string> customAgeRatings;
+    bool showAgeInputDialog;
+    std::unique_ptr<UIInputBox> inputNewAgeRating;
+    std::unique_ptr<RoundRectButton> btnSaveNewAge;
+    std::unique_ptr<RoundRectButton> btnCancelNewAge;
     std::unique_ptr<UIInputBox> inputMovieGenre;
     std::unique_ptr<UIInputBox> inputMoviePoster;
     std::unique_ptr<UIInputBox> inputMovieDesc;
@@ -176,6 +206,7 @@ private:
     std::unique_ptr<RoundRectButton> btnGenreClear;
     std::unique_ptr<UIInputBox> genreSearchInput;
     std::unique_ptr<RoundRectButton> btnExportGenres;
+    std::unique_ptr<RoundRectButton> btnQuickAddGenre;
     int selectedGenreColorIdx;
     std::map<std::string, int> genreColorMap;
     bool genreSortAsc;
@@ -231,6 +262,13 @@ private:
     std::unique_ptr<RoundRectButton> btnFnbUpdate;
     std::unique_ptr<RoundRectButton> btnFnbClear;
 
+    // Combo Recipe items inside F&B Form
+    int comboItem1Idx; // Index in retail list
+    int comboItem1Qty; // Quantity of item 1
+    int comboItem2Idx; // Index in retail list
+    int comboItem2Qty; // Quantity of item 2
+    std::vector<int> getRetailFnbIndices() const;
+
     // View 5: Logs Components
     std::unique_ptr<EditableTable> logsTable;
 
@@ -245,6 +283,103 @@ private:
     std::unique_ptr<RoundRectButton> btnReportBank;
     std::unique_ptr<RoundRectButton> btnAddRoom;
     std::unique_ptr<RoundRectButton> btnAutoGenerateSeats;
+
+    // Rooms Management UI Components (CineOS v3.2 Pro)
+    int selectedRoomRowIdx;
+    int roomCurrentPage;
+    std::string roomSearchQuery;
+    int roomFilterType;  // 0: Tất cả, 1: Standard, 2: Premium, 3: Đặc biệt
+    int roomFormTechIdx; // 0: Standard, 1: VIP, 2: IMAX, 3: 4DX, 4: 10D VR
+    int roomFormCapacity;
+    int roomFormStatusIdx; // 0: HoatDong (Sẵn sàng đón khách), 1: TamNgung (Tạm ngưng / Bảo trì)
+
+    std::unique_ptr<UIInputBox> roomSearchInput;
+    std::unique_ptr<RoundRectButton> btnRoomFilterAll;
+    std::unique_ptr<RoundRectButton> btnRoomFilterStandard;
+    std::unique_ptr<RoundRectButton> btnRoomFilterPremium;
+    std::unique_ptr<RoundRectButton> btnRoomFilterSpecial;
+
+    std::unique_ptr<RoundRectButton> btnRoomExportPDF;
+    std::unique_ptr<RoundRectButton> btnRoomAddNew;
+
+    std::unique_ptr<UIInputBox> inputRoomUUID;
+    std::unique_ptr<UIInputBox> inputRoomName;
+    std::unique_ptr<UIInputBox> inputRoomCapacity;
+    std::unique_ptr<RoundRectButton> btnRoomCapMinus;
+    std::unique_ptr<RoundRectButton> btnRoomCapPlus;
+    std::vector<std::unique_ptr<RoundRectButton>> btnRoomTechOptions;
+    std::unique_ptr<DropdownBox> roomStatusDropdown;
+
+    std::unique_ptr<RoundRectButton> btnRoomCreate;
+    std::unique_ptr<RoundRectButton> btnRoomUpdate;
+    std::unique_ptr<RoundRectButton> btnRoomDelete;
+    std::unique_ptr<RoundRectButton> btnRoomReset;
+
+    std::unique_ptr<RoundRectButton> btnRoomPrevPage;
+    std::unique_ptr<RoundRectButton> btnRoomNextPage;
+
+    // Seats Management UI Components (CineOS Enterprise / v3.2 Pro)
+    int seatSubTab; // 0: Thiết lập sơ đồ ghế, 1: Loại ghế & đơn giá
+    std::string seatSelectedRoomId;
+    int seatViewMode; // 0: 3D, 1: 2D Phẳng, 2: POV Ghế
+    float seatZoomLevel;
+    std::vector<std::string> seatSelectedCodes;
+    int seatListPage;
+    std::string seatListSearchQuery;
+    int selectedSeatRowIdx;
+
+    // Tab 1 UI controls
+    std::unique_ptr<DropdownBox> seatRoomDropdown;
+    std::unique_ptr<RoundRectButton> btnSeatCopyLayout;
+    std::unique_ptr<RoundRectButton> btnSeatExportMap;
+    std::unique_ptr<RoundRectButton> btnSeatAddRowQuick;
+    std::unique_ptr<RoundRectButton> btnSeatSubTabMatrix;
+    std::unique_ptr<RoundRectButton> btnSeatSubTabTypes;
+
+    std::unique_ptr<RoundRectButton> btnSeatView3D;
+    std::unique_ptr<RoundRectButton> btnSeatView2D;
+    std::unique_ptr<RoundRectButton> btnSeatViewPOV;
+    std::unique_ptr<RoundRectButton> btnSeatZoomIn;
+    std::unique_ptr<RoundRectButton> btnSeatZoomOut;
+    std::unique_ptr<RoundRectButton> btnSeatZoomReset;
+
+    std::unique_ptr<UIInputBox> seatSearchInput;
+    std::unique_ptr<RoundRectButton> btnSeatListPrev;
+    std::unique_ptr<RoundRectButton> btnSeatListNext;
+
+    std::unique_ptr<UIInputBox> inputSeatBatchRows;
+    std::unique_ptr<UIInputBox> inputSeatBatchCols;
+    std::unique_ptr<DropdownBox> seatBatchTypeDropdown;
+    std::unique_ptr<RoundRectButton> btnSeatBatchAdd;
+    std::unique_ptr<RoundRectButton> btnSeatUpdateType;
+    std::unique_ptr<RoundRectButton> btnSeatDeleteBatch;
+    std::unique_ptr<RoundRectButton> btnSeatResetForm;
+
+    // Tab 2 UI controls
+    std::vector<SeatTypeItem> seatTypeList;
+    int selectedSeatTypeRowIdx;
+    int seatTypeFilterIdx; // 0: Tất cả, 1: Ghế Đơn, 2: Ghế Đôi / Premium, 3: Công Nghệ Đặc Biệt
+    std::unique_ptr<RoundRectButton> btnSeatExportPricing;
+    std::unique_ptr<RoundRectButton> btnSeatAddNewType;
+    std::unique_ptr<RoundRectButton> btnSeatPriceHistory;
+    std::unique_ptr<UIInputBox> seatTypeSearchInput;
+    std::unique_ptr<RoundRectButton> btnSeatTypeFilterAll;
+    std::unique_ptr<RoundRectButton> btnSeatTypeFilterSingle;
+    std::unique_ptr<RoundRectButton> btnSeatTypeFilterCouple;
+    std::unique_ptr<RoundRectButton> btnSeatTypeFilterSpecial;
+
+    std::string seatFormTypeCode;
+    std::unique_ptr<UIInputBox> inputSeatTypeName;
+    std::unique_ptr<UIInputBox> inputSeatTypePrice;
+    std::unique_ptr<UIInputBox> inputSeatTypeDesc;
+    int seatTypeColorIdx; // 0..4
+    bool seatTypeSaleActive;
+
+    std::unique_ptr<RoundRectButton> btnSeatTypeAdd;
+    std::unique_ptr<RoundRectButton> btnSeatTypeUpdate;
+    std::unique_ptr<RoundRectButton> btnSeatTypeDelete;
+    std::unique_ptr<RoundRectButton> btnSeatTypeReset;
+
     std::unique_ptr<RoundRectButton> btnAddShowtime;
     std::unique_ptr<RoundRectButton> btnManageGenres;
     std::unique_ptr<RoundRectButton> btnAddFnb;
@@ -259,6 +394,8 @@ private:
     int showtimeSubTab; // 0: Bảng danh sách, 1: Timeline lịch theo phòng, 2: Lịch chiếu theo phim
     int selectedShowtimeRowIdx;
     int showtimeCurrentPage;
+    int stLastValidMinutes;
+    std::string showtimeTimelineDate;
     std::unique_ptr<RoundRectButton> btnStTabList;
     std::unique_ptr<RoundRectButton> btnStTabTimeline;
     std::unique_ptr<RoundRectButton> btnStTabByMovie;
@@ -266,10 +403,12 @@ private:
     std::unique_ptr<RoundRectButton> btnStNew;
 
     std::unique_ptr<UIInputBox> stSearchInput;
+    std::unique_ptr<DropdownBox> stMovieFilterDropdown;
     std::unique_ptr<DropdownBox> stDateDropdown;
     std::unique_ptr<RoundRectButton> btnStTodayQuick;
     std::unique_ptr<DropdownBox> stRoomDropdown;
     std::unique_ptr<RoundRectButton> btnStConfig;
+    std::string stMovieFilterVal;
     std::string stDateFilterVal;
     std::string stRoomFilterVal;
 
@@ -293,6 +432,36 @@ private:
     std::unique_ptr<RoundRectButton> btnStDelete;
     std::unique_ptr<RoundRectButton> btnStReset;
 
+    // Promotions Management UI Components (CineOS v3.2 Pro)
+    int selectedPromoRowIdx;
+    int promoCurrentPage;
+    int promoFilterTab; // 0: Tất cả, 1: Đang chạy, 2: Sắp tới, 3: Hết hạn
+    std::string promoScopeVal; // "All" or movie ID e.g. "P01"
+
+    std::unique_ptr<RoundRectButton> btnPromoExport;
+    std::unique_ptr<RoundRectButton> btnPromoNew;
+    std::unique_ptr<UIInputBox> promoSearchInput;
+    std::unique_ptr<RoundRectButton> btnPromoFilterAll;
+    std::unique_ptr<RoundRectButton> btnPromoFilterActive;
+    std::unique_ptr<RoundRectButton> btnPromoFilterUpcoming;
+    std::unique_ptr<RoundRectButton> btnPromoFilterExpired;
+
+    std::unique_ptr<UIInputBox> inputPromoId;
+    std::unique_ptr<UIInputBox> inputPromoName;
+    std::unique_ptr<UIInputBox> inputPromoCode;
+    std::unique_ptr<RoundRectButton> btnPromoCopyCode;
+    std::unique_ptr<UIInputBox> inputPromoPercent;
+    std::unique_ptr<UIInputBox> inputPromoMaxDiscount;
+    std::unique_ptr<UIInputBox> inputPromoStartDate;
+    std::unique_ptr<UIInputBox> inputPromoEndDate;
+    std::unique_ptr<DropdownBox> promoScopeDropdown;
+    std::unique_ptr<RoundRectButton> btnPromoSelectMovie;
+
+    std::unique_ptr<RoundRectButton> btnPromoCreate;
+    std::unique_ptr<RoundRectButton> btnPromoUpdate;
+    std::unique_ptr<RoundRectButton> btnPromoDelete;
+    std::unique_ptr<RoundRectButton> btnPromoClear;
+
 public:
     CinemaUIApp();
     ~CinemaUIApp() = default;
@@ -311,12 +480,36 @@ private:
     void setupNavigation();
     void setupDashboardView();
     void setupMoviesView();
+    void setupRoomsView();
+    void setupSeatsView();
     void setupSeatBookingView();
     void setupConcessionsView();
     void setupShowtimesView();
+    void setupPromotionsView();
     void setupLogsView();
 
+    void syncPromoSelectionToForm(int idx);
+    void refreshPromoScopeDropdown();
+    std::string generateNextPromoId() const;
+    std::vector<int> getFilteredPromoIndices() const;
+
+    void refreshSeatTypeList();
+    void syncSeatTypeSelectionToForm(int idx);
+    void applyBatchSeatChanges(bool isUpdate);
+    void deleteSelectedSeats();
+    void refreshSeatsRoomDropdown();
+    bool isSeatBookedInRoom(const std::string& maPhong, const std::string& maGhe) const;
+    std::vector<SeatMapBox> buildCurrentRoomSeatMapBoxes() const;
+    std::vector<int> getFilteredRoomSeatIndices() const;
+
     void refreshSeatsForShowtime(const std::string& maSuatChieu);
+    void syncShowtimeSelectionToForm(int idx);
+    void syncRoomSelectionToForm(int idx);
+    void generateSeatsForRoom(const std::string& roomId, int capacity, const std::string& techType);
+    void refreshShowtimesDropdowns();
+    void refreshAgeRatingDropdowns();
+    void syncMovieFormAgeDropdown(const std::string& ageCode);
+    void addNewAgeRating(const std::string& newAge);
     void handleEvents();
     void update(float dt);
     void render();

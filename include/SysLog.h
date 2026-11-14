@@ -1,13 +1,16 @@
 #ifndef SYSLOG_H
 #define SYSLOG_H
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
+#define byte win_byte_override
 #include <windows.h>
+#undef byte
 
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <string>
-#include <windows.h>
 
 #include "User.h"
 

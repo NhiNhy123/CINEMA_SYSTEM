@@ -11,7 +11,12 @@
 #include <iomanip>
 #include <limits>
 #include <ctime>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#define byte win_byte_override
 #include <windows.h>
+#undef byte
 
 using namespace std;
 

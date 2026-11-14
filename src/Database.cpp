@@ -21,7 +21,14 @@
 #include <map>
 #include <set>
 #include <algorithm>
-#include <windows.h>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
 #include <sqlite3.h>
 
 using namespace std;
@@ -1079,8 +1086,7 @@ void Database::docDanhSachFAndB(vector<FoodAndBeverage>& ds) {
     ds.clear();
     vector<vector<string> > rows;
     if (!readTable("food_and_beverages", rows)) return;
-    if (rows.size() <= 4 && !rows.empty() && rows[0].size() >= 2 && rows[0][1] == "Bap ngot") {
-        rows.clear();
+    if (rows.empty()) {
         rows.push_back(makeRow("FB01", "CoCa CoLa", "Nuoc", "25000", "NgungBan"));
         rows.push_back(makeRow("FB02", "Nước có Gas (Sprite/Fanta)", "Nuoc", "20000", "DangBan"));
         rows.push_back(makeRow("FB03", "Bắp Caramel Thơm Ngọt", "Bap", "20000", "DangBan"));
@@ -1100,8 +1106,13 @@ void Database::docDanhSachFAndB(vector<FoodAndBeverage>& ds) {
 }
 
 void Database::ghiDanhSachFAndB(const vector<FoodAndBeverage>& fnb) {
-    vector<Promotion> km; vector<Invoice> hd; docDanhSachKhuyenMai(km); docDanhSachHoaDon(hd);
-    ghiFileGiaoDichFNB(fnb, km, hd);
+    vector<vector<string> > foodRows;
+    for (size_t i = 0; i < fnb.size(); ++i) {
+        foodRows.push_back(makeRow(fnb[i].getMaMatHang(), fnb[i].getTenMatHang(),
+            fnb[i].getLoai(), toText(fnb[i].getGiaTien()),
+            fnb[i].getTrangThaiKinhDoanh()));
+    }
+    writeTable("food_and_beverages", foodRows);
 }
 
 void Database::docDanhSachKhuyenMai(vector<Promotion>& ds) {

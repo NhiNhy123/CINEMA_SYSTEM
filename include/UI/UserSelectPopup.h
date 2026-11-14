@@ -90,14 +90,24 @@ public:
             std::round((windowSize.y - cardSize.y) / 2.0f)
         );
 
-        float btnW = 136.f;
+        float btnW = 140.f;
         float btnGap = 16.f;
-        float totalBtnW = btnW * 2.f + btnGap;
-        float startX = std::round(cardPos.x + (cardSize.x - totalBtnW) / 2.0f);
         float btnY = std::round(cardPos.y + cardSize.y - 62.f);
 
-        btnCancel.setPosition(sf::Vector2f(startX, btnY));
-        btnConfirm.setPosition(sf::Vector2f(startX + btnW + btnGap, btnY));
+        if (btnCancel.getText().empty() || btnCancel.getText() == "") {
+            // Only 1 Button (e.g. "Đóng") - Center horizontally!
+            float startX = std::round(cardPos.x + (cardSize.x - btnW) / 2.0f);
+            btnConfirm.setPosition(sf::Vector2f(startX, btnY));
+            btnConfirm.setSize(sf::Vector2f(btnW, 42.f));
+        } else {
+            // 2 Buttons (Confirm and Cancel)
+            float totalBtnW = btnW * 2.f + btnGap;
+            float startX = std::round(cardPos.x + (cardSize.x - totalBtnW) / 2.0f);
+            btnCancel.setPosition(sf::Vector2f(startX, btnY));
+            btnCancel.setSize(sf::Vector2f(btnW, 42.f));
+            btnConfirm.setPosition(sf::Vector2f(startX + btnW + btnGap, btnY));
+            btnConfirm.setSize(sf::Vector2f(btnW, 42.f));
+        }
     }
 
     void show(
@@ -125,21 +135,27 @@ public:
     bool handleMouseMove(sf::Vector2f mousePos) {
         if (!isOpen) return false;
         btnConfirm.handleMouseMove(mousePos);
-        btnCancel.handleMouseMove(mousePos);
+        if (!btnCancel.getText().empty() && btnCancel.getText() != "") {
+            btnCancel.handleMouseMove(mousePos);
+        }
         return true; // Modal captures all mouse movement
     }
 
     bool handleMouseButtonPressed(sf::Mouse::Button button, sf::Vector2f mousePos) {
         if (!isOpen) return false;
         btnConfirm.handleMouseButtonPressed(button, mousePos);
-        btnCancel.handleMouseButtonPressed(button, mousePos);
+        if (!btnCancel.getText().empty() && btnCancel.getText() != "") {
+            btnCancel.handleMouseButtonPressed(button, mousePos);
+        }
         return true; // Modal captures all clicks
     }
 
     bool handleMouseButtonReleased(sf::Mouse::Button button, sf::Vector2f mousePos) {
         if (!isOpen) return false;
         btnConfirm.handleMouseButtonReleased(button, mousePos);
-        btnCancel.handleMouseButtonReleased(button, mousePos);
+        if (!btnCancel.getText().empty() && btnCancel.getText() != "") {
+            btnCancel.handleMouseButtonReleased(button, mousePos);
+        }
         return true;
     }
 
@@ -221,7 +237,9 @@ public:
         }
 
         // Centered Buttons
-        btnCancel.draw(target);
+        if (!btnCancel.getText().empty() && btnCancel.getText() != "") {
+            btnCancel.draw(target);
+        }
         btnConfirm.draw(target);
     }
 };

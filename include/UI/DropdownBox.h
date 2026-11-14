@@ -29,9 +29,31 @@ private:
     bool isLightStyle;
     int maxVisibleItems;
     int scrollOffset;
+    bool isDraggingScrollbar;
     std::string leftIcon; // "date", "room", "time", "icon_only_date", "icon_only_time" or ""
+    std::string placeholder;
     float popupWidth;
     float popupOffsetX;
+
+    void updateScrollFromMouseY(float mouseY) {
+        int totalOpts = static_cast<int>(options.size());
+        int maxScroll = totalOpts - maxVisibleItems;
+        if (maxScroll <= 0) return;
+
+        float dropY = position.y + size.y + 4.f;
+        int visibleCount = std::min(totalOpts, maxVisibleItems);
+        float totalHeight = static_cast<float>(visibleCount) * itemHeight;
+        float sbTrackY = dropY + 4.f;
+        float sbTrackH = totalHeight - 8.f;
+        float thumbH = std::max(22.f, sbTrackH * (static_cast<float>(maxVisibleItems) / static_cast<float>(totalOpts)));
+        float maxThumbTravel = sbTrackH - thumbH;
+
+        if (maxThumbTravel > 0.f) {
+            float relThumbY = mouseY - sbTrackY - thumbH * 0.5f;
+            float ratio = std::clamp(relThumbY / maxThumbTravel, 0.f, 1.f);
+            scrollOffset = std::clamp(static_cast<int>(std::round(ratio * static_cast<float>(maxScroll))), 0, maxScroll);
+        }
+    }
 
 public:
     DropdownBox(
@@ -43,19 +65,28 @@ public:
         hoveredOptionIndex(-1), isExpanded(false), isVisible(true),
         isEnabled(true), font(&Theme::FontPrimary), fontSize(Theme::SizeBody),
         itemHeight(38.f), onSelect(nullptr),
-        isLightStyle(false), maxVisibleItems(6), scrollOffset(0), leftIcon(""),
+        isLightStyle(false), maxVisibleItems(6), scrollOffset(0),
+        isDraggingScrollbar(false),
+        leftIcon(""),
+        placeholder("-- Chọn --"),
         popupWidth(-1.f), popupOffsetX(0.f) {}
 
     void setPosition(sf::Vector2f pos) { position = pos; }
     void setSize(sf::Vector2f sz) { size = sz; }
+    void setPlaceholder(const std::string& p) { placeholder = p; }
+    std::string getPlaceholder() const { return placeholder; }
     void setOptions(const std::vector<std::string>& opts, int defIdx = 0) {
         options = opts;
         selectedIndex = (defIdx >= 0 && defIdx < static_cast<int>(options.size())) ? defIdx : 0;
-        scrollOffset = 0;
+        int maxScroll = std::max(0, static_cast<int>(options.size()) - maxVisibleItems);
+        scrollOffset = std::clamp(scrollOffset, 0, maxScroll);
+        isDraggingScrollbar = false;
     }
     void setSelectedIndex(int idx) {
         if (idx >= 0 && idx < static_cast<int>(options.size())) {
             selectedIndex = idx;
+        } else if (idx < 0) {
+            selectedIndex = -1;
         }
     }
     int getSelectedIndex() const { return selectedIndex; }
@@ -68,7 +99,10 @@ public:
     bool getExpanded() const { return isExpanded; }
     void setExpanded(bool exp) {
         isExpanded = exp;
-        if (!exp) scrollOffset = 0;
+        if (!exp) {
+            scrollOffset = 0;
+            isDraggingScrollbar = false;
+        }
     }
     void setVisible(bool vis) { isVisible = vis; }
     void setEnabled(bool en) { isEnabled = en; }
@@ -100,8 +134,19 @@ public:
         float dropHeight = static_cast<float>(visibleCount) * itemHeight;
         float px = getEffectivePopupX();
         float pw = getEffectivePopupWidth();
-        return pt.x >= px && pt.x <= px + pw &&
-               pt.y >= position.y + size.y + 4.f && pt.y <= position.y + size.y + 4.f + dropHeight;
+        return pt.x >= px - 2.f && pt.x <= px + pw + 2.f &&
+               pt.y >= position.y + size.y && pt.y <= position.y + size.y + 6.f + dropHeight;
+    }
+
+    bool isScrollbarHit(sf::Vector2f pt) const {
+        if (!isExpanded || static_cast<int>(options.size()) <= maxVisibleItems) return false;
+        float px = getEffectivePopupX();
+        float pw = getEffectivePopupWidth();
+        float dropY = position.y + size.y + 4.f;
+        int visibleCount = std::min(static_cast<int>(options.size()), maxVisibleItems);
+        float totalHeight = static_cast<float>(visibleCount) * itemHeight;
+        return pt.x >= px + pw - 22.f && pt.x <= px + pw + 4.f &&
+               pt.y >= dropY && pt.y <= dropY + totalHeight;
     }
 
     bool handleMouseMove(sf::Vector2f mousePos) {
@@ -110,6 +155,13 @@ public:
             float dropY = position.y + size.y + 4.f;
             float px = getEffectivePopupX();
             float pw = getEffectivePopupWidth();
+            int maxScroll = static_cast<int>(options.size()) - maxVisibleItems;
+
+            if (isDraggingScrollbar && maxScroll > 0) {
+                updateScrollFromMouseY(mousePos.y);
+                return true;
+            }
+
             hoveredOptionIndex = -1;
             int visibleCount = std::min(static_cast<int>(options.size()) - scrollOffset, maxVisibleItems);
             for (int i = 0; i < visibleCount; ++i) {
@@ -127,15 +179,17 @@ public:
 
     bool handleMouseWheelScrolled(float delta, sf::Vector2f mousePos) {
         if (!isVisible || !isEnabled || !isExpanded) return false;
-        if (containsDropdown(mousePos)) {
+        if (containsDropdown(mousePos) || containsMain(mousePos)) {
             int maxScroll = std::max(0, static_cast<int>(options.size()) - maxVisibleItems);
-            if (delta > 0 && scrollOffset > 0) {
-                scrollOffset--;
-                return true;
-            } else if (delta < 0 && scrollOffset < maxScroll) {
-                scrollOffset++;
-                return true;
+            if (maxScroll > 0) {
+                int step = (std::abs(delta) > 1.5f) ? 2 : 1;
+                if (delta > 0.f && scrollOffset > 0) {
+                    scrollOffset = std::max(0, scrollOffset - step);
+                } else if (delta < 0.f && scrollOffset < maxScroll) {
+                    scrollOffset = std::min(maxScroll, scrollOffset + step);
+                }
             }
+            return true;
         }
         return false;
     }
@@ -145,19 +199,44 @@ public:
         if (button == sf::Mouse::Left) {
             if (containsMain(mousePos)) {
                 isExpanded = !isExpanded;
+                if (!isExpanded) isDraggingScrollbar = false;
                 return true;
             } else if (isExpanded && containsDropdown(mousePos)) {
+                float px = getEffectivePopupX();
+                float pw = getEffectivePopupWidth();
                 float dropY = position.y + size.y + 4.f;
+                int maxScroll = static_cast<int>(options.size()) - maxVisibleItems;
+
+                // Priority 1: Check scrollbar hit first (22px right margin)
+                if (maxScroll > 0 && isScrollbarHit(mousePos)) {
+                    isDraggingScrollbar = true;
+                    updateScrollFromMouseY(mousePos.y);
+                    return true;
+                }
+
+                // Priority 2: Option selection
                 int clickedRow = static_cast<int>((mousePos.y - dropY) / itemHeight);
                 int clickedIdx = scrollOffset + clickedRow;
                 if (clickedIdx >= 0 && clickedIdx < static_cast<int>(options.size())) {
                     selectedIndex = clickedIdx;
                     isExpanded = false;
+                    isDraggingScrollbar = false;
                     if (onSelect) onSelect(selectedIndex, options[selectedIndex]);
                     return true;
                 }
             } else if (isExpanded) {
                 isExpanded = false;
+                isDraggingScrollbar = false;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool handleMouseButtonReleased(sf::Mouse::Button button, sf::Vector2f mousePos) {
+        if (button == sf::Mouse::Left) {
+            if (isDraggingScrollbar) {
+                isDraggingScrollbar = false;
                 return true;
             }
         }
@@ -172,7 +251,21 @@ public:
         sf::Color border = isExpanded
             ? (isLightStyle ? sf::Color(2, 132, 199) : Theme::Primary)
             : (isLightStyle ? sf::Color(226, 232, 240) : Theme::InputBorder);
-        RoundedRectRenderer::render(target, position, size, isLightStyle ? 8.f : Theme::RadiusMedium, bg, 1.f, border);
+        bool iconOnly = (leftIcon == "icon_only_date" || leftIcon == "icon_only_time");
+        if (iconOnly) {
+            // Icon-only trigger is embedded inside an input box: draw a subtle
+            // separator instead of a full box so the icon does not look "stuck on".
+            sf::RectangleShape sep(sf::Vector2f(1.f, size.y - 16.f));
+            sep.setPosition(position.x, position.y + 8.f);
+            sep.setFillColor(sf::Color(226, 232, 240));
+            target.draw(sep);
+            if (isExpanded) {
+                RoundedRectRenderer::render(target, sf::Vector2f(position.x + 4.f, position.y + 5.f),
+                                            sf::Vector2f(size.x - 8.f, size.y - 10.f), 6.f, sf::Color(224, 242, 254));
+            }
+        } else {
+            RoundedRectRenderer::render(target, position, size, isLightStyle ? 8.f : Theme::RadiusMedium, bg, 1.f, border);
+        }
 
         float textLeftPad = 14.f;
 
@@ -239,14 +332,23 @@ public:
             sf::Text text;
             text.setFont(*font);
             text.setCharacterSize(fontSize);
-            text.setFillColor(isLightStyle ? sf::Color(30, 41, 59) : Theme::TextPrimary);
-
             std::string disp = getSelectedValue();
-            if (disp.empty()) disp = "-- Chọn --";
-            // Truncate if too long to leave room for chevron
-            int maxDispChars = std::max(22, static_cast<int>((size.x - textLeftPad - 28.f) / 8.5f));
-            if (static_cast<int>(disp.length()) > maxDispChars) disp = disp.substr(0, maxDispChars - 2) + "...";
+            bool isPh = disp.empty();
+            if (isPh) disp = placeholder;
+            text.setFillColor(isPh ? sf::Color(148, 163, 184) : (isLightStyle ? sf::Color(30, 41, 59) : Theme::TextPrimary));
+            // Truncate (by measured pixel width, UTF-8 safe) to leave room for chevron
+            float maxTextW = size.x - textLeftPad - 30.f;
             text.setString(toSfString(disp));
+            if (text.getLocalBounds().width > maxTextW) {
+                sf::String full = toSfString(disp);
+                std::size_t n = full.getSize();
+                while (n > 1) {
+                    --n;
+                    sf::String cut = full.substring(0, n) + sf::String("...");
+                    text.setString(cut);
+                    if (text.getLocalBounds().width <= maxTextW) break;
+                }
+            }
 
             float tx = position.x + textLeftPad;
             float ty = position.y + (size.y - fontSize) / 2.0f - 2.f;
@@ -333,16 +435,23 @@ public:
         // Draw Scrollbar if options exceed maxVisibleItems
         if (static_cast<int>(options.size()) > maxVisibleItems) {
             int maxScroll = static_cast<int>(options.size()) - maxVisibleItems;
-            float sbTrackX = px + pw - 6.f;
+            float sbTrackX = px + pw - 9.f;
             float sbTrackY = dropY + 4.f;
             float sbTrackH = totalHeight - 8.f;
-            float thumbH = std::max(16.f, sbTrackH * (static_cast<float>(maxVisibleItems) / options.size()));
-            float thumbY = sbTrackY + (sbTrackH - thumbH) * (static_cast<float>(scrollOffset) / maxScroll);
 
-            sf::RectangleShape thumb(sf::Vector2f(4.f, thumbH));
-            thumb.setPosition(sbTrackX, thumbY);
-            thumb.setFillColor(isLightStyle ? sf::Color(186, 230, 253) : sf::Color(100, 116, 139));
-            target.draw(thumb);
+            // Draw subtle track
+            RoundedRectRenderer::render(target, sf::Vector2f(sbTrackX - 1.f, sbTrackY), sf::Vector2f(7.f, sbTrackH), 3.5f,
+                                        isLightStyle ? sf::Color(241, 245, 249) : sf::Color(30, 41, 59));
+
+            float thumbH = std::max(22.f, sbTrackH * (static_cast<float>(maxVisibleItems) / static_cast<float>(options.size())));
+            float thumbY = sbTrackY + (sbTrackH - thumbH) * (static_cast<float>(scrollOffset) / static_cast<float>(maxScroll));
+
+            sf::Color thumbColor = isDraggingScrollbar
+                ? (isLightStyle ? sf::Color(2, 132, 199) : Theme::Cyan)
+                : (isLightStyle ? sf::Color(148, 163, 184) : sf::Color(100, 116, 139));
+
+            RoundedRectRenderer::render(target, sf::Vector2f(sbTrackX, thumbY), sf::Vector2f(5.f, thumbH), 2.5f,
+                                        thumbColor);
         }
     }
 };
