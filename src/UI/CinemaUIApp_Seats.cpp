@@ -544,6 +544,55 @@ void CinemaUIApp::applyBatchSeatChanges(bool isUpdate) {
         }
     }
 
+    int maxAllowedCap = 0;
+    for (const auto& rm : roomList) {
+        if (rm.getMaPhong() == seatSelectedRoomId) {
+            maxAllowedCap = rm.getSucChua();
+            break;
+        }
+    }
+    int curRoomSeats = 0;
+    for (const auto& s : allSeats) {
+        if (s.getMaPhong() == seatSelectedRoomId) curRoomSeats++;
+    }
+
+    if (!isUpdate && maxAllowedCap > 0) {
+        int projectedNewSeats = 0;
+        for (char r : rows) {
+            if (targetIsCouple) {
+                for (size_t i = 0; i < cols.size(); i += 2) {
+                    int c1 = cols[i];
+                    int c2 = cols[i + 1];
+                    std::string pairCode = std::string(1, r) + std::to_string(c1) + "-" + std::to_string(c2);
+                    bool found = false;
+                    for (const auto& s : allSeats) {
+                        if (s.getMaPhong() == seatSelectedRoomId && s.getMaGhe() == pairCode) {
+                            found = true; break;
+                        }
+                    }
+                    if (!found) projectedNewSeats++;
+                }
+            } else {
+                for (int c : cols) {
+                    std::string singleCode = std::string(1, r) + std::to_string(c);
+                    bool found = false;
+                    for (const auto& s : allSeats) {
+                        if (s.getMaPhong() == seatSelectedRoomId && s.getMaGhe() == singleCode) {
+                            found = true; break;
+                        }
+                    }
+                    if (!found) projectedNewSeats++;
+                }
+            }
+        }
+        if (curRoomSeats + projectedNewSeats > maxAllowedCap) {
+            if (confirmPopup) {
+                confirmPopup->show("LỖI SỨC CHỨA", "Không thể thêm " + std::to_string(projectedNewSeats) + " ghế mới! Tổng số ghế (" + std::to_string(curRoomSeats + projectedNewSeats) + ") sẽ vượt quá sức chứa định mức của phòng (" + std::to_string(maxAllowedCap) + " ghế).\nSức chứa phòng được quản lý cố định bên Quản lý Phòng chiếu.", ButtonStyle::Danger, "Đóng", "");
+            }
+            return;
+        }
+    }
+
     int affectedCount = 0;
 
     for (char r : rows) {
@@ -615,17 +664,6 @@ void CinemaUIApp::applyBatchSeatChanges(bool isUpdate) {
     seatSelectedCodes.clear();
     db.ghiDanhSachGhe(allSeats);
 
-    int curRoomSeats = 0;
-    for (const auto& s : allSeats) {
-        if (s.getMaPhong() == seatSelectedRoomId) curRoomSeats++;
-    }
-    for (auto& rm : roomList) {
-        if (rm.getMaPhong() == seatSelectedRoomId) {
-            rm.setSucChua(curRoomSeats);
-            break;
-        }
-    }
-    db.ghiDanhSachPhong(roomList);
     refreshSeatsRoomDropdown();
     refreshShowtimesDropdowns();
 
@@ -715,17 +753,6 @@ void CinemaUIApp::deleteSelectedSeats() {
 
     if (deletedCount > 0) {
         db.ghiDanhSachGhe(allSeats);
-        int curRoomSeats = 0;
-        for (const auto& s : allSeats) {
-            if (s.getMaPhong() == seatSelectedRoomId) curRoomSeats++;
-        }
-        for (auto& rm : roomList) {
-            if (rm.getMaPhong() == seatSelectedRoomId) {
-                rm.setSucChua(curRoomSeats);
-                break;
-            }
-        }
-        db.ghiDanhSachPhong(roomList);
         refreshSeatsRoomDropdown();
         refreshShowtimesDropdowns();
 
@@ -827,6 +854,14 @@ void CinemaUIApp::setupSeatsView() {
     btnSeatSubTabMatrix->setCustomColors(sf::Color::Transparent, sf::Color(241, 245, 249), sf::Color(226, 232, 240), sf::Color::Transparent);
     btnSeatSubTabMatrix->setOnClick([this]() {
         seatSubTab = 0;
+        refreshSeatTypeList();
+        if (seatBatchTypeDropdown) {
+            std::vector<std::string> bTypeOpts;
+            for (const auto& st : seatTypeList) {
+                bTypeOpts.push_back(st.tenLoai + " (" + formatSeatPriceVN(st.donGia) + " VNĐ)");
+            }
+            seatBatchTypeDropdown->setOptions(bTypeOpts);
+        }
     });
 
     btnSeatSubTabTypes = std::unique_ptr<RoundRectButton>(new RoundRectButton(
@@ -840,6 +875,13 @@ void CinemaUIApp::setupSeatsView() {
     btnSeatSubTabTypes->setOnClick([this]() {
         seatSubTab = 1;
         refreshSeatTypeList();
+        if (seatTypeFilterDropdown) {
+            std::vector<std::string> fOpts = {"Tất cả loại ghế"};
+            for (const auto& st : seatTypeList) {
+                fOpts.push_back(st.tenLoai);
+            }
+            seatTypeFilterDropdown->setOptions(fOpts);
+        }
         if (!seatTypeList.empty() && selectedSeatTypeRowIdx < 0) syncSeatTypeSelectionToForm(0);
     });
 
@@ -899,6 +941,7 @@ void CinemaUIApp::setupSeatsView() {
                             }
                         }
                         if (roomHasSold) continue;
+                        if (rm.getSucChua() < static_cast<int>(curRoomSeats.size())) continue;
 
                         allSeats.erase(std::remove_if(allSeats.begin(), allSeats.end(), [&](const Seat& s) {
                             return s.getMaPhong() == rm.getMaPhong();
@@ -906,11 +949,9 @@ void CinemaUIApp::setupSeatsView() {
                         for (const auto& s : curRoomSeats) {
                             allSeats.push_back(Seat(s.getMaGhe(), rm.getMaPhong(), s.getLoaiGhe(), s.getDonGiaGhe(), "Trong"));
                         }
-                        rm.setSucChua(static_cast<int>(curRoomSeats.size()));
                     }
                 }
                 db.ghiDanhSachGhe(allSeats);
-                db.ghiDanhSachPhong(roomList);
                 ActivityLog::ghiNhan(currentUserId, currentUserRole, "SAO_CHEP_GHE", "Đồng bộ bố cục phòng " + seatSelectedRoomId + " thành công");
                 refreshSeatsRoomDropdown();
                 refreshShowtimesDropdowns();
@@ -1233,46 +1274,23 @@ void CinemaUIApp::setupSeatsView() {
     seatTypeSearchInput->setCornerRadius(10.f);
     seatTypeSearchInput->setTextInset(34.f);
 
-    // Filter Pills on Tab 2 — NO numbers on filter buttons per user requirement
-    btnSeatTypeFilterAll = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "Tất cả",
-        sf::Vector2f(leftColX + 570.f, 184.f),
-        sf::Vector2f(95.f, 32.f),
-        ButtonStyle::Primary,
-        16.f
+    std::vector<std::string> filterOpts = {"Tất cả loại ghế"};
+    for (const auto& st : seatTypeList) {
+        filterOpts.push_back(st.tenLoai);
+    }
+    seatTypeFilterDropdown = std::unique_ptr<DropdownBox>(new DropdownBox(
+        sf::Vector2f(leftColX + 570.f, 182.f),
+        sf::Vector2f(260.f, 36.f),
+        filterOpts,
+        0
     ));
-    btnSeatTypeFilterAll->setFontSize(12);
-    btnSeatTypeFilterAll->setOnClick([this]() { seatTypeFilterIdx = 0; });
-
-    btnSeatTypeFilterSingle = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "Ghế Đơn (Standard/VIP)",
-        sf::Vector2f(leftColX + 675.f, 184.f),
-        sf::Vector2f(175.f, 32.f),
-        ButtonStyle::Ghost,
-        16.f
-    ));
-    btnSeatTypeFilterSingle->setFontSize(12);
-    btnSeatTypeFilterSingle->setOnClick([this]() { seatTypeFilterIdx = 1; });
-
-    btnSeatTypeFilterCouple = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "Ghế Đôi / Premium",
-        sf::Vector2f(leftColX + 860.f, 184.f),
-        sf::Vector2f(155.f, 32.f),
-        ButtonStyle::Ghost,
-        16.f
-    ));
-    btnSeatTypeFilterCouple->setFontSize(12);
-    btnSeatTypeFilterCouple->setOnClick([this]() { seatTypeFilterIdx = 2; });
-
-    btnSeatTypeFilterSpecial = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "Công Nghệ Đặc Biệt (IMAX, 4DX)",
-        sf::Vector2f(leftColX + 1025.f, 184.f),
-        sf::Vector2f(235.f, 32.f),
-        ButtonStyle::Ghost,
-        16.f
-    ));
-    btnSeatTypeFilterSpecial->setFontSize(12);
-    btnSeatTypeFilterSpecial->setOnClick([this]() { seatTypeFilterIdx = 3; });
+    seatTypeFilterDropdown->setFontSize(12);
+    seatTypeFilterDropdown->setLightStyle(true);
+    seatTypeFilterDropdown->setMaxVisibleItems(6);
+    seatTypeFilterDropdown->setOnSelect([this](int idx, const std::string& val) {
+        (void)val;
+        seatTypeFilterIdx = idx;
+    });
 
     // Right Form Inputs (Tab 2)
     inputSeatTypeName = std::unique_ptr<UIInputBox>(new UIInputBox(
@@ -1284,15 +1302,56 @@ void CinemaUIApp::setupSeatsView() {
     inputSeatTypeName->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(15, 23, 42), sf::Color(148, 163, 184));
     inputSeatTypeName->setCornerRadius(8.f);
 
+    float priceInputW = rightColW - 48.f - 82.f;
     inputSeatTypePrice = std::unique_ptr<UIInputBox>(new UIInputBox(
         sf::Vector2f(rightColX + 24.f, 414.f),
-        sf::Vector2f(rightColW - 48.f, 40.f),
+        sf::Vector2f(priceInputW, 40.f),
         "100000",
         14
     ));
     inputSeatTypePrice->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(3, 105, 161), sf::Color(148, 163, 184));
     inputSeatTypePrice->setCornerRadius(8.f);
-    inputSeatTypePrice->setRightInset(55.f);
+    inputSeatTypePrice->setRightInset(20.f);
+
+    btnSeatPriceMinus = std::unique_ptr<RoundRectButton>(new RoundRectButton(
+        "-",
+        sf::Vector2f(rightColX + 24.f + priceInputW + 8.f, 414.f),
+        sf::Vector2f(34.f, 40.f),
+        ButtonStyle::Ghost,
+        8.f
+    ));
+    btnSeatPriceMinus->setFontSize(16);
+    btnSeatPriceMinus->setCustomColors(sf::Color(241, 245, 249), sf::Color(226, 232, 240), sf::Color(203, 213, 225), sf::Color(226, 232, 240));
+    btnSeatPriceMinus->setTextColor(sf::Color(15, 23, 42));
+    btnSeatPriceMinus->setOnClick([this]() {
+        if (!inputSeatTypePrice) return;
+        std::string cur = inputSeatTypePrice->getText();
+        double p = 0.0;
+        try { p = std::stod(cur); } catch (...) {}
+        p = std::max(0.0, p - 10000.0);
+        long long lp = static_cast<long long>(std::round(p));
+        inputSeatTypePrice->setText(std::to_string(lp));
+    });
+
+    btnSeatPricePlus = std::unique_ptr<RoundRectButton>(new RoundRectButton(
+        "+",
+        sf::Vector2f(rightColX + 24.f + priceInputW + 48.f, 414.f),
+        sf::Vector2f(34.f, 40.f),
+        ButtonStyle::Ghost,
+        8.f
+    ));
+    btnSeatPricePlus->setFontSize(16);
+    btnSeatPricePlus->setCustomColors(sf::Color(241, 245, 249), sf::Color(226, 232, 240), sf::Color(203, 213, 225), sf::Color(226, 232, 240));
+    btnSeatPricePlus->setTextColor(sf::Color(15, 23, 42));
+    btnSeatPricePlus->setOnClick([this]() {
+        if (!inputSeatTypePrice) return;
+        std::string cur = inputSeatTypePrice->getText();
+        double p = 0.0;
+        try { p = std::stod(cur); } catch (...) {}
+        p += 10000.0;
+        long long lp = static_cast<long long>(std::round(p));
+        inputSeatTypePrice->setText(std::to_string(lp));
+    });
 
     inputSeatTypeDesc = std::unique_ptr<UIInputBox>(new UIInputBox(
         sf::Vector2f(rightColX + 24.f, 558.f),
@@ -1347,6 +1406,11 @@ void CinemaUIApp::setupSeatsView() {
             bTypeOpts.push_back(st.tenLoai + " (" + formatSeatPriceVN(st.donGia) + " VNĐ)");
         }
         if (seatBatchTypeDropdown) seatBatchTypeDropdown->setOptions(bTypeOpts);
+        if (seatTypeFilterDropdown) {
+            std::vector<std::string> fOpts = {"Tất cả loại ghế"};
+            for (const auto& st : seatTypeList) fOpts.push_back(st.tenLoai);
+            seatTypeFilterDropdown->setOptions(fOpts);
+        }
 
         if (confirmPopup) confirmPopup->show("THÀNH CÔNG", "Đã thêm loại ghế '" + name + "' vào hệ thống!", ButtonStyle::Primary, "Đóng", "");
     });
@@ -1398,6 +1462,11 @@ void CinemaUIApp::setupSeatsView() {
             bTypeOpts.push_back(st.tenLoai + " (" + formatSeatPriceVN(st.donGia) + " VNĐ)");
         }
         if (seatBatchTypeDropdown) seatBatchTypeDropdown->setOptions(bTypeOpts);
+        if (seatTypeFilterDropdown) {
+            std::vector<std::string> fOpts = {"Tất cả loại ghế"};
+            for (const auto& st : seatTypeList) fOpts.push_back(st.tenLoai);
+            seatTypeFilterDropdown->setOptions(fOpts);
+        }
 
         if (confirmPopup) confirmPopup->show("THÀNH CÔNG", "Đã cập nhật thông tin loại ghế '" + name + "' và đồng bộ đơn giá thành công!", ButtonStyle::Primary, "Đóng", "");
     });
@@ -1431,6 +1500,11 @@ void CinemaUIApp::setupSeatsView() {
             bTypeOpts.push_back(st.tenLoai + " (" + formatSeatPriceVN(st.donGia) + " VNĐ)");
         }
         if (seatBatchTypeDropdown) seatBatchTypeDropdown->setOptions(bTypeOpts);
+        if (seatTypeFilterDropdown) {
+            std::vector<std::string> fOpts = {"Tất cả loại ghế"};
+            for (const auto& st : seatTypeList) fOpts.push_back(st.tenLoai);
+            seatTypeFilterDropdown->setOptions(fOpts);
+        }
 
         if (confirmPopup) confirmPopup->show("THÀNH CÔNG", "Đã xóa loại ghế '" + delName + "' khỏi hệ thống!", ButtonStyle::Primary, "Đóng", "");
     });
@@ -1499,56 +1573,7 @@ void CinemaUIApp::renderSeatsView() {
     int totalSeatsAll = static_cast<int>(allSeats.size());
     int totalRoomsAll = static_cast<int>(roomList.size());
 
-    // =========================================================
-    // 1. TOP WHITE BREADCRUMB & PROFILE BAR (y = 0..46)
-    // =========================================================
-    RoundedRectRenderer::render(window, sf::Vector2f(sidebarWidth, 0.f), sf::Vector2f(1728.f - sidebarWidth, 46.f), 0.f, sf::Color::White, 1.f, sf::Color(226, 232, 240));
 
-    sf::Text tBread1(toSfString("Bảng điều khiển   >   Quản lý phòng & Ghế ngồi   >   "), Theme::FontPrimary, 12);
-    tBread1.setFillColor(sf::Color(100, 116, 139));
-    tBread1.setPosition(leftColX, 14.f);
-    window.draw(tBread1);
-
-    sf::Text tBread2(toSfString("Quản lý ghế"), Theme::FontPrimary, 12);
-    tBread2.setStyle(sf::Text::Bold);
-    tBread2.setFillColor(sf::Color(15, 23, 42));
-    tBread2.setPosition(leftColX + tBread1.getLocalBounds().width + 4.f, 14.f);
-    window.draw(tBread2);
-
-    // Branch Pill
-    float brW = 286.f;
-    float brX = rightColX + rightColW - 210.f - brW;
-    RoundedRectRenderer::render(window, sf::Vector2f(brX, 8.f), sf::Vector2f(brW, 30.f), 15.f, sf::Color(241, 245, 249), 1.f, sf::Color(226, 232, 240));
-    sf::CircleShape brDot(4.f);
-    brDot.setFillColor(sf::Color(2, 132, 199));
-    brDot.setPosition(brX + 12.f, 19.f);
-    window.draw(brDot);
-    sf::Text tBranch(toSfString("Chi nhánh: Cinestar Quốc Thanh (TP.HCM)"), Theme::FontPrimary, 11);
-    tBranch.setStyle(sf::Text::Bold);
-    tBranch.setFillColor(sf::Color(30, 41, 59));
-    tBranch.setPosition(brX + 26.f, 15.f);
-    window.draw(tBranch);
-
-    // User Profile on Right
-    sf::Text tAdminName(toSfString("Nguyễn Quốc Thái"), Theme::FontPrimary, 12);
-    tAdminName.setStyle(sf::Text::Bold);
-    tAdminName.setFillColor(sf::Color(15, 23, 42));
-    tAdminName.setPosition(rightColX + rightColW - 155.f, 7.f);
-    window.draw(tAdminName);
-
-    sf::Text tAdminRole(toSfString("Quản trị viên hệ thống"), Theme::FontPrimary, 10);
-    tAdminRole.setFillColor(sf::Color(100, 116, 139));
-    tAdminRole.setPosition(rightColX + rightColW - 155.f, 24.f);
-    window.draw(tAdminRole);
-
-    sf::CircleShape userAv(15.f);
-    userAv.setFillColor(sf::Color(3, 105, 161));
-    userAv.setPosition(rightColX + rightColW - 34.f, 8.f);
-    window.draw(userAv);
-    sf::CircleShape userHead(4.5f);
-    userHead.setFillColor(sf::Color::White);
-    userHead.setPosition(rightColX + rightColW - 23.5f, 13.f);
-    window.draw(userHead);
 
     // =========================================================
     // 2. DARK NAVY HERO BANNER (y = 50, h = 82)
@@ -1752,6 +1777,37 @@ void CinemaUIApp::renderSeatsView() {
         window.draw(projLens);
 
         // Draw Auditorium Seat Map using shared SeatMapBox layout
+        int expectedCap = 0;
+        for (const auto& rm : roomList) {
+            if (rm.getMaPhong() == seatSelectedRoomId) {
+                expectedCap = rm.getSucChua();
+                break;
+            }
+        }
+        int actualSeatsCount = static_cast<int>(roomSeats.size());
+        bool capacityMismatch = (expectedCap > 0 && actualSeatsCount != expectedCap);
+
+        if (capacityMismatch) {
+            float alertW = 580.f;
+            float alertH = 130.f;
+            float alertX = leftColX + (leftColW - alertW) / 2.f;
+            float alertY = mapCardY + 160.f;
+            RoundedRectRenderer::render(window, sf::Vector2f(alertX, alertY), sf::Vector2f(alertW, alertH), 12.f, sf::Color(254, 242, 242), 1.2f, sf::Color(254, 202, 202));
+
+            sf::Text tWarnTitle(toSfString("SỨC CHỨA CHƯA ĐỒNG BỘ VỚI SƠ ĐỒ GHẾ"), Theme::FontPrimary, 14);
+            tWarnTitle.setStyle(sf::Text::Bold);
+            tWarnTitle.setFillColor(sf::Color(185, 28, 28));
+            sf::FloatRect wtb = tWarnTitle.getLocalBounds();
+            tWarnTitle.setPosition(alertX + (alertW - wtb.width) / 2.f - wtb.left, alertY + 22.f);
+            window.draw(tWarnTitle);
+
+            std::string warnDesc = "Phòng chiếu đã đổi sức chứa (" + std::to_string(expectedCap) + " ghế) nhưng chưa tạo lại sơ đồ (" + std::to_string(actualSeatsCount) + " ghế hiện có).\nSơ đồ tạm thời ẩn để tránh sai lệch hiển thị dữ liệu.\nVui lòng nhấn nút 'Tạo sơ đồ ghế' bên trên để tạo lại sơ đồ đồng bộ!";
+            sf::Text tWarnDesc(toSfString(warnDesc), Theme::FontPrimary, 12);
+            tWarnDesc.setFillColor(sf::Color(153, 27, 27));
+            sf::FloatRect wdb = tWarnDesc.getLocalBounds();
+            tWarnDesc.setPosition(alertX + (alertW - wdb.width) / 2.f - wdb.left, alertY + 54.f);
+            window.draw(tWarnDesc);
+        } else {
         std::vector<SeatMapBox> mapBoxes = buildCurrentRoomSeatMapBoxes();
 
         // Draw Row Letters on Left of each row
@@ -1822,6 +1878,14 @@ void CinemaUIApp::renderSeatsView() {
                 seatBorder = sf::Color(249, 115, 22);
                 seatAccent = sf::Color(251, 146, 60);
                 seatTxtCol = sf::Color(30, 41, 59);
+            } else {
+                for (const auto& st : seatTypeList) {
+                    if (st.tenLoai == box.loaiGhe) {
+                        seatBorder = st.mauSac;
+                        seatAccent = st.mauSac;
+                        break;
+                    }
+                }
             }
 
             if (isHovered && !isSelected) {
@@ -1867,6 +1931,7 @@ void CinemaUIApp::renderSeatsView() {
             lt.setPosition(lg.x + lg.w + 8.f, lg.y - 1.f);
             window.draw(lt);
         }
+        } // end capacityMismatch else
 
         // ---------------------------------------------------------
         // LEFT BOTTOM CARD: DANH SÁCH GHẾ ĐÃ CẤU HÌNH (y = 648, h = 276)
@@ -2252,25 +2317,8 @@ void CinemaUIApp::renderSeatsView() {
         // ---------------------------------------------------------
         // SUB-TAB 1: DANH MỤC LOẠI GHẾ & ĐƠN GIÁ
         // ---------------------------------------------------------
-        // Style active filter pill
-        auto styleTypeFilter = [&](std::unique_ptr<RoundRectButton>& btn, bool active) {
-            if (!btn) return;
-            if (active) {
-                btn->setCustomColors(sf::Color(2, 132, 199), sf::Color(3, 105, 161), sf::Color(7, 89, 133), sf::Color(2, 132, 199));
-                btn->setTextColor(sf::Color::White);
-            } else {
-                btn->setCustomColors(sf::Color::White, sf::Color(241, 245, 249), sf::Color(226, 232, 240), sf::Color::White);
-                btn->setOutline(1.f, sf::Color(226, 232, 240));
-                btn->setTextColor(sf::Color(71, 85, 105));
-            }
-            btn->draw(window);
-        };
-
         if (seatTypeSearchInput) seatTypeSearchInput->draw(window);
-        styleTypeFilter(btnSeatTypeFilterAll, seatTypeFilterIdx == 0);
-        styleTypeFilter(btnSeatTypeFilterSingle, seatTypeFilterIdx == 1);
-        styleTypeFilter(btnSeatTypeFilterCouple, seatTypeFilterIdx == 2);
-        styleTypeFilter(btnSeatTypeFilterSpecial, seatTypeFilterIdx == 3);
+        if (seatTypeFilterDropdown) seatTypeFilterDropdown->draw(window);
 
         // Left Card: Danh Mục Loại Ghế Toàn Hệ Thống
         float tblCardY = 228.f;
@@ -2325,12 +2373,8 @@ void CinemaUIApp::renderSeatsView() {
         std::vector<int> visIndices;
         for (size_t i = 0; i < seatTypeList.size(); ++i) {
             std::string tlLow = normalizeSeatSearchVN(seatTypeList[i].tenLoai);
-            if (seatTypeFilterIdx == 1) {
-                if (tlLow.find("standard") == std::string::npos && tlLow.find("vip") == std::string::npos) continue;
-            } else if (seatTypeFilterIdx == 2) {
-                if (tlLow.find("couple") == std::string::npos && tlLow.find("sweetbox") == std::string::npos && tlLow.find("vip") == std::string::npos) continue;
-            } else if (seatTypeFilterIdx == 3) {
-                if (tlLow.find("imax") == std::string::npos && tlLow.find("4dx") == std::string::npos) continue;
+            if (seatTypeFilterIdx > 0 && seatTypeFilterIdx <= static_cast<int>(seatTypeList.size())) {
+                if (seatTypeList[i].tenLoai != seatTypeList[seatTypeFilterIdx - 1].tenLoai) continue;
             }
             if (!q.empty()) {
                 std::string descLow = normalizeSeatSearchVN(seatTypeList[i].moTa + " " + seatTypeList[i].maLoai);
@@ -2515,25 +2559,15 @@ void CinemaUIApp::renderSeatsView() {
         window.draw(lPrice);
 
         if (inputSeatTypePrice) inputSeatTypePrice->draw(window);
+        if (btnSeatPriceMinus) btnSeatPriceMinus->draw(window);
+        if (btnSeatPricePlus) btnSeatPricePlus->draw(window);
 
-        float prBoxRight = rightColX + rightColW - 24.f;
-        sf::Text dTxt(toSfString("đ"), Theme::FontPrimary, 14);
+        float prBoxRight = rightColX + 24.f + (rightColW - 48.f - 82.f);
+        sf::Text dTxt(toSfString("đ"), Theme::FontPrimary, 13);
         dTxt.setStyle(sf::Text::Bold);
         dTxt.setFillColor(sf::Color(71, 85, 105));
-        dTxt.setPosition(prBoxRight - 50.f, 424.f);
+        dTxt.setPosition(prBoxRight - 22.f, 424.f);
         window.draw(dTxt);
-
-        sf::Text upArr(toSfString("^"), Theme::FontPrimary, 12);
-        upArr.setStyle(sf::Text::Bold);
-        upArr.setFillColor(sf::Color(100, 116, 139));
-        upArr.setPosition(prBoxRight - 22.f, 416.f);
-        window.draw(upArr);
-
-        sf::Text dnArr(toSfString("v"), Theme::FontPrimary, 10);
-        dnArr.setStyle(sf::Text::Bold);
-        dnArr.setFillColor(sf::Color(100, 116, 139));
-        dnArr.setPosition(prBoxRight - 22.f, 434.f);
-        window.draw(dnArr);
 
         sf::Text lColor(toSfString("MÀU HIỂN THỊ TRÊN LAYOUT SƠ ĐỒ GHẾ:"), Theme::FontPrimary, 11);
         lColor.setStyle(sf::Text::Bold); lColor.setFillColor(sf::Color(51, 65, 85));

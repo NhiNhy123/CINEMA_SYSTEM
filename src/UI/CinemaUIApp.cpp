@@ -90,7 +90,31 @@ CinemaUIApp::CinemaUIApp()
       selectedPromoRowIdx(0),
       promoCurrentPage(0),
       promoFilterTab(0),
-      promoScopeVal("All")
+      promoScopeVal("All"),
+      selectedStaffRowIdx(0),
+      staffCurrentPage(0),
+      staffFilterTab(0),
+      staffFormResigned(false),
+      selectedAccountRowIdx(0),
+      accountCurrentPage(0),
+      accountFilterTab(0),
+      accountShowPassword(false),
+      auditFilterType(0),
+      auditCurrentPage(0),
+      auditTableFilterVal(""),
+      auditDateFilterVal(""),
+      reportFilterTab(0),
+      reportCurrentPage(0),
+      reportSearchQuery(""),
+      reportTotalRevenue(0.0),
+      reportCashRevenue(0.0),
+      reportQrRevenue(0.0),
+      reportCardRevenue(0.0),
+      reportTicketCount(0),
+      reportFnbCount(0),
+      reportTotalTxCount(0),
+      reportCashDifference(0.0),
+      reportIsBalanced(true)
 {
 }
 
@@ -513,7 +537,10 @@ void CinemaUIApp::setupUIComponents() {
     setupConcessionsView();
     setupShowtimesView();
     setupPromotionsView();
+    setupStaffView();
+    setupAccountsView();
     setupLogsView();
+    setupReportsView();
 }
 
 void CinemaUIApp::setupNavigation() {
@@ -563,6 +590,21 @@ void CinemaUIApp::setupNavigation() {
                 refreshShowtimesDropdowns();
             } else if (targetTab == ActiveTab::Promotions) {
                 refreshPromoScopeDropdown();
+            } else if (targetTab == ActiveTab::Staff) {
+                if (!staffUserList.empty()) {
+                    if (selectedStaffRowIdx < 0 || selectedStaffRowIdx >= static_cast<int>(staffUserList.size())) {
+                        selectedStaffRowIdx = 0;
+                    }
+                    syncStaffSelectionToForm(selectedStaffRowIdx);
+                }
+            } else if (targetTab == ActiveTab::Accounts) {
+                refreshAccountEmployeeDropdown();
+                if (!staffUserList.empty()) {
+                    if (selectedAccountRowIdx < 0 || selectedAccountRowIdx >= static_cast<int>(staffUserList.size())) {
+                        selectedAccountRowIdx = 0;
+                    }
+                    syncAccountSelectionToForm(selectedAccountRowIdx);
+                }
             } else if (targetTab == ActiveTab::Rooms) {
                 if (!roomList.empty()) {
                     if (selectedRoomRowIdx < 0 || selectedRoomRowIdx >= static_cast<int>(roomList.size())) {
@@ -756,15 +798,24 @@ void CinemaUIApp::handleEvents() {
             if (capturedByDropdown) continue;
         }
 
-        if (currentTab == ActiveTab::Rooms && roomStatusDropdown && roomStatusDropdown->getExpanded()) {
-            if (event.type == sf::Event::MouseWheelScrolled) {
-                capturedByDropdown = roomStatusDropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
-            } else if (event.type == sf::Event::MouseButtonPressed) {
-                capturedByDropdown = roomStatusDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
-            } else if (event.type == sf::Event::MouseButtonReleased) {
-                capturedByDropdown = roomStatusDropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
-            } else if (event.type == sf::Event::MouseMoved) {
-                capturedByDropdown = roomStatusDropdown->handleMouseMove(mousePos);
+        if (currentTab == ActiveTab::Rooms) {
+            std::vector<DropdownBox*> allRoomDrops = {
+                roomStatusDropdown.get(),
+                roomFilterDropdown.get()
+            };
+            for (auto* drp : allRoomDrops) {
+                if (drp && drp->getExpanded()) {
+                    if (event.type == sf::Event::MouseWheelScrolled) {
+                        capturedByDropdown = drp->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                    } else if (event.type == sf::Event::MouseButtonPressed) {
+                        capturedByDropdown = drp->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    } else if (event.type == sf::Event::MouseButtonReleased) {
+                        capturedByDropdown = drp->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                    } else if (event.type == sf::Event::MouseMoved) {
+                        capturedByDropdown = drp->handleMouseMove(mousePos);
+                    }
+                    if (capturedByDropdown) break;
+                }
             }
             if (capturedByDropdown) continue;
         }
@@ -795,6 +846,49 @@ void CinemaUIApp::handleEvents() {
             } else if (event.type == sf::Event::MouseMoved) {
                 capturedByDropdown = promoScopeDropdown->handleMouseMove(mousePos);
             }
+            if (capturedByDropdown) continue;
+        }
+        if (currentTab == ActiveTab::Staff && staffGenderDropdown && staffGenderDropdown->getExpanded()) {
+            if (event.type == sf::Event::MouseWheelScrolled) {
+                capturedByDropdown = staffGenderDropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+            } else if (event.type == sf::Event::MouseButtonPressed) {
+                capturedByDropdown = staffGenderDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+            } else if (event.type == sf::Event::MouseButtonReleased) {
+                capturedByDropdown = staffGenderDropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+            } else if (event.type == sf::Event::MouseMoved) {
+                capturedByDropdown = staffGenderDropdown->handleMouseMove(mousePos);
+            }
+            if (capturedByDropdown) continue;
+        }
+        if (currentTab == ActiveTab::Accounts && accountRoleDropdown && accountRoleDropdown->getExpanded()) {
+            if (event.type == sf::Event::MouseWheelScrolled) {
+                capturedByDropdown = accountRoleDropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+            } else if (event.type == sf::Event::MouseButtonPressed) {
+                capturedByDropdown = accountRoleDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+            } else if (event.type == sf::Event::MouseButtonReleased) {
+                capturedByDropdown = accountRoleDropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+            } else if (event.type == sf::Event::MouseMoved) {
+                capturedByDropdown = accountRoleDropdown->handleMouseMove(mousePos);
+            }
+            if (capturedByDropdown) continue;
+        }
+        if (currentTab == ActiveTab::Reports) {
+            auto checkReportDrop = [&](std::unique_ptr<DropdownBox>& drop) {
+                if (drop && drop->getExpanded()) {
+                    if (event.type == sf::Event::MouseWheelScrolled) {
+                        capturedByDropdown = drop->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                    } else if (event.type == sf::Event::MouseButtonPressed) {
+                        capturedByDropdown = drop->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    } else if (event.type == sf::Event::MouseButtonReleased) {
+                        capturedByDropdown = drop->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                    } else if (event.type == sf::Event::MouseMoved) {
+                        capturedByDropdown = drop->handleMouseMove(mousePos);
+                    }
+                }
+            };
+            checkReportDrop(reportShiftDropdown);
+            if (!capturedByDropdown) checkReportDrop(reportCashierDropdown);
+            if (!capturedByDropdown) checkReportDrop(reportPaymentDropdown);
             if (capturedByDropdown) continue;
         }
 
@@ -898,6 +992,7 @@ void CinemaUIApp::handleEvents() {
                                 if (inputMovieTitle) inputMovieTitle->setText("");
                                 if (inputMovieDuration) inputMovieDuration->setText("");
                                 if (inputMovieReleaseDate) inputMovieReleaseDate->setText("");
+                                if (inputMovieEndDate) inputMovieEndDate->setText("");
                                 if (inputMovieAgeRating) inputMovieAgeRating->setText("");
                                 syncMovieFormAgeDropdown("");
                                 if (inputMovieGenre) inputMovieGenre->setText("");
@@ -911,6 +1006,7 @@ void CinemaUIApp::handleEvents() {
                                 if (inputMovieTitle) inputMovieTitle->setText(movieList[firstIdx].getTenPhim());
                                 if (inputMovieDuration) inputMovieDuration->setText(std::to_string(movieList[firstIdx].getThoiLuong()));
                                 if (inputMovieReleaseDate) inputMovieReleaseDate->setText(movieList[firstIdx].getNgayKhoiChieu());
+                                if (inputMovieEndDate) inputMovieEndDate->setText(movieList[firstIdx].getNgayKetThuc());
                                 int ageVal = movieList[firstIdx].getNhanDoTuoi();
                                 std::string codeVal = (ageVal <= 0) ? "P" : ("T" + std::to_string(ageVal));
                                 if (inputMovieAgeRating) inputMovieAgeRating->setText(codeVal);
@@ -940,6 +1036,10 @@ void CinemaUIApp::handleEvents() {
                     if (inputMovieReleaseDate) {
                         if (event.type == sf::Event::MouseButtonPressed) inputMovieReleaseDate->handleMouseButtonPressed(event.mouseButton.button, mousePos);
                         else if (event.type == sf::Event::TextEntered) inputMovieReleaseDate->handleTextEntered(event.text.unicode);
+                    }
+                    if (inputMovieEndDate) {
+                        if (event.type == sf::Event::MouseButtonPressed) inputMovieEndDate->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                        else if (event.type == sf::Event::TextEntered) inputMovieEndDate->handleTextEntered(event.text.unicode);
                     }
                     if (inputMovieAgeRating) {
                         if (event.type == sf::Event::MouseButtonPressed) inputMovieAgeRating->handleMouseButtonPressed(event.mouseButton.button, mousePos);
@@ -1069,6 +1169,7 @@ void CinemaUIApp::handleEvents() {
                                 if (inputMovieTitle) inputMovieTitle->setText(movieList[targetIdx].getTenPhim());
                                 if (inputMovieDuration) inputMovieDuration->setText(std::to_string(movieList[targetIdx].getThoiLuong()));
                                 if (inputMovieReleaseDate) inputMovieReleaseDate->setText(movieList[targetIdx].getNgayKhoiChieu());
+                                if (inputMovieEndDate) inputMovieEndDate->setText(movieList[targetIdx].getNgayKetThuc());
                                 int ageVal = movieList[targetIdx].getNhanDoTuoi();
                                 std::string codeVal = (ageVal <= 0) ? "P" : ("T" + std::to_string(ageVal));
                                 if (inputMovieAgeRating) inputMovieAgeRating->setText(codeVal);
@@ -1365,19 +1466,55 @@ void CinemaUIApp::handleEvents() {
                 handleBtn(btnAddCustomer);
                 break;
 
-            case ActiveTab::Reports:
-                handleBtn(btnReportAll);
-                handleBtn(btnReportCash);
-                handleBtn(btnReportBank);
+            case ActiveTab::Reports: {
+                handleBtn(btnReportExport);
+                handleBtn(btnReportFilter);
+                handleBtn(btnTxFilterAll);
+                handleBtn(btnTxFilterTicket);
+                handleBtn(btnTxFilterFnb);
+                handleBtn(btnReconcileBalance);
+                handleBtn(btnPrintShiftReceipt);
+                handleBtn(btnReportPrevPage);
+                handleBtn(btnReportNextPage);
+
+                if (reportSearchInput) {
+                    if (event.type == sf::Event::MouseButtonPressed) reportSearchInput->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    else if (event.type == sf::Event::TextEntered) {
+                        reportSearchInput->handleTextEntered(event.text.unicode);
+                        reportSearchQuery = reportSearchInput->getText();
+                        applyReportFilters();
+                    }
+                }
+                if (inputReportStartDate) {
+                    if (event.type == sf::Event::MouseButtonPressed) inputReportStartDate->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    else if (event.type == sf::Event::TextEntered) inputReportStartDate->handleTextEntered(event.text.unicode);
+                }
+                if (inputReportEndDate) {
+                    if (event.type == sf::Event::MouseButtonPressed) inputReportEndDate->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    else if (event.type == sf::Event::TextEntered) inputReportEndDate->handleTextEntered(event.text.unicode);
+                }
+
+                auto handleReportDropEvents = [&](std::unique_ptr<DropdownBox>& drop) {
+                    if (!drop) return;
+                    if (event.type == sf::Event::MouseMoved) drop->handleMouseMove(mousePos);
+                    else if (event.type == sf::Event::MouseWheelScrolled) drop->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                    else if (event.type == sf::Event::MouseButtonPressed) drop->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    else if (event.type == sf::Event::MouseButtonReleased) drop->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                };
+
+                handleReportDropEvents(reportShiftDropdown);
+                handleReportDropEvents(reportCashierDropdown);
+                handleReportDropEvents(reportPaymentDropdown);
+
+                if (event.type == sf::Event::KeyPressed && event.key.control && event.key.code == sf::Keyboard::K) {
+                    if (reportSearchInput) reportSearchInput->setFocused(true);
+                }
                 break;
+            }
 
             case ActiveTab::Rooms: {
                 handleBtn(btnRoomExportPDF);
                 handleBtn(btnRoomAddNew);
-                handleBtn(btnRoomFilterAll);
-                handleBtn(btnRoomFilterStandard);
-                handleBtn(btnRoomFilterPremium);
-                handleBtn(btnRoomFilterSpecial);
                 handleBtn(btnRoomCapMinus);
                 handleBtn(btnRoomCapPlus);
                 for (auto& tb : btnRoomTechOptions) handleBtn(tb);
@@ -1387,6 +1524,13 @@ void CinemaUIApp::handleEvents() {
                 handleBtn(btnRoomReset);
                 handleBtn(btnRoomPrevPage);
                 handleBtn(btnRoomNextPage);
+
+                if (roomFilterDropdown) {
+                    if (event.type == sf::Event::MouseMoved) roomFilterDropdown->handleMouseMove(mousePos);
+                    else if (event.type == sf::Event::MouseWheelScrolled) roomFilterDropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                    else if (event.type == sf::Event::MouseButtonPressed) roomFilterDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    else if (event.type == sf::Event::MouseButtonReleased) roomFilterDropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                }
 
                 if (roomStatusDropdown) {
                     if (event.type == sf::Event::MouseMoved) roomStatusDropdown->handleMouseMove(mousePos);
@@ -1792,8 +1936,6 @@ void CinemaUIApp::handleEvents() {
                 handleBtn(btnStTabByMovie);
                 handleBtn(btnStExport);
                 handleBtn(btnStNew);
-
-                handleBtn(btnStConfig);
 
                 auto handleStDrop = [&](std::unique_ptr<DropdownBox>& drp) {
                     if (!drp) return;
@@ -2388,20 +2530,358 @@ void CinemaUIApp::handleEvents() {
                 break;
             }
 
-            case ActiveTab::Staff:
-                handleBtn(btnAddStaff);
-                break;
+            case ActiveTab::Staff: {
+                handleBtn(btnStaffExport);
+                handleBtn(btnStaffNew);
+                handleBtn(btnStaffFilterAll);
+                handleBtn(btnStaffFilterActive);
+                handleBtn(btnStaffFilterResigned);
+                handleBtn(btnStaffCreate);
+                handleBtn(btnStaffUpdate);
+                handleBtn(btnStaffDelete);
+                handleBtn(btnStaffClear);
+                handleBtn(btnStaffPrevPage);
+                handleBtn(btnStaffNextPage);
 
-            case ActiveTab::Accounts:
-                handleBtn(btnChangePassword);
+                if (staffGenderDropdown) {
+                    if (event.type == sf::Event::MouseMoved) staffGenderDropdown->handleMouseMove(mousePos);
+                    else if (event.type == sf::Event::MouseButtonPressed) staffGenderDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    else if (event.type == sf::Event::MouseButtonReleased) staffGenderDropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                }
+
+                if (event.type == sf::Event::KeyPressed && event.key.control && event.key.code == sf::Keyboard::K) {
+                    if (staffSearchInput) staffSearchInput->setFocused(true);
+                }
+
+                auto handleStaffInput = [&](std::unique_ptr<UIInputBox>& inp) {
+                    if (!inp) return;
+                    if (event.type == sf::Event::MouseButtonPressed) {
+                        inp->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    } else if (event.type == sf::Event::TextEntered) {
+                        std::string prev = inp->getText();
+                        inp->handleTextEntered(event.text.unicode);
+                        if (inp.get() == staffSearchInput.get() && inp->getText() != prev) {
+                            staffCurrentPage = 0;
+                        }
+                    }
+                };
+
+                handleStaffInput(staffSearchInput);
+                if (selectedStaffRowIdx < 0) handleStaffInput(inputStaffId);
+                handleStaffInput(inputStaffName);
+                handleStaffInput(inputStaffPhone);
+                handleStaffInput(inputStaffBirthDate);
+                handleStaffInput(inputStaffCCCD);
+                handleStaffInput(inputStaffEmail);
+
+                if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                    float leftColX = sidebarWidth + 24.f;
+                    float leftColW = 910.f;
+                    float rowStartY = 378.f;
+                    float rowH = 74.f;
+
+                    std::vector<int> filteredIndices = getFilteredStaffIndices();
+                    int totalFiltered = static_cast<int>(filteredIndices.size());
+                    int rowsPerPage = 5;
+                    int totalPages = std::max(1, (totalFiltered + rowsPerPage - 1) / rowsPerPage);
+                    if (staffCurrentPage >= totalPages) staffCurrentPage = totalPages - 1;
+                    if (staffCurrentPage < 0) staffCurrentPage = 0;
+
+                    int startIdx = staffCurrentPage * rowsPerPage;
+                    int endIdx = std::min(startIdx + rowsPerPage, totalFiltered);
+                    int shownCount = std::max(0, endIdx - startIdx);
+
+                    // Table rows selection & status pill clicks
+                    for (int r = 0; r < shownCount; ++r) {
+                        int actualIdx = filteredIndices[startIdx + r];
+                        float ry = rowStartY + r * rowH;
+
+                        // Click directly on status pill (leftColX + 780 .. leftColX + 890, ry + 16 .. ry + 56)
+                        if (mousePos.x >= leftColX + 780.f && mousePos.x <= leftColX + 890.f &&
+                            mousePos.y >= ry + 16.f && mousePos.y <= ry + 56.f) {
+                            std::string curSt = staffUserList[actualIdx].trangThaiLamViec;
+                            staffUserList[actualIdx].trangThaiLamViec = (curSt == "DangLam") ? "DaNghi" : "DangLam";
+                            saveStaffUsersToDatabase();
+                            syncStaffSelectionToForm(actualIdx);
+                            break;
+                        }
+
+                        // Row click selection
+                        if (mousePos.x >= leftColX && mousePos.x <= leftColX + leftColW &&
+                            mousePos.y >= ry && mousePos.y <= ry + rowH) {
+                            syncStaffSelectionToForm(actualIdx);
+                            break;
+                        }
+                    }
+
+                    // Numbered Pagination clicks at footY = 868.f
+                    float footY = 868.f;
+                    float btnSz = 28.f;
+                    float btnGap = 6.f;
+                    float totalPagingW = (totalPages + 2) * btnSz + (totalPages + 1) * btnGap;
+                    float pgStartX = leftColX + leftColW - 18.f - totalPagingW;
+
+                    // Prev '<'
+                    if (mousePos.x >= pgStartX && mousePos.x <= pgStartX + btnSz &&
+                        mousePos.y >= footY && mousePos.y <= footY + btnSz) {
+                        if (staffCurrentPage > 0) staffCurrentPage--;
+                    }
+                    // Page numbers
+                    for (int p = 0; p < totalPages; ++p) {
+                        float px = pgStartX + (p + 1) * (btnSz + btnGap);
+                        if (mousePos.x >= px && mousePos.x <= px + btnSz &&
+                            mousePos.y >= footY && mousePos.y <= footY + btnSz) {
+                            staffCurrentPage = p;
+                        }
+                    }
+                    // Next '>'
+                    float nextX = pgStartX + (totalPages + 1) * (btnSz + btnGap);
+                    if (mousePos.x >= nextX && mousePos.x <= nextX + btnSz &&
+                        mousePos.y >= footY && mousePos.y <= footY + btnSz) {
+                        if (staffCurrentPage < totalPages - 1) staffCurrentPage++;
+                    }
+
+                    // Checkbox "Đã nghỉ làm" in Right Form at rightColX = 1200, y = 780
+                    float rightColX = sidebarWidth + 950.f;
+                    if (mousePos.x >= rightColX + 24.f && mousePos.x <= rightColX + 220.f &&
+                        mousePos.y >= 776.f && mousePos.y <= 810.f) {
+                        staffFormResigned = !staffFormResigned;
+                    }
+                }
                 break;
+            }
+
+            case ActiveTab::Accounts: {
+                handleBtn(btnAccountExport);
+                handleBtn(btnAccountNew);
+                handleBtn(btnAccountFilterAll);
+                handleBtn(btnAccountFilterActive);
+                handleBtn(btnAccountFilterLocked);
+                handleBtn(btnAccountSave);
+                handleBtn(btnAccountToggleLock);
+                handleBtn(btnAccountRefresh);
+                handleBtn(btnAccountClear);
+                handleBtn(btnAccountPrevPage);
+                handleBtn(btnAccountNextPage);
+
+                if (accountRoleDropdown) {
+                    if (event.type == sf::Event::MouseMoved) accountRoleDropdown->handleMouseMove(mousePos);
+                    else if (event.type == sf::Event::MouseButtonPressed) accountRoleDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    else if (event.type == sf::Event::MouseButtonReleased) accountRoleDropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                }
+
+                if (event.type == sf::Event::KeyPressed && event.key.control && event.key.code == sf::Keyboard::K) {
+                    if (accountSearchInput) accountSearchInput->setFocused(true);
+                }
+
+                auto handleAccountInput = [&](std::unique_ptr<UIInputBox>& inp) {
+                    if (!inp) return;
+                    if (event.type == sf::Event::MouseButtonPressed) {
+                        inp->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    } else if (event.type == sf::Event::TextEntered) {
+                        std::string prev = inp->getText();
+                        inp->handleTextEntered(event.text.unicode);
+                        if (inp.get() == accountSearchInput.get() && inp->getText() != prev) {
+                            accountCurrentPage = 0;
+                        }
+                    }
+                };
+
+                handleAccountInput(accountSearchInput);
+                handleAccountInput(inputAccountEmployeeId);
+                // inputAccountFullName is read-only
+                handleAccountInput(inputAccountUsername);
+                handleAccountInput(inputAccountPassword);
+
+                if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                    float leftColX = sidebarWidth + 24.f;
+                    float leftColW = 910.f;
+                    float rowStartY = 378.f;
+                    float rowH = 74.f;
+
+                    std::vector<int> filteredIndices = getFilteredAccountIndices();
+                    int totalFiltered = static_cast<int>(filteredIndices.size());
+                    int rowsPerPage = 5;
+                    int totalPages = std::max(1, (totalFiltered + rowsPerPage - 1) / rowsPerPage);
+                    if (accountCurrentPage >= totalPages) accountCurrentPage = totalPages - 1;
+                    if (accountCurrentPage < 0) accountCurrentPage = 0;
+
+                    int startIdx = accountCurrentPage * rowsPerPage;
+                    int endIdx = std::min(startIdx + rowsPerPage, totalFiltered);
+                    int shownCount = std::max(0, endIdx - startIdx);
+
+                    // Table rows selection & status/action clicks
+                    for (int r = 0; r < shownCount; ++r) {
+                        int actualIdx = filteredIndices[startIdx + r];
+                        float ry = rowStartY + r * rowH;
+
+                        // Click on Edit/Pencil icon (aColX = leftColX + 834.f, ry + 22.f, 28x28)
+                        if (mousePos.x >= leftColX + 830.f && mousePos.x <= leftColX + 865.f &&
+                            mousePos.y >= ry + 18.f && mousePos.y <= ry + 56.f) {
+                            syncAccountSelectionToForm(actualIdx);
+                            break;
+                        }
+
+                        // Click on Status Pill (leftColX + 680.f .. leftColX + 790.f, ry + 18.f .. ry + 56.f) -> toggle lock
+                        if (mousePos.x >= leftColX + 680.f && mousePos.x <= leftColX + 790.f &&
+                            mousePos.y >= ry + 18.f && mousePos.y <= ry + 56.f) {
+                            std::string curSt = staffUserList[actualIdx].trangThaiTaiKhoan;
+                            staffUserList[actualIdx].trangThaiTaiKhoan = (curSt == "KichHoat") ? "BiKhoa" : "KichHoat";
+                            saveStaffUsersToDatabase();
+                            syncAccountSelectionToForm(actualIdx);
+                            break;
+                        }
+
+                        // Row click selection
+                        if (mousePos.x >= leftColX && mousePos.x <= leftColX + leftColW &&
+                            mousePos.y >= ry && mousePos.y <= ry + rowH) {
+                            syncAccountSelectionToForm(actualIdx);
+                            break;
+                        }
+                    }
+
+                    // Numbered Pagination clicks at footY = 868.f
+                    float footY = 868.f;
+                    float btnSz = 28.f;
+                    float btnGap = 6.f;
+                    float totalPagingW = (totalPages + 2) * btnSz + (totalPages + 1) * btnGap;
+                    float pgStartX = leftColX + leftColW - 18.f - totalPagingW;
+
+                    // Prev '<'
+                    if (mousePos.x >= pgStartX && mousePos.x <= pgStartX + btnSz &&
+                        mousePos.y >= footY && mousePos.y <= footY + btnSz) {
+                        if (accountCurrentPage > 0) accountCurrentPage--;
+                    }
+                    // Page numbers
+                    for (int p = 0; p < totalPages; ++p) {
+                        float px = pgStartX + (p + 1) * (btnSz + btnGap);
+                        if (mousePos.x >= px && mousePos.x <= px + btnSz &&
+                            mousePos.y >= footY && mousePos.y <= footY + btnSz) {
+                            accountCurrentPage = p;
+                        }
+                    }
+                    // Next '>'
+                    float nextX = pgStartX + (totalPages + 1) * (btnSz + btnGap);
+                    if (mousePos.x >= nextX && mousePos.x <= nextX + btnSz &&
+                        mousePos.y >= footY && mousePos.y <= footY + btnSz) {
+                        if (accountCurrentPage < totalPages - 1) accountCurrentPage++;
+                    }
+
+                    // Right Form interactions
+                    float rightColX = sidebarWidth + 950.f;
+                    // Eye icon toggle in Password Box (rightColX + 484 - 52, y = 530..570)
+                    if (mousePos.x >= rightColX + 484.f - 52.f && mousePos.x <= rightColX + 484.f - 24.f &&
+                        mousePos.y >= 530.f && mousePos.y <= 570.f) {
+                        accountShowPassword = !accountShowPassword;
+                    }
+
+                    // "Tạo mật khẩu ngẫu nhiên" link (rightColX + 300 .. rightColX + 470, y = 502 .. 526)
+                    if (mousePos.x >= rightColX + 300.f && mousePos.x <= rightColX + 470.f &&
+                        mousePos.y >= 502.f && mousePos.y <= 526.f) {
+                        const char chars[] = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789!@#$%";
+                        std::string rndPass = "";
+                        for (int i = 0; i < 10; ++i) rndPass += chars[rand() % (sizeof(chars) - 1)];
+                        if (inputAccountPassword) inputAccountPassword->setText(rndPass);
+                    }
+                }
+                break;
+            }
 
             case ActiveTab::SystemLogs:
                 handleBtn(btnRefreshLogs);
-                if (logsTable) {
-                    if (event.type == sf::Event::MouseMoved) logsTable->handleMouseMove(mousePos);
-                    else if (event.type == sf::Event::MouseWheelScrolled) logsTable->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
-                    else if (event.type == sf::Event::MouseButtonPressed) logsTable->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                handleBtn(btnExportLogs);
+                handleBtn(btnAuditFilterAll);
+                handleBtn(btnAuditFilterInsert);
+                handleBtn(btnAuditFilterUpdate);
+                handleBtn(btnAuditFilterDelete);
+
+                if (auditSearchInput) {
+                    if (event.type == sf::Event::MouseButtonPressed) {
+                        auditSearchInput->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    } else if (event.type == sf::Event::TextEntered) {
+                        auditSearchInput->handleTextEntered(event.text.unicode);
+                        auditCurrentPage = 0;
+                    }
+                }
+
+                if (auditDateDropdown) {
+                    if (event.type == sf::Event::MouseButtonPressed) {
+                        bool wasExp = auditDateDropdown->getExpanded();
+                        auditDateDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                        if (!wasExp && auditDateDropdown->getExpanded() && auditTableDropdown) {
+                            auditTableDropdown->setExpanded(false);
+                        }
+                    } else if (event.type == sf::Event::MouseMoved) {
+                        auditDateDropdown->handleMouseMove(mousePos);
+                    } else if (event.type == sf::Event::MouseWheelScrolled) {
+                        auditDateDropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                    }
+                }
+
+                if (auditTableDropdown) {
+                    if (event.type == sf::Event::MouseButtonPressed) {
+                        bool wasExp = auditTableDropdown->getExpanded();
+                        auditTableDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                        if (!wasExp && auditTableDropdown->getExpanded() && auditDateDropdown) {
+                            auditDateDropdown->setExpanded(false);
+                        }
+                    } else if (event.type == sf::Event::MouseMoved) {
+                        auditTableDropdown->handleMouseMove(mousePos);
+                    } else if (event.type == sf::Event::MouseWheelScrolled) {
+                        auditTableDropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                    }
+                }
+
+                if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                    float leftColX = sidebarWidth + 24.f;
+                    float cardW = 1420.f;
+                    float tableY = 262.f;
+                    float tableH = 652.f;
+                    float footRowY = tableY + tableH - 42.f;
+                    float pgBtnSz = 28.f;
+                    float pgGap = 6.f;
+
+                    std::string q = auditSearchInput ? auditSearchInput->getText() : "";
+                    std::string qNorm = removeVietnameseDiacritics(q);
+                    std::transform(qNorm.begin(), qNorm.end(), qNorm.begin(), ::tolower);
+                    int filteredCount = 0;
+                    for (const auto& r : auditRecords) {
+                        if (auditFilterType == 1 && r.actionType != 1) continue;
+                        if (auditFilterType == 2 && r.actionType != 2) continue;
+                        if (auditFilterType == 3 && r.actionType != 3) continue;
+                        if (!auditDateFilterVal.empty() && r.thoiGian.rfind(auditDateFilterVal, 0) != 0) continue;
+                        if (!auditTableFilterVal.empty() && r.tableName != auditTableFilterVal) continue;
+                        if (!qNorm.empty()) {
+                            std::string hay = r.thoiGian + " " + r.maNguoiDung + " " + r.hoTen + " " + r.vaiTro + " " +
+                                              r.tableName + " " + r.fieldChanged + " " + r.oldData + " " + r.newData + " " + r.chiTiet;
+                            std::string hayNorm = removeVietnameseDiacritics(hay);
+                            std::transform(hayNorm.begin(), hayNorm.end(), hayNorm.begin(), ::tolower);
+                            if (hayNorm.find(qNorm) == std::string::npos) continue;
+                        }
+                        filteredCount++;
+                    }
+                    int totalPages = std::max(1, (filteredCount + 11) / 12);
+                    float totalPgW = (std::min(5, totalPages) + 2) * (pgBtnSz + pgGap);
+                    float pgStartX = leftColX + cardW - 24.f - totalPgW;
+
+                    if (mousePos.y >= footRowY && mousePos.y <= footRowY + pgBtnSz) {
+                        if (mousePos.x >= pgStartX && mousePos.x <= pgStartX + pgBtnSz) {
+                            if (auditCurrentPage > 0) auditCurrentPage--;
+                        }
+                        int startP = std::max(0, auditCurrentPage - 2);
+                        int endP = std::min(totalPages, startP + 5);
+                        if (endP - startP < 5) startP = std::max(0, endP - 5);
+                        for (int p = startP; p < endP; ++p) {
+                            float bx = pgStartX + (p - startP + 1) * (pgBtnSz + pgGap);
+                            if (mousePos.x >= bx && mousePos.x <= bx + pgBtnSz) {
+                                auditCurrentPage = p;
+                            }
+                        }
+                        float nextBx = pgStartX + (endP - startP + 1) * (pgBtnSz + pgGap);
+                        if (mousePos.x >= nextBx && mousePos.x <= nextBx + pgBtnSz) {
+                            if (auditCurrentPage < totalPages - 1) auditCurrentPage++;
+                        }
+                    }
                 }
                 break;
 
@@ -2431,6 +2911,7 @@ void CinemaUIApp::update(float dt) {
         if (inputMovieTitle) inputMovieTitle->update(dt);
         if (inputMovieDuration) inputMovieDuration->update(dt);
         if (inputMovieReleaseDate) inputMovieReleaseDate->update(dt);
+        if (inputMovieEndDate) inputMovieEndDate->update(dt);
         if (inputMovieAgeRating) inputMovieAgeRating->update(dt);
         if (inputMovieGenre) inputMovieGenre->update(dt);
         if (inputMoviePoster) inputMoviePoster->update(dt);
@@ -2478,6 +2959,22 @@ void CinemaUIApp::update(float dt) {
         if (inputPromoMaxDiscount) inputPromoMaxDiscount->update(dt);
         if (inputPromoStartDate) inputPromoStartDate->update(dt);
         if (inputPromoEndDate) inputPromoEndDate->update(dt);
+    }
+    if (currentTab == ActiveTab::Staff) {
+        if (staffSearchInput) staffSearchInput->update(dt);
+        if (inputStaffId) inputStaffId->update(dt);
+        if (inputStaffName) inputStaffName->update(dt);
+        if (inputStaffPhone) inputStaffPhone->update(dt);
+        if (inputStaffBirthDate) inputStaffBirthDate->update(dt);
+        if (inputStaffCCCD) inputStaffCCCD->update(dt);
+        if (inputStaffEmail) inputStaffEmail->update(dt);
+    }
+    if (currentTab == ActiveTab::Accounts) {
+        if (accountSearchInput) accountSearchInput->update(dt);
+        if (inputAccountEmployeeId) inputAccountEmployeeId->update(dt);
+        if (inputAccountFullName) inputAccountFullName->update(dt);
+        if (inputAccountUsername) inputAccountUsername->update(dt);
+        if (inputAccountPassword) inputAccountPassword->update(dt);
     }
 }
 
@@ -2539,7 +3036,7 @@ void CinemaUIApp::render() {
 
     // Render Fixed Chrome (Top Bar & Sidebar)
     renderSidebar();
-    if (currentTab != ActiveTab::SeatBooking && currentTab != ActiveTab::Movies && currentTab != ActiveTab::Concessions && currentTab != ActiveTab::Showtimes && currentTab != ActiveTab::Rooms && currentTab != ActiveTab::Seats && currentTab != ActiveTab::Promotions) {
+    if (currentTab != ActiveTab::SeatBooking && currentTab != ActiveTab::Movies && currentTab != ActiveTab::Concessions && currentTab != ActiveTab::Showtimes && currentTab != ActiveTab::Rooms && currentTab != ActiveTab::Seats && currentTab != ActiveTab::Promotions && currentTab != ActiveTab::Staff && currentTab != ActiveTab::Accounts && currentTab != ActiveTab::Reports && currentTab != ActiveTab::SystemLogs) {
         renderTopBar();
     }
 
@@ -2561,12 +3058,28 @@ void CinemaUIApp::render() {
     if (currentTab == ActiveTab::Promotions) {
         if (promoScopeDropdown) promoScopeDropdown->drawPopup(window);
     }
+    if (currentTab == ActiveTab::Staff) {
+        if (staffGenderDropdown) staffGenderDropdown->drawPopup(window);
+    }
+    if (currentTab == ActiveTab::Accounts) {
+        if (accountRoleDropdown) accountRoleDropdown->drawPopup(window);
+    }
     if (currentTab == ActiveTab::Rooms) {
         if (roomStatusDropdown) roomStatusDropdown->drawPopup(window);
+        if (roomFilterDropdown) roomFilterDropdown->drawPopup(window);
     }
     if (currentTab == ActiveTab::Seats && seatSubTab == 0) {
         if (seatBatchTypeDropdown) seatBatchTypeDropdown->drawPopup(window);
         if (seatRoomDropdown) seatRoomDropdown->drawPopup(window);
+    }
+    if (currentTab == ActiveTab::SystemLogs) {
+        if (auditDateDropdown) auditDateDropdown->drawPopup(window);
+        if (auditTableDropdown) auditTableDropdown->drawPopup(window);
+    }
+    if (currentTab == ActiveTab::Reports) {
+        if (reportShiftDropdown) reportShiftDropdown->drawPopup(window);
+        if (reportCashierDropdown) reportCashierDropdown->drawPopup(window);
+        if (reportPaymentDropdown) reportPaymentDropdown->drawPopup(window);
     }
 
     // Modal dialog for adding custom age limit

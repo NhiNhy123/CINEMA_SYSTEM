@@ -1,4 +1,5 @@
-﻿#include "../../include/UI/CinemaUIApp.h"
+#include "../../include/UI/CinemaUIApp.h"
+#include "../../include/UI/CinemaUIApp_ShowtimeHelpers.h"
 #include "../../include/ActivityLog.h"
 #include <sqlite3.h>
 #include <fstream>
@@ -7,33 +8,24 @@
 
 namespace UI {
 
+std::string CinemaUIApp::generateNextFnbId() const {
+    int maxId = 0;
+    for (const auto& item : fnbList) {
+        std::string code = item.getMaMatHang();
+        if (code.size() >= 3 && (code[0] == 'F' || code[0] == 'f') && (code[1] == 'B' || code[1] == 'b')) {
+            try {
+                int num = std::stoi(code.substr(2));
+                if (num > maxId) maxId = num;
+            } catch (...) {}
+        }
+    }
+    char buf[16];
+    snprintf(buf, sizeof(buf), "FB%02d", maxId + 1);
+    return std::string(buf);
+}
+
 void CinemaUIApp::reloadFnbImageTextures() {
     fnbImageTextures.clear();
-
-    sqlite3* database = nullptr;
-    if (sqlite3_open("DATA/cinema.db", &database) == SQLITE_OK && database != nullptr) {
-        sqlite3_exec(
-            database,
-            "CREATE TABLE IF NOT EXISTS fnb_images (maMatHang TEXT PRIMARY KEY, imagePath TEXT);",
-            nullptr,
-            nullptr,
-            nullptr
-        );
-        sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(database, "SELECT maMatHang, imagePath FROM fnb_images", -1, &stmt, nullptr) == SQLITE_OK) {
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                const unsigned char* c0 = sqlite3_column_text(stmt, 0);
-                const unsigned char* c1 = sqlite3_column_text(stmt, 1);
-                std::string k = c0 ? reinterpret_cast<const char*>(c0) : "";
-                std::string v = c1 ? reinterpret_cast<const char*>(c1) : "";
-                if (!k.empty() && !v.empty()) {
-                    fnbImagePaths[k] = v;
-                }
-            }
-            sqlite3_finalize(stmt);
-        }
-        sqlite3_close(database);
-    }
 
     for (const auto& item : fnbList) {
         std::string id = item.getMaMatHang();
@@ -224,25 +216,17 @@ void CinemaUIApp::setupConcessionsView() {
     auto saveFnbImagePathToDb = [this](const std::string& code, const std::string& imgPath) {
         if (code.empty()) return;
         fnbImagePaths[code] = imgPath;
-        sqlite3* database = nullptr;
-        if (sqlite3_open("DATA/cinema.db", &database) == SQLITE_OK && database != nullptr) {
-            sqlite3_exec(
-                database,
-                "CREATE TABLE IF NOT EXISTS fnb_images (maMatHang TEXT PRIMARY KEY, imagePath TEXT);",
-                nullptr,
-                nullptr,
-                nullptr
-            );
-            sqlite3_stmt* stmt = nullptr;
-            if (sqlite3_prepare_v2(database, "INSERT OR REPLACE INTO fnb_images(maMatHang, imagePath) VALUES(?, ?);", -1, &stmt, nullptr) == SQLITE_OK) {
-                sqlite3_bind_text(stmt, 1, code.c_str(), -1, SQLITE_TRANSIENT);
-                sqlite3_bind_text(stmt, 2, imgPath.c_str(), -1, SQLITE_TRANSIENT);
-                sqlite3_step(stmt);
-                sqlite3_finalize(stmt);
+        if (!imgPath.empty()) {
+            std::ifstream f(imgPath.c_str(), std::ios::binary);
+            if (f.good()) {
+                f.close();
+                std::shared_ptr<sf::Texture> tex(new sf::Texture());
+                if (tex->loadFromFile(imgPath)) {
+                    tex->setSmooth(true);
+                    fnbImageTextures[code] = tex;
+                }
             }
-            sqlite3_close(database);
         }
-        reloadFnbImageTextures();
     };
 
     float btnRow1Y = 792.f;
@@ -445,7 +429,7 @@ void CinemaUIApp::setupConcessionsView() {
     btnFnbClear->setTextColor(sf::Color(51, 65, 85));
     btnFnbClear->setOnClick([this]() {
         selectedFnbRowIdx = -1;
-        inputFnbId->setText("");
+        inputFnbId->setText(generateNextFnbId());
         inputFnbId->setEnabled(true);
         inputFnbName->setText("");
         inputFnbPrice->setText("");
@@ -454,21 +438,46 @@ void CinemaUIApp::setupConcessionsView() {
         fnbFormActive = true;
         inputFnbId->setFocused(true);
     });
+
+    std::vector<std::string> retailOpts;
+    auto rIndices = getRetailFnbIndices();
+    for (int ri : rIndices) {
+        if (ri >= 0 && ri < static_cast<int>(fnbList.size())) {
+            retailOpts.push_back(fnbList[ri].getTenMatHang() + " (" + std::to_string(static_cast<long long>(fnbList[ri].getGiaTien())) + " đ)");
+        }
+    }
+    if (retailOpts.empty()) retailOpts.push_back("Chọn món lẻ...");
+
+    float boxY = 462.f;
+    comboItem1Dropdown = std::unique_ptr<DropdownBox>(new DropdownBox(
+        sf::Vector2f(gInputX + 16.f, boxY + 41.f),
+        sf::Vector2f(245.f, 32.f),
+        retailOpts,
+        0
+    ));
+    comboItem1Dropdown->setFontSize(11);
+    comboItem1Dropdown->setLightStyle(true);
+    comboItem1Dropdown->setMaxVisibleItems(5);
+    comboItem1Dropdown->setOnSelect([this](int idx, const std::string& val) {
+        (void)val;
+        comboItem1Idx = idx;
+    });
+
+    comboItem2Dropdown = std::unique_ptr<DropdownBox>(new DropdownBox(
+        sf::Vector2f(gInputX + 16.f, boxY + 83.f),
+        sf::Vector2f(245.f, 32.f),
+        retailOpts,
+        retailOpts.size() > 1 ? 1 : 0
+    ));
+    comboItem2Dropdown->setFontSize(11);
+    comboItem2Dropdown->setLightStyle(true);
+    comboItem2Dropdown->setMaxVisibleItems(5);
+    comboItem2Dropdown->setOnSelect([this](int idx, const std::string& val) {
+        (void)val;
+        comboItem2Idx = idx;
+    });
 }
 
-// Layout coordinates for right form card (consistent across setup & render)
-// Layout coordinates for right form card (consistent across setup & render)
-static const float ST_FORM_MOVIE_LBL_Y = 276.f;
-static const float ST_FORM_MOVIE_Y     = 298.f;
-static const float ST_FORM_MOVIE_INFO_Y= 342.f;
-static const float ST_FORM_ROOM_LBL_Y  = 374.f;
-static const float ST_FORM_ROOM_Y      = 396.f;
-static const float ST_FORM_ROOM_INFO_Y = 440.f;
-static const float ST_FORM_DATE_LBL_Y  = 470.f;
-static const float ST_FORM_DATE_Y      = 492.f;
-static const float ST_FORM_EST_Y       = 546.f;
-static const float ST_FORM_EST_H       = 92.f;
-static const float ST_FORM_BTN_ROW_Y   = 778.f;
 
 
 void CinemaUIApp::renderConcessionsView() {
@@ -714,17 +723,15 @@ void CinemaUIApp::renderConcessionsView() {
 
     // Filter & sort F&B items
     std::string q = fnbSearchInput ? fnbSearchInput->getText() : "";
-    std::transform(q.begin(), q.end(), q.begin(), ::tolower);
+    std::string qNorm = removeVietnameseDiacritics(q);
 
     std::vector<int> visibleIdx;
     for (size_t i = 0; i < fnbList.size(); ++i) {
         if (fnbSubTab == 1 && fnbList[i].getLoai() != "Combo") continue;
-        if (!q.empty()) {
-            std::string cLow = fnbList[i].getMaMatHang();
-            std::string nLow = fnbList[i].getTenMatHang();
-            std::transform(cLow.begin(), cLow.end(), cLow.begin(), ::tolower);
-            std::transform(nLow.begin(), nLow.end(), nLow.begin(), ::tolower);
-            if (cLow.find(q) == std::string::npos && nLow.find(q) == std::string::npos) continue;
+        if (!qNorm.empty()) {
+            std::string cLow = removeVietnameseDiacritics(fnbList[i].getMaMatHang());
+            std::string nLow = removeVietnameseDiacritics(fnbList[i].getTenMatHang());
+            if (cLow.find(qNorm) == std::string::npos && nLow.find(qNorm) == std::string::npos) continue;
         }
         visibleIdx.push_back(static_cast<int>(i));
     }
@@ -759,35 +766,6 @@ void CinemaUIApp::renderConcessionsView() {
         auto it = fnbImageTextures.find(itemCode);
         if (it != fnbImageTextures.end() && it->second && it->second->getSize().x > 0) {
             tex = it->second;
-        }
-        if (!customPath.empty()) {
-            std::string loadPath = customPath;
-            if (loadPath.find('/') == std::string::npos && loadPath.find('\\') == std::string::npos) {
-                loadPath = "assets/fnb/" + loadPath;
-            }
-            std::ifstream f(loadPath.c_str(), std::ios::binary);
-            if (f.good()) {
-                f.close();
-                std::shared_ptr<sf::Texture> loaded(new sf::Texture());
-                if (loaded->loadFromFile(loadPath)) {
-                    loaded->setSmooth(true);
-                    fnbImageTextures[itemCode] = loaded;
-                    tex = loaded;
-                }
-            }
-        }
-        if (!tex && !itemCode.empty()) {
-            std::string defPath = "assets/fnb/" + itemCode + ".jpg";
-            std::ifstream df(defPath.c_str(), std::ios::binary);
-            if (df.good()) {
-                df.close();
-                std::shared_ptr<sf::Texture> loaded(new sf::Texture());
-                if (loaded->loadFromFile(defPath)) {
-                    loaded->setSmooth(true);
-                    fnbImageTextures[itemCode] = loaded;
-                    tex = loaded;
-                }
-            }
         }
 
         if (tex && tex->getSize().x > 0 && tex->getSize().y > 0) {
@@ -1278,41 +1256,26 @@ void CinemaUIApp::renderConcessionsView() {
                 if (c >= '0' && c <= '9') curPriceDigits += c;
             }
         }
-        double curFormPrice = curPriceDigits.empty() ? 45000.0 : std::stod(curPriceDigits);
-        double saving = (totalRetail > curFormPrice) ? (totalRetail - curFormPrice) : 0.0;
+        double curFormPrice = curPriceDigits.empty() ? 0.0 : std::stod(curPriceDigits);
+        double saving = (curFormPrice > 0.0 && totalRetail > curFormPrice) ? (totalRetail - curFormPrice) : 0.0;
 
         // Badge Tiết kiệm
-        RoundedRectRenderer::render(window, sf::Vector2f(gInputX + gInputW - 132.f, boxY + 9.f), sf::Vector2f(120.f, 22.f), 11.f, sf::Color(224, 242, 254));
-        sf::Text saveBadge;
-        saveBadge.setFont(Theme::FontPrimary);
-        saveBadge.setCharacterSize(11);
-        saveBadge.setStyle(sf::Text::Bold);
-        saveBadge.setFillColor(sf::Color(3, 105, 161));
-        saveBadge.setString(toSfString("Tiết kiệm " + fmtShortPrice(saving)));
-        sf::FloatRect svB = saveBadge.getLocalBounds();
-        saveBadge.setPosition(std::round(gInputX + gInputW - 132.f + (120.f - svB.width) / 2.f - svB.left), std::round(boxY + 9.f + (22.f - svB.height) / 2.f - svB.top));
-        window.draw(saveBadge);
+        if (saving > 0.0) {
+            RoundedRectRenderer::render(window, sf::Vector2f(gInputX + gInputW - 132.f, boxY + 9.f), sf::Vector2f(120.f, 22.f), 11.f, sf::Color(224, 242, 254));
+            sf::Text saveBadge;
+            saveBadge.setFont(Theme::FontPrimary);
+            saveBadge.setCharacterSize(11);
+            saveBadge.setStyle(sf::Text::Bold);
+            saveBadge.setFillColor(sf::Color(3, 105, 161));
+            saveBadge.setString(toSfString("Tiết kiệm " + fmtShortPrice(saving)));
+            sf::FloatRect svB = saveBadge.getLocalBounds();
+            saveBadge.setPosition(std::round(gInputX + gInputW - 132.f + (120.f - svB.width) / 2.f - svB.left), std::round(boxY + 9.f + (22.f - svB.height) / 2.f - svB.top));
+            window.draw(saveBadge);
+        }
 
         // Sub-item 1 inside Combo box
         RoundedRectRenderer::render(window, sf::Vector2f(gInputX + 12.f, boxY + 38.f), sf::Vector2f(gInputW - 24.f, 38.f), 8.f, sf::Color::White, 1.f, sf::Color(226, 232, 240));
-
-        // Tên món 1 (có nút đổi món ◀ ▶)
-        sf::Text sub1Title;
-        sub1Title.setFont(Theme::FontPrimary);
-        sub1Title.setCharacterSize(12);
-        sub1Title.setStyle(sf::Text::Bold);
-        sub1Title.setFillColor(sf::Color(15, 23, 42));
-        sub1Title.setString(toSfString("◀  " + name1 + "  ▶"));
-        sub1Title.setPosition(gInputX + 22.f, boxY + 42.f);
-        window.draw(sub1Title);
-
-        sf::Text sub1Unit;
-        sub1Unit.setFont(Theme::FontPrimary);
-        sub1Unit.setCharacterSize(11);
-        sub1Unit.setFillColor(sf::Color(100, 116, 139));
-        sub1Unit.setString(toSfString("Đơn vị: " + unit1 + " • " + fmtShortPrice(price1)));
-        sub1Unit.setPosition(gInputX + 24.f, boxY + 58.f);
-        window.draw(sub1Unit);
+        if (comboItem1Dropdown) comboItem1Dropdown->draw(window);
 
         sf::Text qtyLbl1;
         qtyLbl1.setFont(Theme::FontPrimary);
@@ -1345,24 +1308,7 @@ void CinemaUIApp::renderConcessionsView() {
 
         // Sub-item 2 inside Combo box
         RoundedRectRenderer::render(window, sf::Vector2f(gInputX + 12.f, boxY + 80.f), sf::Vector2f(gInputW - 24.f, 38.f), 8.f, sf::Color::White, 1.f, sf::Color(226, 232, 240));
-
-        // Tên món 2 (có nút đổi món ◀ ▶)
-        sf::Text sub2Title;
-        sub2Title.setFont(Theme::FontPrimary);
-        sub2Title.setCharacterSize(12);
-        sub2Title.setStyle(sf::Text::Bold);
-        sub2Title.setFillColor(sf::Color(15, 23, 42));
-        sub2Title.setString(toSfString("◀  " + name2 + "  ▶"));
-        sub2Title.setPosition(gInputX + 22.f, boxY + 84.f);
-        window.draw(sub2Title);
-
-        sf::Text sub2Unit;
-        sub2Unit.setFont(Theme::FontPrimary);
-        sub2Unit.setCharacterSize(11);
-        sub2Unit.setFillColor(sf::Color(100, 116, 139));
-        sub2Unit.setString(toSfString("Đơn vị: " + unit2 + " • " + fmtShortPrice(price2)));
-        sub2Unit.setPosition(gInputX + 24.f, boxY + 100.f);
-        window.draw(sub2Unit);
+        if (comboItem2Dropdown) comboItem2Dropdown->draw(window);
 
         sf::Text qtyLbl2;
         qtyLbl2.setFont(Theme::FontPrimary);
@@ -1407,7 +1353,7 @@ void CinemaUIApp::renderConcessionsView() {
         comboPriceTxt.setCharacterSize(12);
         comboPriceTxt.setStyle(sf::Text::Bold);
         comboPriceTxt.setFillColor(sf::Color(3, 105, 161));
-        comboPriceTxt.setString(toSfString("Giá bán ra: " + fmtShortPrice(curFormPrice)));
+        comboPriceTxt.setString(toSfString("Giá bán ra: " + (curFormPrice > 0.0 ? fmtShortPrice(curFormPrice) : "0 đ")));
         sf::FloatRect cpB = comboPriceTxt.getLocalBounds();
         comboPriceTxt.setPosition(gInputX + gInputW - 14.f - cpB.width, boxY + 124.f);
         window.draw(comboPriceTxt);

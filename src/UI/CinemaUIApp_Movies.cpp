@@ -1,4 +1,4 @@
-﻿#include "../../include/UI/CinemaUIApp.h"
+#include "../../include/UI/CinemaUIApp.h"
 #include "../../include/ActivityLog.h"
 #include <fstream>
 #include <algorithm>
@@ -196,6 +196,7 @@ void CinemaUIApp::setupMoviesView() {
         inputMovieTitle->setText("");
         inputMovieDuration->setText("");
         inputMovieReleaseDate->setText("");
+        if (inputMovieEndDate) inputMovieEndDate->setText("");
         inputMovieAgeRating->setText("");
         syncMovieFormAgeDropdown("");
         refreshAgeRatingDropdowns();
@@ -241,14 +242,24 @@ void CinemaUIApp::setupMoviesView() {
     inputMovieDuration->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(15, 23, 42), sf::Color(148, 163, 184));
     inputMovieDuration->setCornerRadius(8.f);
 
+    float dateW = (inputW - 10.f) / 2.f;
     inputMovieReleaseDate = std::unique_ptr<UIInputBox>(new UIInputBox(
         sf::Vector2f(inputX, 421.f),
-        sf::Vector2f(inputW, inputH),
-        "DD/MM/YYYY",
+        sf::Vector2f(dateW, inputH),
+        "Khởi chiếu: DD/MM/YYYY",
         Theme::SizeBody
     ));
     inputMovieReleaseDate->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(15, 23, 42), sf::Color(148, 163, 184));
     inputMovieReleaseDate->setCornerRadius(8.f);
+
+    inputMovieEndDate = std::unique_ptr<UIInputBox>(new UIInputBox(
+        sf::Vector2f(inputX + dateW + 10.f, 421.f),
+        sf::Vector2f(dateW, inputH),
+        "Kết thúc: DD/MM/YYYY",
+        Theme::SizeBody
+    ));
+    inputMovieEndDate->setColors(softInputBg, softInputBorder, focusBlue, sf::Color(15, 23, 42), sf::Color(148, 163, 184));
+    inputMovieEndDate->setCornerRadius(8.f);
 
     inputMovieAgeRating = std::unique_ptr<UIInputBox>(new UIInputBox(
         sf::Vector2f(inputX, 466.f),
@@ -425,6 +436,7 @@ void CinemaUIApp::setupMoviesView() {
             inputMovieTitle->setText("");
             inputMovieDuration->setText("");
             inputMovieReleaseDate->setText("");
+        if (inputMovieEndDate) inputMovieEndDate->setText("");
             inputMovieAgeRating->setText("");
             syncMovieFormAgeDropdown("");
             refreshAgeRatingDropdowns();
@@ -489,14 +501,28 @@ void CinemaUIApp::setupMoviesView() {
                                  ? inputMoviePoster->getText()
                                  : ("assets/posters/" + id + ".jpg");
 
-        int day = 1, month = 1, year = 2026;
-        DateFormat::parseDate(normRel, day, month, year);
-        month += 1;
-        if (month > 12) { month = 1; year += 1; }
-        std::ostringstream ssEnd;
-        ssEnd << std::setfill('0') << std::setw(2) << day << "/"
-              << std::setw(2) << month << "/" << std::setw(4) << year;
-        std::string endDate = ssEnd.str();
+        std::string endDate = inputMovieEndDate ? inputMovieEndDate->getText() : "";
+        if (!endDate.empty()) {
+            if (!DateFormat::isValidDate(endDate)) {
+                confirmPopup->show("Lỗi", "Ngày kết thúc không hợp lệ! Vui lòng nhập định dạng DD/MM/YYYY.", ButtonStyle::Danger, "Đóng", "Hủy");
+                return;
+            }
+            std::string normEnd = DateFormat::normalizeDate(endDate);
+            if (normEnd < normRel) {
+                confirmPopup->show("Lỗi", "Ngày kết thúc không được trước ngày khởi chiếu!", ButtonStyle::Danger, "Đóng", "Hủy");
+                return;
+            }
+            endDate = normEnd;
+        } else {
+            int day = 1, month = 1, year = 2026;
+            DateFormat::parseDate(normRel, day, month, year);
+            month += 1;
+            if (month > 12) { month = 1; year += 1; }
+            std::ostringstream ssEnd;
+            ssEnd << std::setfill('0') << std::setw(2) << day << "/"
+                  << std::setw(2) << month << "/" << std::setw(4) << year;
+            endDate = ssEnd.str();
+        }
 
         Movie m(id, title, dur, age, normRel, endDate, desc, posterPath);
         movieList.push_back(m);
@@ -532,6 +558,7 @@ void CinemaUIApp::setupMoviesView() {
         inputMovieTitle->setText("");
         inputMovieDuration->setText("");
         inputMovieReleaseDate->setText("");
+        if (inputMovieEndDate) inputMovieEndDate->setText("");
         inputMovieAgeRating->setText("");
         syncMovieFormAgeDropdown("");
         refreshAgeRatingDropdowns();
@@ -625,8 +652,15 @@ void CinemaUIApp::setupMoviesView() {
             movieList[selectedMovieRowIdx].setTenPhim(title);
             movieList[selectedMovieRowIdx].setThoiLuong(dur);
             movieList[selectedMovieRowIdx].setNhanDoTuoi(age);
+            std::string userEnd = inputMovieEndDate ? inputMovieEndDate->getText() : "";
             if (!rel.empty()) {
                 movieList[selectedMovieRowIdx].setNgayKhoiChieu(rel);
+            }
+            if (!userEnd.empty()) {
+                if (DateFormat::isValidDate(userEnd)) {
+                    movieList[selectedMovieRowIdx].setNgayKetThuc(DateFormat::normalizeDate(userEnd));
+                }
+            } else if (!rel.empty()) {
                 int day = 1, month = 1, year = 2026;
                 DateFormat::parseDate(rel, day, month, year);
                 month += 1;
@@ -721,6 +755,7 @@ void CinemaUIApp::setupMoviesView() {
         inputMovieTitle->setText("");
         inputMovieDuration->setText("");
         inputMovieReleaseDate->setText("");
+        if (inputMovieEndDate) inputMovieEndDate->setText("");
         inputMovieAgeRating->setText("");
         syncMovieFormAgeDropdown("");
         refreshAgeRatingDropdowns();
@@ -737,6 +772,7 @@ void CinemaUIApp::setupMoviesView() {
         inputMovieTitle->setText(movieList[0].getTenPhim());
         inputMovieDuration->setText(std::to_string(movieList[0].getThoiLuong()));
         inputMovieReleaseDate->setText(movieList[0].getNgayKhoiChieu());
+        if (inputMovieEndDate) inputMovieEndDate->setText(movieList[0].getNgayKetThuc());
         int a0 = movieList[0].getNhanDoTuoi();
         std::string code0 = (a0 <= 0) ? "P" : ("T" + std::to_string(a0));
         inputMovieAgeRating->setText(code0);
@@ -2417,6 +2453,7 @@ void CinemaUIApp::renderMoviesView() {
         if (inputMovieTitle) inputMovieTitle->draw(window);
         if (inputMovieDuration) inputMovieDuration->draw(window);
         if (inputMovieReleaseDate) inputMovieReleaseDate->draw(window);
+        if (inputMovieEndDate) inputMovieEndDate->draw(window);
         if (inputMovieGenre) inputMovieGenre->draw(window);
         if (btnSelectGenre) btnSelectGenre->draw(window);
         if (inputMoviePoster) {

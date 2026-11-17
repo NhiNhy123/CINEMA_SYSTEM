@@ -178,6 +178,7 @@ private:
     std::unique_ptr<UIInputBox> inputMovieTitle;
     std::unique_ptr<UIInputBox> inputMovieDuration;
     std::unique_ptr<UIInputBox> inputMovieReleaseDate;
+    std::unique_ptr<UIInputBox> inputMovieEndDate;
     std::unique_ptr<UIInputBox> inputMovieAgeRating;
     std::unique_ptr<DropdownBox> movieFormAgeDropdown;
     std::unique_ptr<DropdownBox> movieAgeFilterDropdown;
@@ -267,10 +268,42 @@ private:
     int comboItem1Qty; // Quantity of item 1
     int comboItem2Idx; // Index in retail list
     int comboItem2Qty; // Quantity of item 2
+    std::unique_ptr<DropdownBox> comboItem1Dropdown;
+    std::unique_ptr<DropdownBox> comboItem2Dropdown;
     std::vector<int> getRetailFnbIndices() const;
+    std::string generateNextFnbId() const;
 
-    // View 5: Logs Components
+    // View 5: Logs Components (Audit Log)
+    struct AuditRecord {
+        std::string thoiGian;
+        std::string maNguoiDung;
+        std::string hoTen;
+        std::string vaiTro;
+        std::string hanhDong;
+        std::string chiTiet;
+        std::string tableName;
+        std::string fieldChanged;
+        std::string oldData;
+        std::string newData;
+        int actionType; // 0: Other/System, 1: Insert, 2: Update, 3: Delete
+    };
+
+    std::vector<AuditRecord> auditRecords;
     std::unique_ptr<EditableTable> logsTable;
+    std::unique_ptr<RoundRectButton> btnExportLogs;
+    std::unique_ptr<UIInputBox> auditSearchInput;
+    std::unique_ptr<DropdownBox> auditTableDropdown;
+    std::unique_ptr<DropdownBox> auditDateDropdown;
+    std::unique_ptr<RoundRectButton> btnAuditFilterAll;
+    std::unique_ptr<RoundRectButton> btnAuditFilterInsert;
+    std::unique_ptr<RoundRectButton> btnAuditFilterUpdate;
+    std::unique_ptr<RoundRectButton> btnAuditFilterDelete;
+    int auditFilterType;
+    int auditCurrentPage;
+    std::string auditTableFilterVal;
+    std::string auditDateFilterVal;
+    void reloadAuditLogs();
+    void exportAuditLogsToCSV();
 
     // Modal Confirmation Dialog
     std::unique_ptr<UserSelectPopup> confirmPopup;
@@ -294,6 +327,7 @@ private:
     int roomFormStatusIdx; // 0: HoatDong (Sẵn sàng đón khách), 1: TamNgung (Tạm ngưng / Bảo trì)
 
     std::unique_ptr<UIInputBox> roomSearchInput;
+    std::unique_ptr<DropdownBox> roomFilterDropdown;
     std::unique_ptr<RoundRectButton> btnRoomFilterAll;
     std::unique_ptr<RoundRectButton> btnRoomFilterStandard;
     std::unique_ptr<RoundRectButton> btnRoomFilterPremium;
@@ -363,6 +397,7 @@ private:
     std::unique_ptr<RoundRectButton> btnSeatAddNewType;
     std::unique_ptr<RoundRectButton> btnSeatPriceHistory;
     std::unique_ptr<UIInputBox> seatTypeSearchInput;
+    std::unique_ptr<DropdownBox> seatTypeFilterDropdown;
     std::unique_ptr<RoundRectButton> btnSeatTypeFilterAll;
     std::unique_ptr<RoundRectButton> btnSeatTypeFilterSingle;
     std::unique_ptr<RoundRectButton> btnSeatTypeFilterCouple;
@@ -371,6 +406,8 @@ private:
     std::string seatFormTypeCode;
     std::unique_ptr<UIInputBox> inputSeatTypeName;
     std::unique_ptr<UIInputBox> inputSeatTypePrice;
+    std::unique_ptr<RoundRectButton> btnSeatPriceMinus;
+    std::unique_ptr<RoundRectButton> btnSeatPricePlus;
     std::unique_ptr<UIInputBox> inputSeatTypeDesc;
     int seatTypeColorIdx; // 0..4
     bool seatTypeSaleActive;
@@ -407,7 +444,6 @@ private:
     std::unique_ptr<DropdownBox> stDateDropdown;
     std::unique_ptr<RoundRectButton> btnStTodayQuick;
     std::unique_ptr<DropdownBox> stRoomDropdown;
-    std::unique_ptr<RoundRectButton> btnStConfig;
     std::string stMovieFilterVal;
     std::string stDateFilterVal;
     std::string stRoomFilterVal;
@@ -462,6 +498,114 @@ private:
     std::unique_ptr<RoundRectButton> btnPromoDelete;
     std::unique_ptr<RoundRectButton> btnPromoClear;
 
+    // Staff Management UI Components (CineOS v3.4 PRO)
+    int selectedStaffRowIdx;
+    int staffCurrentPage;
+    int staffFilterTab; // 0: Tất cả, 1: Đang làm, 2: Đã nghỉ
+    bool staffFormResigned;
+
+    std::unique_ptr<RoundRectButton> btnStaffExport;
+    std::unique_ptr<RoundRectButton> btnStaffNew;
+    std::unique_ptr<UIInputBox> staffSearchInput;
+    std::unique_ptr<RoundRectButton> btnStaffFilterAll;
+    std::unique_ptr<RoundRectButton> btnStaffFilterActive;
+    std::unique_ptr<RoundRectButton> btnStaffFilterResigned;
+
+    std::unique_ptr<UIInputBox> inputStaffId;
+    std::unique_ptr<UIInputBox> inputStaffName;
+    std::unique_ptr<UIInputBox> inputStaffPhone;
+    std::unique_ptr<UIInputBox> inputStaffBirthDate;
+    std::unique_ptr<DropdownBox> staffGenderDropdown;
+    std::unique_ptr<UIInputBox> inputStaffCCCD;
+    std::unique_ptr<UIInputBox> inputStaffEmail;
+
+    std::unique_ptr<RoundRectButton> btnStaffCreate;
+    std::unique_ptr<RoundRectButton> btnStaffUpdate;
+    std::unique_ptr<RoundRectButton> btnStaffClear;
+    std::unique_ptr<RoundRectButton> btnStaffDelete;
+    std::unique_ptr<RoundRectButton> btnStaffPrevPage;
+    std::unique_ptr<RoundRectButton> btnStaffNextPage;
+
+    // Account Management UI Components (CineOS v3.4 PRO - Quản lý tài khoản)
+    int selectedAccountRowIdx;
+    int accountCurrentPage;
+    int accountFilterTab; // 0: Tất cả, 1: Hoạt động, 2: Bị khóa
+    bool accountShowPassword;
+
+    std::unique_ptr<RoundRectButton> btnAccountExport;
+    std::unique_ptr<RoundRectButton> btnAccountNew;
+    std::unique_ptr<UIInputBox> accountSearchInput;
+    std::unique_ptr<RoundRectButton> btnAccountFilterAll;
+    std::unique_ptr<RoundRectButton> btnAccountFilterActive;
+    std::unique_ptr<RoundRectButton> btnAccountFilterLocked;
+
+    std::unique_ptr<DropdownBox> accountEmployeeDropdown;
+    std::unique_ptr<UIInputBox> inputAccountEmployeeId;
+    std::unique_ptr<UIInputBox> inputAccountFullName;
+    std::unique_ptr<UIInputBox> inputAccountUsername;
+    std::unique_ptr<UIInputBox> inputAccountPassword;
+    std::unique_ptr<DropdownBox> accountRoleDropdown;
+
+    std::unique_ptr<RoundRectButton> btnAccountSave;
+    std::unique_ptr<RoundRectButton> btnAccountToggleLock;
+    std::unique_ptr<RoundRectButton> btnAccountRefresh;
+    std::unique_ptr<RoundRectButton> btnAccountClear;
+    std::unique_ptr<RoundRectButton> btnAccountPrevPage;
+    std::unique_ptr<RoundRectButton> btnAccountNextPage;
+
+    // Revenue Reconciliation & Cash Audit UI Components (CineOS v3.4 PRO - Đối soát & Doanh thu)
+    struct RevenueTxRecord {
+        std::string maHoaDon;
+        std::string idSub;        // e.g. "531c6d1c-..."
+        std::string ngay;         // "06/04/2026"
+        std::string gio;          // "16:32:18"
+        std::string maKhachHang;  // "U03"
+        std::string tenKhachHang; // "Lâm Văn Dĩ"
+        std::string chiTietKhach; // "Khách lẻ tại quầy" or "Ghế VIP F12 - Rạp 1"
+        int loaiGD;               // 0: Vé phim, 1: Bắp nước (F&B)
+        std::string chiTietHang;  // "F&B Combo bắp ngọt" or "Vé 2D Chuẩn VIP"
+        double soTien;            // e.g. 87000, 135000
+        std::string hinhThuc;     // "TienMat" (CASH), "QueQR" (QR Pay), "TheNganHang" (CARD)
+        std::string maNhanVien;   // "U002"
+        std::string tenNhanVien;  // "Nguyễn Tiến Dũng"
+        std::string maGiaoDich;   // "TXN-17754..." or "SIM-17754..."
+    };
+
+    std::vector<RevenueTxRecord> reportAllTxList;
+    std::vector<RevenueTxRecord> reportFilteredTxList;
+
+    int reportFilterTab;          // 0: Tất cả, 1: Vé phim, 2: Bắp nước
+    int reportCurrentPage;
+    std::string reportSearchQuery;
+
+    double reportTotalRevenue;
+    double reportCashRevenue;
+    double reportQrRevenue;
+    double reportCardRevenue;
+    int reportTicketCount;
+    int reportFnbCount;
+    int reportTotalTxCount;
+
+    double reportCashDifference;
+    bool reportIsBalanced;
+
+    std::unique_ptr<UIInputBox> reportSearchInput;
+    std::unique_ptr<UIInputBox> inputReportStartDate;
+    std::unique_ptr<UIInputBox> inputReportEndDate;
+    std::unique_ptr<DropdownBox> reportShiftDropdown;
+    std::unique_ptr<DropdownBox> reportCashierDropdown;
+    std::unique_ptr<DropdownBox> reportPaymentDropdown;
+    std::unique_ptr<RoundRectButton> btnReportFilter;
+
+    std::unique_ptr<RoundRectButton> btnReportExport;
+    std::unique_ptr<RoundRectButton> btnTxFilterAll;
+    std::unique_ptr<RoundRectButton> btnTxFilterTicket;
+    std::unique_ptr<RoundRectButton> btnTxFilterFnb;
+    std::unique_ptr<RoundRectButton> btnReconcileBalance;
+    std::unique_ptr<RoundRectButton> btnPrintShiftReceipt;
+    std::unique_ptr<RoundRectButton> btnReportPrevPage;
+    std::unique_ptr<RoundRectButton> btnReportNextPage;
+
 public:
     CinemaUIApp();
     ~CinemaUIApp() = default;
@@ -486,7 +630,23 @@ private:
     void setupConcessionsView();
     void setupShowtimesView();
     void setupPromotionsView();
+    void setupStaffView();
+    void setupAccountsView();
     void setupLogsView();
+    void setupReportsView();
+    void reloadReportsData();
+    void applyReportFilters();
+    void exportRevenueReportCSV();
+    void printShiftReceipt();
+
+    void syncStaffSelectionToForm(int idx);
+    std::string generateNextStaffId() const;
+    std::vector<int> getFilteredStaffIndices() const;
+    bool saveStaffUsersToDatabase();
+
+    void syncAccountSelectionToForm(int idx);
+    std::vector<int> getFilteredAccountIndices() const;
+    void refreshAccountEmployeeDropdown();
 
     void syncPromoSelectionToForm(int idx);
     void refreshPromoScopeDropdown();

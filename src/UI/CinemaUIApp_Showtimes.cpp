@@ -367,7 +367,7 @@ void CinemaUIApp::setupShowtimesView() {
     }
     stRoomDropdown = std::unique_ptr<DropdownBox>(new DropdownBox(
         sf::Vector2f(leftColX + 630.f, ST_FILTER_Y),
-        sf::Vector2f(198.f, 38.f),
+        sf::Vector2f(250.f, 38.f),
         roomFilterOpts,
         0
     ));
@@ -380,27 +380,6 @@ void CinemaUIApp::setupShowtimesView() {
             stRoomFilterVal = roomList[idx - 1].getMaPhong();
         }
         showtimeCurrentPage = 0;
-    });
-
-    btnStConfig = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "",
-        sf::Vector2f(leftColX + 838.f, ST_FILTER_Y),
-        sf::Vector2f(42.f, 38.f),
-        ButtonStyle::Ghost,
-        8.f
-    ));
-    btnStConfig->setCustomColors(sf::Color::White, sf::Color(241, 245, 249), sf::Color(226, 232, 240), sf::Color(241, 245, 249));
-    btnStConfig->setOutline(1.f, sf::Color(226, 232, 240));
-    btnStConfig->setOnClick([this]() {
-        if (stSearchInput) stSearchInput->setText("");
-        if (stMovieFilterDropdown) stMovieFilterDropdown->setSelectedIndex(0);
-        if (stDateDropdown) stDateDropdown->setSelectedIndex(0);
-        if (stRoomDropdown) stRoomDropdown->setSelectedIndex(0);
-        stMovieFilterVal = "";
-        stDateFilterVal = "";
-        stRoomFilterVal = "";
-        showtimeCurrentPage = 0;
-        refreshShowtimesDropdowns();
     });
 
     // Form Inputs on Right Card
@@ -841,20 +820,6 @@ void CinemaUIApp::renderShowtimesView() {
     if (stMovieFilterDropdown) stMovieFilterDropdown->draw(window);
     if (stDateDropdown) stDateDropdown->draw(window);
     if (stRoomDropdown) stRoomDropdown->draw(window);
-    if (btnStConfig) {
-        btnStConfig->draw(window);
-        // Little gear/filter icon inside config button
-        sf::CircleShape gear(6.f);
-        gear.setFillColor(sf::Color::Transparent);
-        gear.setOutlineThickness(1.8f);
-        gear.setOutlineColor(sf::Color(100, 116, 139));
-        gear.setPosition(leftColX + 850.f, ST_FILTER_Y + 13.f);
-        window.draw(gear);
-        sf::CircleShape gearHole(2.f);
-        gearHole.setFillColor(sf::Color(100, 116, 139));
-        gearHole.setPosition(leftColX + 854.f, ST_FILTER_Y + 17.f);
-        window.draw(gearHole);
-    }
 
     // ==========================================
     // 6. MAIN CONTENT CARDS (y = ST_CARD_Y = 214.f, h = ST_CARD_H = 616.f)

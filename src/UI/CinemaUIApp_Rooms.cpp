@@ -1,4 +1,4 @@
-﻿#include "../../include/UI/CinemaUIApp.h"
+#include "../../include/UI/CinemaUIApp.h"
 #include "../../include/ActivityLog.h"
 #include <fstream>
 #include <algorithm>
@@ -10,9 +10,7 @@ void CinemaUIApp::syncRoomSelectionToForm(int idx) {
     selectedRoomRowIdx = idx;
     const auto& r = roomList[idx];
 
-    char uuidBuf[64];
-    snprintf(uuidBuf, sizeof(uuidBuf), "63fcfa9d-abd9-4fce-8321-3f86a559%04x", ((idx + 1) * 0x1a2b) & 0xFFFF);
-    if (inputRoomUUID) inputRoomUUID->setText(uuidBuf);
+    if (inputRoomUUID) inputRoomUUID->setText(r.getMaPhong());
 
     if (inputRoomName) inputRoomName->setText(r.getTenPhong());
     roomFormCapacity = std::max(4, r.getSucChua());
@@ -124,9 +122,17 @@ void CinemaUIApp::setupRoomsView() {
     btnRoomAddNew->setCustomColors(sf::Color(2, 132, 199), sf::Color(3, 105, 161), sf::Color(7, 89, 133), sf::Color(203, 213, 225));
     btnRoomAddNew->setOnClick([this]() {
         selectedRoomRowIdx = -1;
-        char uuidBuf[64];
-        snprintf(uuidBuf, sizeof(uuidBuf), "63fcfa9d-abd9-4fce-8321-3f86a559%04x", (static_cast<int>(roomList.size()) + 1) * 0x1234 & 0xFFFF);
-        if (inputRoomUUID) inputRoomUUID->setText(uuidBuf);
+        int maxNum = 0;
+        for (const auto& rm : roomList) {
+            std::string m = rm.getMaPhong();
+            int num = 0;
+            if (sscanf(m.c_str(), "R%d", &num) >= 1) {
+                if (num > maxNum) maxNum = num;
+            }
+        }
+        char idBuf[16];
+        snprintf(idBuf, sizeof(idBuf), "R%02d", maxNum + 1);
+        if (inputRoomUUID) inputRoomUUID->setText(idBuf);
         if (inputRoomName) {
             char nameBuf[48];
             snprintf(nameBuf, sizeof(nameBuf), "Phòng %d - Standard", static_cast<int>(roomList.size()) + 1);
@@ -151,27 +157,18 @@ void CinemaUIApp::setupRoomsView() {
     roomSearchInput->setColors(sf::Color::White, sf::Color(226, 232, 240), sf::Color(2, 132, 199), sf::Color(15, 23, 42), sf::Color(148, 163, 184));
     roomSearchInput->setCornerRadius(8.f);
 
-    auto makeFilterBtn = [&](const std::string& txt, float x, float w, int filterIdx) {
-        auto b = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-            txt,
-            sf::Vector2f(x, 166.f),
-            sf::Vector2f(w, 38.f),
-            ButtonStyle::Ghost,
-            8.f
-        ));
-        b->setFontSize(12);
-        b->setOnClick([this, filterIdx]() {
-            roomFilterType = filterIdx;
-            roomCurrentPage = 0;
-        });
-        return b;
-    };
-
-    // Note: Do NOT display count numbers on filter buttons per user instruction
-    btnRoomFilterAll = makeFilterBtn("Tất cả", leftColX + 258.f, 84.f, 0);
-    btnRoomFilterStandard = makeFilterBtn("Standard", leftColX + 350.f, 96.f, 1);
-    btnRoomFilterPremium = makeFilterBtn("Premium", leftColX + 454.f, 96.f, 2);
-    btnRoomFilterSpecial = makeFilterBtn("Đặc biệt (IMAX/4DX/10D)", leftColX + 558.f, 194.f, 3);
+    roomFilterDropdown = std::unique_ptr<DropdownBox>(new DropdownBox(
+        sf::Vector2f(leftColX + 258.f, 166.f),
+        sf::Vector2f(230.f, 38.f),
+        {"Tất cả loại phòng", "Standard (2D)", "Premium (VIP / 3D)", "Đặc biệt (IMAX/4DX/VR)"},
+        0
+    ));
+    roomFilterDropdown->setFontSize(12);
+    roomFilterDropdown->setLightStyle(true);
+    roomFilterDropdown->setOnSelect([this](int idx, const std::string& val) {
+        roomFilterType = idx;
+        roomCurrentPage = 0;
+    });
 
     // 3. Right Column Form Inputs (matching reference mockup & Room.cpp backend)
     float formX = rightColX + 24.f;
@@ -405,8 +402,11 @@ void CinemaUIApp::setupRoomsView() {
         roomList[selectedRoomRowIdx].setTrangThaiPhong(statusStr);
         db.ghiDanhSachPhong(roomList);
 
-        if (oldCap != roomFormCapacity || oldTech != tech) {
-            generateSeatsForRoom(rId, roomFormCapacity, tech);
+        int affectedShowtimes = 0;
+        if (statusStr == "TamNgung") {
+            for (const auto& st : showtimeList) {
+                if (st.getMaPhong() == rId) affectedShowtimes++;
+            }
         }
 
         ActivityLog::ghiNhan(currentUserId, currentUserRole, "SUA_PHONG", "Cập nhật phòng: " + name + " (" + rId + ")");
@@ -414,7 +414,13 @@ void CinemaUIApp::setupRoomsView() {
         refreshSeatsRoomDropdown();
         syncRoomSelectionToForm(selectedRoomRowIdx);
 
-        if (confirmPopup) confirmPopup->show("Thành công", "Đã lưu cập nhật phòng '" + name + "' (" + std::to_string(roomFormCapacity) + " ghế) vào cơ sở dữ liệu SQLite!", ButtonStyle::Primary, "Đóng", "Quay lại");
+        if (confirmPopup) {
+            if (statusStr == "TamNgung" && affectedShowtimes > 0) {
+                confirmPopup->show("CẢNH BÁO SUẤT CHIẾU", "Đã lưu cập nhật phòng '" + name + "'. Lưu ý: Phòng chuyển sang TẠM NGƯNG và có " + std::to_string(affectedShowtimes) + " suất chiếu thuộc phòng này!", ButtonStyle::Primary, "Đóng", "Quay lại");
+            } else {
+                confirmPopup->show("Thành công", "Đã lưu cập nhật phòng '" + name + "' (" + std::to_string(roomFormCapacity) + " ghế) vào cơ sở dữ liệu SQLite!", ButtonStyle::Primary, "Đóng", "Quay lại");
+            }
+        }
     });
 
     btnRoomDelete = std::unique_ptr<RoundRectButton>(new RoundRectButton(
@@ -547,56 +553,6 @@ void CinemaUIApp::renderRoomsView() {
     window.clear(sf::Color(248, 250, 252));
 
     // ==========================================
-    // 2. TOP BREADCRUMB & REALTIME SYNC HEADER
-    // ==========================================
-    float topNavY = 12.f;
-
-    sf::CircleShape pinDot(3.5f);
-    pinDot.setFillColor(sf::Color(16, 185, 129));
-    pinDot.setPosition(leftColX, topNavY + 3.f);
-    window.draw(pinDot);
-
-    sf::Text brBranch(toSfString("Cinestar Quốc Thanh (TP.HCM)"), Theme::FontPrimary, 11);
-    brBranch.setStyle(sf::Text::Bold);
-    brBranch.setFillColor(sf::Color(15, 23, 42));
-    brBranch.setPosition(leftColX + 12.f, topNavY);
-    window.draw(brBranch);
-
-    sf::CircleShape sepDot(2.f);
-    sepDot.setFillColor(sf::Color(203, 213, 225));
-    sepDot.setPosition(leftColX + brBranch.getLocalBounds().width + 20.f, topNavY + 5.f);
-    window.draw(sepDot);
-
-    sf::Text brPath(toSfString("Bảng điều khiển  >  Quản lý phòng chiếu  >  Quản Lý Phòng"), Theme::FontPrimary, 11);
-    brPath.setFillColor(sf::Color(100, 116, 139));
-    brPath.setPosition(leftColX + brBranch.getLocalBounds().width + 30.f, topNavY);
-    window.draw(brPath);
-
-    // Right User Pill (CineOS Profile)
-    float uPillW = 246.f;
-    float uPillX = rightColX + rightColW - uPillW;
-    RoundedRectRenderer::render(window, sf::Vector2f(uPillX, topNavY - 4.f), sf::Vector2f(uPillW, 26.f), 13.f, sf::Color::White, 1.f, sf::Color(226, 232, 240));
-
-    sf::CircleShape uAv(8.f);
-    uAv.setFillColor(sf::Color(2, 132, 199));
-    uAv.setPosition(uPillX + 5.f, topNavY + 1.f);
-    window.draw(uAv);
-
-    sf::Text uIni(toSfString("LT"), Theme::FontPrimary, 9);
-    uIni.setStyle(sf::Text::Bold);
-    uIni.setFillColor(sf::Color::White);
-    uIni.setPosition(uPillX + 7.5f, topNavY + 2.f);
-    window.draw(uIni);
-
-    std::string dispUser = currentUserName.empty() ? "Lê Minh Tuấn" : currentUserName;
-    std::string dispRole = currentUserRole.empty() ? "Trưởng Ca Vận Hành" : currentUserRole;
-    sf::Text uName(toSfString(dispUser + " (" + dispRole + ")"), Theme::FontPrimary, 10);
-    uName.setStyle(sf::Text::Bold);
-    uName.setFillColor(sf::Color(30, 41, 59));
-    uName.setPosition(uPillX + 26.f, topNavY + 1.f);
-    window.draw(uName);
-
-    // ==========================================
     // 3. MAIN HEADER TITLE CARD (y = 38.f, h = 72.f)
     // ==========================================
     float titleCardY = 38.f;
@@ -721,25 +677,7 @@ void CinemaUIApp::renderRoomsView() {
         window.draw(inHandle);
     }
 
-    auto updateChipStyle = [&](std::unique_ptr<RoundRectButton>& b, int idx) {
-        if (!b) return;
-        bool isActive = (roomFilterType == idx);
-        if (isActive) {
-            b->setCustomColors(sf::Color(15, 23, 42), sf::Color(30, 41, 59), sf::Color(51, 65, 85), sf::Color(15, 23, 42));
-            b->setOutline(1.f, sf::Color(15, 23, 42));
-            b->setTextColor(sf::Color::White);
-        } else {
-            b->setCustomColors(sf::Color(248, 250, 252), sf::Color(241, 245, 249), sf::Color(226, 232, 240), sf::Color(241, 245, 249));
-            b->setOutline(1.f, sf::Color(226, 232, 240));
-            b->setTextColor(sf::Color(71, 85, 105));
-        }
-        b->draw(window);
-    };
-
-    updateChipStyle(btnRoomFilterAll, 0);
-    updateChipStyle(btnRoomFilterStandard, 1);
-    updateChipStyle(btnRoomFilterPremium, 2);
-    updateChipStyle(btnRoomFilterSpecial, 3);
+    if (roomFilterDropdown) roomFilterDropdown->draw(window);
 
     // Divider below filter bar (y = 216.f)
     sf::RectangleShape fDiv(sf::Vector2f(leftColW - 40.f, 1.f));
@@ -853,28 +791,11 @@ void CinemaUIApp::renderRoomsView() {
         RoundedRectRenderer::render(window, sf::Vector2f(codeBoxX, codeBoxY), sf::Vector2f(codeBoxW, codeBoxH), 8.f, codeBg, 1.f, codeBdr);
 
         std::string rawCode = rm.getMaPhong();
-        int parsedNum = 0;
-        if (sscanf(rawCode.c_str(), "R%d", &parsedNum) == 1 || sscanf(rawCode.c_str(), "ROOM%d", &parsedNum) == 1) {
-            char numStr[16];
-            snprintf(numStr, sizeof(numStr), "%02d", parsedNum);
-            sf::Text l1(toSfString("ROOM"), Theme::FontPrimary, 10);
-            l1.setStyle(sf::Text::Bold);
-            l1.setFillColor(codeFg);
-            l1.setPosition(std::round(colMaCenterX - l1.getLocalBounds().width / 2.f), codeBoxY + 7.f);
-            window.draw(l1);
-
-            sf::Text l2(toSfString(numStr), Theme::FontPrimary, 12);
-            l2.setStyle(sf::Text::Bold);
-            l2.setFillColor(codeFg);
-            l2.setPosition(std::round(colMaCenterX - l2.getLocalBounds().width / 2.f), codeBoxY + 22.f);
-            window.draw(l2);
-        } else {
-            sf::Text mCodeTxt(toSfString(rawCode), Theme::FontPrimary, 11);
-            mCodeTxt.setStyle(sf::Text::Bold);
-            mCodeTxt.setFillColor(codeFg);
-            mCodeTxt.setPosition(std::round(colMaCenterX - mCodeTxt.getLocalBounds().width / 2.f), codeBoxY + 14.f);
-            window.draw(mCodeTxt);
-        }
+        sf::Text mCodeTxt(toSfString(rawCode), Theme::FontPrimary, 13);
+        mCodeTxt.setStyle(sf::Text::Bold);
+        mCodeTxt.setFillColor(codeFg);
+        mCodeTxt.setPosition(std::round(colMaCenterX - mCodeTxt.getLocalBounds().width / 2.f), codeBoxY + 13.f);
+        window.draw(mCodeTxt);
 
         // Col 2: Color dot + Room Name + Tech sticker + "Đang chọn" sticker + Subtitle
         std::string lp = rm.getLoaiPhong();
