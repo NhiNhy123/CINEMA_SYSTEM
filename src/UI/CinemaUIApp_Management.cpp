@@ -825,7 +825,7 @@ void CinemaUIApp::reloadReportsData() {
         if (userMap.count(rec.maNhanVien) && !userMap[rec.maNhanVien].empty()) {
             rec.tenNhanVien = userMap[rec.maNhanVien];
         } else {
-            rec.tenNhanVien = "Nguyễn Tiến Dũng";
+            rec.tenNhanVien = "Phạm Như Anh Thư";
         }
 
         int ticketCount = 0;

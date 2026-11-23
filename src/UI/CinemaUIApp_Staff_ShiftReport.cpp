@@ -517,8 +517,9 @@ void CinemaUIApp::setupShiftReportView() {
     float startX = sidebarWidth + 24.f; // 274.f
     float contentW = 1728.f - startX - 24.f; // 1430.f
 
-    shiftCalculatedSysRev = 222000;
-    shiftCalculatedActualCash = 222000;
+    shiftCalculatedSysRev = 0;
+    shiftCalculatedCashRev = 0;
+    shiftCalculatedActualCash = 0;
     shiftCalculatedDiff = 0;
     shiftIsClosed = false;
     shiftCurrentPage = 0;
@@ -736,9 +737,9 @@ void CinemaUIApp::setupShiftReportView() {
     });
 
     btnAdminManagerApprove = std::make_unique<RoundRectButton>(
-        "QUẢN LÝ DUYỆT CA",
+        "DUYỆT CA",
         sf::Vector2f(rColX + 298.f, 892.f),
-        sf::Vector2f(266.f, 40.f),
+        sf::Vector2f(130.f, 40.f),
         ButtonStyle::Primary,
         8.f
     );
@@ -799,6 +800,7 @@ void CinemaUIApp::setupShiftReportView() {
         }
 
         const auto& profiles = getAdminShiftProfiles();
+        if (profiles.empty()) return;
         const auto& p = profiles[adminSelectedShiftIdx % profiles.size()];
         if (p.maCa == "CA00") return;
 
@@ -852,6 +854,43 @@ void CinemaUIApp::setupShiftReportView() {
         }
     });
 
+    btnAdminManagerReject = std::make_unique<RoundRectButton>(
+        "TRẢ LẠI / TỪ CHỐI",
+        sf::Vector2f(rColX + 434.f, 892.f),
+        sf::Vector2f(130.f, 40.f),
+        ButtonStyle::Danger,
+        8.f
+    );
+    btnAdminManagerReject->setFontSize(10);
+    btnAdminManagerReject->setOnClick([this]() {
+        const auto& profiles = getAdminShiftProfiles();
+        if (profiles.empty()) return;
+        const auto& p = profiles[adminSelectedShiftIdx % profiles.size()];
+        if (p.maCa == "CA00") return;
+
+        sqlite3* dbConn = nullptr;
+        if (sqlite3_open("DATA/cinema.db", &dbConn) == SQLITE_OK) {
+            std::string sql = "UPDATE shift_managements SET trangThai='YeuCauDieuChinh', daKhoaBaoCao='false' WHERE maCa='" + p.maCa + "';";
+            sqlite3_exec(dbConn, sql.c_str(), nullptr, nullptr, nullptr);
+            sqlite3_close(dbConn);
+        }
+
+        adminShiftApproved = false;
+        reloadShiftReportData();
+
+        ActivityLog::ghiNhan(currentUserId, currentUserRole, "TU_CHOI_CA", "Quản lý từ chối ca " + p.maCa + " và yêu cầu thu ngân kiểm đếm lại");
+        if (confirmPopup) {
+            confirmPopup->show(
+                "ĐÃ GỬI YÊU CẦU ĐIỀU CHỈNH",
+                "Ca trực " + p.maCa + " đã được chuyển về trạng thái 'YeuCauDieuChinh'.\n"
+                "Thu ngân có thể kiểm đếm lại két tiền và nộp lại báo cáo đối soát.",
+                ButtonStyle::Primary,
+                "Đóng",
+                ""
+            );
+        }
+    });
+
     // =========================================================================
     // B. STAFF SHIFT REPORT & AUDIT CONTROLS (media_1795195645330_f67074fa.jpg)
     // =========================================================================
@@ -878,29 +917,48 @@ void CinemaUIApp::setupShiftReportView() {
             }
         }
 
-        std::ofstream f("DATA/bien_ban_chot_ca.txt");
-        if (f.is_open()) {
-            f << "=========================================================\n";
-            f << "           CINESTAR CINEMA & POS SYSTEM                  \n";
-            f << "         BIÊN BẢN CHỐT CA & ĐỐI SOÁT DOANH THU           \n";
-            f << "=========================================================\n\n";
-            f << "Thu ngân phụ trách      : " << activeCashier << " (" << currentUserId << ")\n";
-            f << "Quầy giao dịch          : Quầy POS 01\n";
-            f << "Ca làm việc             : Ca Chiều (14h00 - 22h00)\n";
-            f << "Ngày kết toán           : " << getTodayDateStr() << "\n";
-            f << "Thời gian kết xuất      : " << getCurrentTimeStr() << "\n";
-            f << "---------------------------------------------------------\n";
-            f << "1. Doanh thu hệ thống POS ghi nhận : " << formatVnd(shiftCalculatedSysRev) << "\n";
-            f << "2. Tiền mặt kiểm đếm thực tế       : " << formatVnd(shiftCalculatedActualCash) << "\n";
-            f << "3. Chênh lệch kiểm quỹ             : " << formatVnd(shiftCalculatedDiff) << "\n";
-            f << "4. Trạng thái chốt ca              : " << (shiftIsClosed ? "ĐÃ KHÓA SỔ & CHỐT CA" : "CHỜ DUYỆT BÀN GIAO") << "\n";
-            f << "---------------------------------------------------------\n";
-            f.close();
+        std::string safeCa = currentShiftId.empty() ? "CA_HIEN_TAI" : currentShiftId;
+        std::string sDate = getTodayDateStr();
+        std::string cleanDate = "";
+        for (char ch : sDate) if (ch != '/') cleanDate.push_back(ch);
+        std::string sTime = getCurrentTimeStr();
+        std::string cleanTime = "";
+        for (char ch : sTime) if (ch != ':') cleanTime.push_back(ch);
 
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "XUAT_BIEN_BAN_CA", "Xuất biên bản bàn giao doanh thu ca trực ra DATA/bien_ban_chot_ca.txt");
-            if (confirmPopup) {
-                confirmPopup->show("XUẤT BIÊN BẢN THÀNH CÔNG", "Biên bản chốt ca & đối soát doanh thu đã được lưu tại:\nDATA/bien_ban_chot_ca.txt", ButtonStyle::Primary, "Đóng", "");
-            }
+        std::string dynamicPath = "DATA/bien_ban_chot_ca_" + safeCa + "_" + cleanDate + "_" + cleanTime + ".txt";
+        std::ofstream f(dynamicPath);
+        std::ofstream fDef("DATA/bien_ban_chot_ca.txt");
+        auto writeContent = [&](std::ostream& os) {
+            os << "=========================================================\n";
+            os << "           CINESTAR CINEMA & POS SYSTEM                  \n";
+            os << "         BIÊN BẢN CHỐT CA & ĐỐI SOÁT DOANH THU           \n";
+            os << "=========================================================\n\n";
+            os << "Mã ca làm việc          : " << safeCa << "\n";
+            os << "Thu ngân phụ trách      : " << activeCashier << " (" << currentUserId << ")\n";
+            os << "Quầy giao dịch          : " << (currentPosTerminal.empty() ? "Quầy POS 01" : currentPosTerminal) << "\n";
+            os << "Khung giờ trực thực tế  : " << (currentShiftStartTime.empty() ? "Bắt đầu ca" : currentShiftStartTime) << " - " << sTime << "\n";
+            os << "Ngày kết toán           : " << sDate << "\n";
+            os << "Thời gian kết xuất      : " << sTime << "\n";
+            os << "---------------------------------------------------------\n";
+            os << "1. Doanh thu hệ thống POS ghi nhận : " << formatVnd(shiftCalculatedSysRev) << "\n";
+            os << "2. Tiền mặt kiểm đếm thực tế       : " << formatVnd(shiftCalculatedActualCash) << "\n";
+            os << "3. Chênh lệch kiểm quỹ             : " << formatVnd(shiftCalculatedDiff) << "\n";
+            os << "4. Trạng thái chốt ca              : " << (shiftIsClosed ? "ĐÃ KHÓA SỔ & CHỐT CA (Chờ duyệt)" : "ĐANG MỞ TRỰC (Chưa chốt)") << "\n";
+            os << "---------------------------------------------------------\n";
+        };
+
+        if (f.is_open()) {
+            writeContent(f);
+            f.close();
+        }
+        if (fDef.is_open()) {
+            writeContent(fDef);
+            fDef.close();
+        }
+
+        ActivityLog::ghiNhan(currentUserId, currentUserRole, "XUAT_BIEN_BAN_CA", "Xuất biên bản ca trực " + safeCa + " ra " + dynamicPath);
+        if (confirmPopup) {
+            confirmPopup->show("XUẤT BIÊN BẢN THÀNH CÔNG", "Biên bản chốt ca & đối soát đã được lưu tại:\n• " + dynamicPath + "\n• DATA/bien_ban_chot_ca.txt", ButtonStyle::Primary, "Đóng", "");
         }
     });
 
@@ -971,9 +1029,7 @@ void CinemaUIApp::setupShiftReportView() {
             }
         }
 
-        ShiftReport tempReport("CA_CUR", currentUserId, activeCashier, getTodayDateStr(), "14:00", "22:00", shiftCalculatedSysRev, shiftCalculatedActualCash);
-        tempReport.tinhChenhLech();
-        shiftCalculatedDiff = tempReport.getChenhLech();
+        shiftCalculatedDiff = shiftCalculatedActualCash - shiftCalculatedCashRev;
     });
 
     btnShiftCloseShift = std::make_unique<RoundRectButton>(
@@ -991,6 +1047,19 @@ void CinemaUIApp::setupShiftReportView() {
         sf::Color(148, 163, 184)
     );
     btnShiftCloseShift->setOnClick([this]() {
+        if (shiftIsClosed) {
+            if (confirmPopup) {
+                confirmPopup->show(
+                    "CA TRỰC ĐÃ ĐƯỢC CHỐT",
+                    "Ca trực " + (currentShiftId.empty() ? "hiện tại" : currentShiftId) + " đã được khóa sổ & gửi duyệt trước đó!\nKhông thể chốt lặp lại ca này.",
+                    ButtonStyle::Primary,
+                    "Đóng",
+                    ""
+                );
+            }
+            return;
+        }
+
         std::string raw = inputShiftActualCash ? inputShiftActualCash->getText() : "0";
         std::string digits;
         for (char ch : raw) {
@@ -1010,54 +1079,74 @@ void CinemaUIApp::setupShiftReportView() {
             }
         }
 
-        ShiftReport newShift("CA_NEW", currentUserId, activeCashier, getTodayDateStr(), "14:00", "22:00", shiftCalculatedSysRev, shiftCalculatedActualCash, "ChoDuyet", true);
-        newShift.tinhChenhLech();
-        newShift.khoaBaoCao();
-        shiftCalculatedDiff = newShift.getChenhLech();
+        shiftCalculatedDiff = shiftCalculatedActualCash - shiftCalculatedCashRev;
 
         sqlite3* dbConn = nullptr;
         if (sqlite3_open("DATA/cinema.db", &dbConn) == SQLITE_OK) {
-            sqlite3_stmt* stmt = nullptr;
-            int maxCa = 8;
-            if (sqlite3_prepare_v2(dbConn, "SELECT maCa FROM shift_managements;", -1, &stmt, nullptr) == SQLITE_OK) {
-                while (sqlite3_step(stmt) == SQLITE_ROW) {
-                    const char* t = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-                    if (t && std::string(t).rfind("CA", 0) == 0) {
-                        try {
-                            int v = std::stoi(std::string(t).substr(2));
-                            if (v > maxCa) maxCa = v;
-                        } catch (...) {}
+            if (currentShiftId.empty()) {
+                int maxCa = 8;
+                sqlite3_stmt* stmt = nullptr;
+                if (sqlite3_prepare_v2(dbConn, "SELECT maCa FROM shift_managements;", -1, &stmt, nullptr) == SQLITE_OK) {
+                    while (sqlite3_step(stmt) == SQLITE_ROW) {
+                        const char* t = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+                        if (t && std::string(t).rfind("CA", 0) == 0) {
+                            try {
+                                int v = std::stoi(std::string(t).substr(2));
+                                if (v > maxCa) maxCa = v;
+                            } catch (...) {}
+                        }
                     }
+                    sqlite3_finalize(stmt);
                 }
-                sqlite3_finalize(stmt);
+                char caId[32];
+                std::snprintf(caId, sizeof(caId), "CA%02d", maxCa + 1);
+                currentShiftId = caId;
             }
-
-            char caId[32];
-            std::snprintf(caId, sizeof(caId), "CA%02d", maxCa + 1);
 
             std::time_t tNow = std::time(nullptr);
             char timeBuf[16];
             std::strftime(timeBuf, sizeof(timeBuf), "%H:%M:%S", std::localtime(&tNow));
 
-            std::string qInsert = "INSERT INTO shift_managements (maCa, maNhanVien, tenNhanVien, ngayLam, gioBatDau, gioKetThuc, doanhThuHeThong, tienThucTe, chenhLech, trangThai, daKhoaBaoCao) VALUES ('"
-                + std::string(caId) + "', '"
-                + currentUserId + "', '"
-                + activeCashier + "', '"
-                + getTodayDateStr() + "', '14:00', '"
-                + std::string(timeBuf) + "', '"
-                + std::to_string(shiftCalculatedSysRev) + "', '"
-                + std::to_string(shiftCalculatedActualCash) + "', '"
-                + std::to_string(shiftCalculatedDiff) + "', 'ChoDuyet', 'true');";
+            std::string realStart = currentShiftStartTime.empty() ? "07:00" : currentShiftStartTime;
 
-            sqlite3_exec(dbConn, qInsert.c_str(), nullptr, nullptr, nullptr);
+            // Check if shift record already exists
+            bool exists = false;
+            sqlite3_stmt* chkStmt = nullptr;
+            std::string qChk = "SELECT maCa FROM shift_managements WHERE maCa = '" + currentShiftId + "';";
+            if (sqlite3_prepare_v2(dbConn, qChk.c_str(), -1, &chkStmt, nullptr) == SQLITE_OK) {
+                if (sqlite3_step(chkStmt) == SQLITE_ROW) exists = true;
+                sqlite3_finalize(chkStmt);
+            }
+
+            if (exists) {
+                std::string qUpd = "UPDATE shift_managements SET gioKetThuc = '" + std::string(timeBuf) + "', "
+                                   "doanhThuHeThong = '" + std::to_string(shiftCalculatedSysRev) + "', "
+                                   "tienThucTe = '" + std::to_string(shiftCalculatedActualCash) + "', "
+                                   "chenhLech = '" + std::to_string(shiftCalculatedDiff) + "', "
+                                   "trangThai = 'ChoDuyet', daKhoaBaoCao = 'true' "
+                                   "WHERE maCa = '" + currentShiftId + "';";
+                sqlite3_exec(dbConn, qUpd.c_str(), nullptr, nullptr, nullptr);
+            } else {
+                std::string qInsert = "INSERT INTO shift_managements (maCa, maNhanVien, tenNhanVien, ngayLam, gioBatDau, gioKetThuc, doanhThuHeThong, tienThucTe, chenhLech, trangThai, daKhoaBaoCao) VALUES ('"
+                    + currentShiftId + "', '"
+                    + currentUserId + "', '"
+                    + activeCashier + "', '"
+                    + getTodayDateStr() + "', '"
+                    + realStart + "', '"
+                    + std::string(timeBuf) + "', '"
+                    + std::to_string(shiftCalculatedSysRev) + "', '"
+                    + std::to_string(shiftCalculatedActualCash) + "', '"
+                    + std::to_string(shiftCalculatedDiff) + "', 'ChoDuyet', 'true');";
+                sqlite3_exec(dbConn, qInsert.c_str(), nullptr, nullptr, nullptr);
+            }
             sqlite3_close(dbConn);
 
             shiftIsClosed = true;
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "CHOT_CA_TRUC", "Khóa sổ ca trực " + std::string(caId) + " - Doanh thu: " + formatVnd(shiftCalculatedSysRev));
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "CHOT_CA_TRUC", "Khóa sổ ca trực " + currentShiftId + " - Doanh thu: " + formatVnd(shiftCalculatedSysRev));
 
             if (confirmPopup) {
                 confirmPopup->show("KHÓA SỔ & CHỐT CA THÀNH CÔNG",
-                    "Ca trực " + std::string(caId) + " đã được khóa sổ và lưu vào bảng shift_managements!\n"
+                    "Ca trực " + currentShiftId + " đã được khóa sổ và lưu vào bảng shift_managements (Trạng thái: ChoDuyet)!\n"
                     "• Doanh thu hệ thống POS: " + formatVnd(shiftCalculatedSysRev) + "\n"
                     "• Tiền mặt kiểm đếm thực tế: " + formatVnd(shiftCalculatedActualCash) + "\n"
                     "• Chênh lệch đối soát: " + formatVnd(shiftCalculatedDiff),
@@ -1135,48 +1224,75 @@ void CinemaUIApp::reloadShiftReportData() {
         }
     }
 
-    // 2. Calculate current Staff shift revenue filtered by current cashier, current date, and current shift window
+    // 2. Identify active shift for current staff and calculate shift revenue directly by maCa
     sqlite3* dbConn = nullptr;
     long long shiftTotalRev = 0;
     long long shiftCashRev = 0;
 
     std::string activeStaffId = (!currentUserId.empty() && currentUserRole == "Staff") ? currentUserId : "U002";
+    std::string activeCashier = !currentUserName.empty() ? currentUserName : (currentUserId == "U002" ? "Phạm Như Anh Thư" : (currentUserId == "U001" ? "Lê Minh Tuấn" : "Nguyễn Văn A"));
+    for (const auto& u : staffUserList) {
+        if (u.maNguoiDung == currentUserId && !u.hoTen.empty()) {
+            activeCashier = u.hoTen;
+            break;
+        }
+    }
     std::string todayNorm = DateFormat::normalizeDate(getTodayDateStr());
 
-    std::time_t tNow = std::time(nullptr);
-    std::tm tmNow;
-#ifdef _WIN32
-    localtime_s(&tmNow, &tNow);
-#else
-    localtime_r(&tNow, &tmNow);
-#endif
-    int curHour = tmNow.tm_hour;
-    int shiftStartSec = (curHour < 14) ? (7 * 3600) : (14 * 3600);
-    int shiftEndSec = 24 * 3600 - 1;
-
     if (sqlite3_open("DATA/cinema.db", &dbConn) == SQLITE_OK) {
-        // Check if this staff already closed an earlier shift today; if so, only count invoices after that shift's end time
-        sqlite3_stmt* shStmt = nullptr;
-        const char* qClosed = "SELECT maNhanVien, ngayLam, gioKetThuc FROM shift_managements;";
-        if (sqlite3_prepare_v2(dbConn, qClosed, -1, &shStmt, nullptr) == SQLITE_OK) {
-            while (sqlite3_step(shStmt) == SQLITE_ROW) {
-                const char* cNv = reinterpret_cast<const char*>(sqlite3_column_text(shStmt, 0));
-                const char* cDt = reinterpret_cast<const char*>(sqlite3_column_text(shStmt, 1));
-                const char* cKt = reinterpret_cast<const char*>(sqlite3_column_text(shStmt, 2));
-                std::string nv = cNv ? cNv : "";
-                std::string dt = DateFormat::normalizeDate(cDt ? cDt : "");
-                std::string kt = cKt ? cKt : "";
-                if (dt == todayNorm && staffIdMatches(nv, activeStaffId)) {
-                    int endS = parseTimeSeconds(kt, 0);
-                    if (endS > shiftStartSec) shiftStartSec = endS + 1;
+        if (currentShiftId.empty()) {
+            sqlite3_stmt* shCheck = nullptr;
+            std::string qSh = "SELECT maCa, gioBatDau, trangThai, daKhoaBaoCao FROM shift_managements WHERE maNhanVien = '" + activeStaffId + "' AND (trangThai = 'DangLam' OR trangThai = 'ChoDuyet' OR trangThai = 'YeuCauDieuChinh') ORDER BY maCa DESC LIMIT 1;";
+            if (sqlite3_prepare_v2(dbConn, qSh.c_str(), -1, &shCheck, nullptr) == SQLITE_OK) {
+                if (sqlite3_step(shCheck) == SQLITE_ROW) {
+                    const char* cCa = reinterpret_cast<const char*>(sqlite3_column_text(shCheck, 0));
+                    const char* cStart = reinterpret_cast<const char*>(sqlite3_column_text(shCheck, 1));
+                    const char* cSt = reinterpret_cast<const char*>(sqlite3_column_text(shCheck, 2));
+                    const char* cLock = reinterpret_cast<const char*>(sqlite3_column_text(shCheck, 3));
+                    if (cCa) currentShiftId = cCa;
+                    if (cStart) currentShiftStartTime = cStart;
+                    std::string stStr = cSt ? cSt : "";
+                    std::string lockStr = cLock ? cLock : "";
+                    if (stStr == "ChoDuyet" || stStr == "DaDuyet" || lockStr == "true") {
+                        shiftIsClosed = true;
+                    } else {
+                        shiftIsClosed = false;
+                    }
                 }
+                sqlite3_finalize(shCheck);
             }
-            sqlite3_finalize(shStmt);
         }
 
-        // Sum invoices belonging ONLY to this staff member, on today's date, within the current shift's time range
+        if (currentShiftId.empty()) {
+            int maxCa = 8;
+            sqlite3_stmt* stmtM = nullptr;
+            if (sqlite3_prepare_v2(dbConn, "SELECT maCa FROM shift_managements;", -1, &stmtM, nullptr) == SQLITE_OK) {
+                while (sqlite3_step(stmtM) == SQLITE_ROW) {
+                    const char* t = reinterpret_cast<const char*>(sqlite3_column_text(stmtM, 0));
+                    if (t && std::string(t).rfind("CA", 0) == 0) {
+                        try {
+                            int v = std::stoi(std::string(t).substr(2));
+                            if (v > maxCa) maxCa = v;
+                        } catch (...) {}
+                    }
+                }
+                sqlite3_finalize(stmtM);
+            }
+            char caBuf[32];
+            std::snprintf(caBuf, sizeof(caBuf), "CA%02d", maxCa + 1);
+            currentShiftId = caBuf;
+            currentShiftStartTime = getCurrentTimeStr();
+            currentPosTerminal = "Quầy POS 01";
+            shiftIsClosed = false;
+
+            std::string qInit = "INSERT INTO shift_managements (maCa, maNhanVien, tenNhanVien, ngayLam, gioBatDau, gioKetThuc, doanhThuHeThong, tienThucTe, chenhLech, trangThai, daKhoaBaoCao) VALUES ('"
+                + currentShiftId + "', '" + activeStaffId + "', '" + activeCashier + "', '" + getTodayDateStr() + "', '" + currentShiftStartTime + "', 'Đang trực', '0', '0', '0', 'DangLam', 'false');";
+            sqlite3_exec(dbConn, qInit.c_str(), nullptr, nullptr, nullptr);
+        }
+
+        // Sum invoices belonging to currentShiftId (including across midnight)
         sqlite3_stmt* stmt = nullptr;
-        const char* qInv = "SELECT maNhanVien, thoiGianLap, CAST(tongTien AS INTEGER), hinhThucThanhToan "
+        const char* qInv = "SELECT maNhanVien, thoiGianLap, CAST(tongTien AS INTEGER), hinhThucThanhToan, maCa "
                            "FROM invoices WHERE trangThaiThanhToan != 'DaHuy';";
         if (sqlite3_prepare_v2(dbConn, qInv, -1, &stmt, nullptr) == SQLITE_OK) {
             while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -1184,23 +1300,23 @@ void CinemaUIApp::reloadShiftReportData() {
                 const char* cDt = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
                 long long amt = sqlite3_column_int64(stmt, 2);
                 const char* cMethod = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+                const char* cCa = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
 
-                std::string invNv = cNv ? cNv : "";
-                if (!staffIdMatches(invNv, activeStaffId)) continue;
-
-                std::string dtFull = cDt ? cDt : "";
-                std::string invDate, invTime = "12:00:00";
-                size_t sp = dtFull.find(' ');
-                if (sp != std::string::npos) {
-                    invDate = DateFormat::normalizeDate(dtFull.substr(0, sp));
-                    invTime = dtFull.substr(sp + 1);
+                std::string invCa = cCa ? cCa : "";
+                bool match = false;
+                if (!invCa.empty() && !currentShiftId.empty()) {
+                    match = (invCa == currentShiftId);
                 } else {
-                    invDate = DateFormat::normalizeDate(dtFull);
+                    std::string invNv = cNv ? cNv : "";
+                    if (staffIdMatches(invNv, activeStaffId)) {
+                        std::string dtFull = cDt ? cDt : "";
+                        std::string invDate = dtFull;
+                        size_t sp = dtFull.find(' ');
+                        if (sp != std::string::npos) invDate = dtFull.substr(0, sp);
+                        if (DateFormat::normalizeDate(invDate) == todayNorm) match = true;
+                    }
                 }
-                if (invDate != todayNorm) continue;
-
-                int invSec = parseTimeSeconds(invTime, 12 * 3600);
-                if (invSec < shiftStartSec || invSec > shiftEndSec) continue;
+                if (!match) continue;
 
                 shiftTotalRev += amt;
                 std::string method = cMethod ? cMethod : "";
@@ -1215,13 +1331,14 @@ void CinemaUIApp::reloadShiftReportData() {
     }
 
     shiftCalculatedSysRev = shiftTotalRev;
-    shiftCalculatedActualCash = shiftTotalRev;
+    shiftCalculatedCashRev = shiftCashRev;
+    shiftCalculatedActualCash = shiftCashRev;
 
     if (inputShiftActualCash) {
         inputShiftActualCash->setText(std::to_string(shiftCalculatedActualCash));
     }
 
-    shiftCalculatedDiff = shiftCalculatedActualCash - shiftCalculatedSysRev;
+    shiftCalculatedDiff = shiftCalculatedActualCash - shiftCashRev;
 }
 
 void CinemaUIApp::renderShiftReportView() {
@@ -1916,6 +2033,7 @@ void CinemaUIApp::renderShiftReportView() {
 
         if (btnAdminCashierHandover) btnAdminCashierHandover->draw(window);
         if (btnAdminManagerApprove) btnAdminManagerApprove->draw(window);
+        if (btnAdminManagerReject) btnAdminManagerReject->draw(window);
 
         return;
     }

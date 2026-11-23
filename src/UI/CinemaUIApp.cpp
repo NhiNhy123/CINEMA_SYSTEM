@@ -691,6 +691,9 @@ void CinemaUIApp::setupNavigation() {
                 if (retailOpts.empty()) retailOpts.push_back("Chọn món lẻ...");
                 if (comboItem1Dropdown) comboItem1Dropdown->setOptions(retailOpts, (comboItem1Idx >= 0 && comboItem1Idx < static_cast<int>(retailOpts.size())) ? comboItem1Idx : 0);
                 if (comboItem2Dropdown) comboItem2Dropdown->setOptions(retailOpts, (comboItem2Idx >= 0 && comboItem2Idx < static_cast<int>(retailOpts.size())) ? comboItem2Idx : (retailOpts.size() > 1 ? 1 : 0));
+            } else if (targetTab == ActiveTab::SeatBooking) {
+                refreshPosShowtimesDropdown();
+                refreshSeatsForShowtime(currentShowtimeId);
             } else if (targetTab == ActiveTab::CRM) {
                 reloadCRMData();
             } else if (targetTab == ActiveTab::ShiftReport) {
@@ -1849,10 +1852,22 @@ void CinemaUIApp::handleEvents() {
                         }
                     }
 
-                    // 5. Remove single seat ('×') in Card 1 (GHẾ ĐANG CHỌN)
+                    // 5. Remove seat ('×') or paginate in Card 1 (GHẾ ĐANG CHỌN)
                     float rc1Y = 74.f;
-                    for (size_t i = 0; i < selectedSeatCodes.size() && i < 2; ++i) {
-                        float itemY = rc1Y + 38.f + static_cast<float>(i) * 44.f;
+                    int maxSeatPages = std::max(1, (static_cast<int>(selectedSeatCodes.size()) + 1) / 2);
+                    // Card 1 Pagination arrows (◀ and ▶)
+                    if (mousePos.y >= rc1Y + 5.f && mousePos.y <= rc1Y + 26.f) {
+                        if (mousePos.x >= rightStartX + rightW - 80.f && mousePos.x <= rightStartX + rightW - 60.f) {
+                            if (posSeatScrollPage > 0) posSeatScrollPage--;
+                        } else if (mousePos.x >= rightStartX + rightW - 34.f && mousePos.x <= rightStartX + rightW - 14.f) {
+                            if (posSeatScrollPage + 1 < maxSeatPages) posSeatScrollPage++;
+                        }
+                    }
+
+                    size_t startSeatIdx = static_cast<size_t>(posSeatScrollPage * 2);
+                    size_t endSeatIdx = std::min(startSeatIdx + 2, selectedSeatCodes.size());
+                    for (size_t i = startSeatIdx; i < endSeatIdx; ++i) {
+                        float itemY = rc1Y + 38.f + static_cast<float>(i - startSeatIdx) * 44.f;
                         if (mousePos.x >= rightStartX + rightW - 38.f && mousePos.x <= rightStartX + rightW - 14.f &&
                             mousePos.y >= itemY && mousePos.y <= itemY + 38.f) {
                             std::string codeToRemove = selectedSeatCodes[i];
@@ -1867,8 +1882,24 @@ void CinemaUIApp::handleEvents() {
                             break;
                         }
                     }
+                    if (selectedSeatCodes.size() > 2) {
+                        if (mousePos.x >= rightStartX + 70.f && mousePos.x <= rightStartX + 220.f &&
+                            mousePos.y >= rc1Y + 128.f && mousePos.y <= rc1Y + 152.f) {
+                            if (startSeatIdx < selectedSeatCodes.size()) {
+                                std::string codeToRemove = selectedSeatCodes[startSeatIdx];
+                                selectedSeatCodes.erase(selectedSeatCodes.begin() + static_cast<long long>(startSeatIdx));
+                                for (auto& s : currentSeats) {
+                                    if (s.maGhe == codeToRemove) {
+                                        s.isSelected = false;
+                                        break;
+                                    }
+                                }
+                                recalculatePosTotals();
+                            }
+                        }
+                    }
 
-                    // 6. Remove F&B item ('×') in Card 2 (F&B ĐÃ CHỌN)
+                    // 6. Remove F&B item ('×') or paginate in Card 2 (F&B ĐÃ CHỌN)
                     float rc2Y = 248.f;
                     std::vector<std::string> uniqueFnbNames;
                     for (const auto& f : posSelectedFnb) {
@@ -1876,8 +1907,20 @@ void CinemaUIApp::handleEvents() {
                             uniqueFnbNames.push_back(f.first);
                         }
                     }
-                    for (size_t i = 0; i < uniqueFnbNames.size() && i < 2; ++i) {
-                        float fy = rc2Y + 38.f + static_cast<float>(i) * 42.f;
+                    int maxFnbPages = std::max(1, (static_cast<int>(uniqueFnbNames.size()) + 1) / 2);
+                    // Card 2 Pagination arrows (◀ and ▶)
+                    if (mousePos.y >= rc2Y + 4.f && mousePos.y <= rc2Y + 25.f) {
+                        if (mousePos.x >= rightStartX + rightW - 80.f && mousePos.x <= rightStartX + rightW - 60.f) {
+                            if (posFnbScrollPage > 0) posFnbScrollPage--;
+                        } else if (mousePos.x >= rightStartX + rightW - 34.f && mousePos.x <= rightStartX + rightW - 14.f) {
+                            if (posFnbScrollPage + 1 < maxFnbPages) posFnbScrollPage++;
+                        }
+                    }
+
+                    size_t startFnbIdx = static_cast<size_t>(posFnbScrollPage * 2);
+                    size_t endFnbIdx = std::min(startFnbIdx + 2, uniqueFnbNames.size());
+                    for (size_t i = startFnbIdx; i < endFnbIdx; ++i) {
+                        float fy = rc2Y + 38.f + static_cast<float>(i - startFnbIdx) * 42.f;
                         float boxH = (uniqueFnbNames.size() == 1) ? 54.f : 38.f;
                         if (mousePos.x >= rightStartX + rightW - 38.f && mousePos.x <= rightStartX + rightW - 14.f &&
                             mousePos.y >= fy && mousePos.y <= fy + boxH) {
@@ -1893,6 +1936,21 @@ void CinemaUIApp::handleEvents() {
                             break;
                         }
                     }
+                    if (uniqueFnbNames.size() > 2 && !posSelectedFnb.empty()) {
+                        if (mousePos.x >= rightStartX + 70.f && mousePos.x <= rightStartX + 220.f &&
+                            mousePos.y >= rc2Y + 116.f && mousePos.y <= rc2Y + 140.f) {
+                            if (startFnbIdx < uniqueFnbNames.size()) {
+                                std::string targetName = uniqueFnbNames[startFnbIdx];
+                                for (auto it = posSelectedFnb.begin(); it != posSelectedFnb.end(); ++it) {
+                                    if (it->first == targetName) {
+                                        posSelectedFnb.erase(it);
+                                        break;
+                                    }
+                                }
+                                recalculatePosTotals();
+                            }
+                        }
+                    }
 
                     // 7. Payment Method Cards Click (Tiền mặt, Quét QR, Thẻ POS)
                     float pmY = 582.f + 32.f;
@@ -1904,6 +1962,15 @@ void CinemaUIApp::handleEvents() {
                             float px = rightStartX + 14.f + static_cast<float>(p) * (pmW + pmGap);
                             if (mousePos.x >= px && mousePos.x <= px + pmW) {
                                 posPaymentMethod = p;
+                                if (posPaymentMethod != 0) {
+                                    posCashGivenAmount = posGrandTotal;
+                                    if (inputPosCashGiven) {
+                                        inputPosCashGiven->setText(formatNumberDots(static_cast<long long>(std::round(posGrandTotal))));
+                                    }
+                                } else {
+                                    posCustomCashEdited = false;
+                                    recalculatePosTotals();
+                                }
                                 break;
                             }
                         }
@@ -3081,6 +3148,7 @@ void CinemaUIApp::handleEvents() {
                     handleBtn(btnAdminShiftHistory);
                     handleBtn(btnAdminCashierHandover);
                     handleBtn(btnAdminManagerApprove);
+                    handleBtn(btnAdminManagerReject);
                 } else {
                     if (currentUserRole == "Staff") {
                         if (inputShiftActualCash) {

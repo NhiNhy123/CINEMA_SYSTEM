@@ -42,6 +42,17 @@
 
 namespace UI {
 
+inline std::string formatNumberDots(long long val) {
+    if (val < 0) val = 0;
+    std::string s = std::to_string(val);
+    int n = static_cast<int>(s.length()) - 3;
+    while (n > 0) {
+        s.insert(n, ".");
+        n -= 3;
+    }
+    return s;
+}
+
 enum class ActiveTab {
     SeatBooking = 0,    // Bán vé (POS)
     CRM = 1,            // Khách hàng (CRM)
@@ -256,6 +267,7 @@ private:
     int posSelectedShowtimeIdx;
     int posSelectedDateIdx;
     bool posShowSeatMap;
+    std::string posMemberId;
     std::string posMemberName;
     std::string posMemberTier;
     int posMemberPoints;
@@ -275,6 +287,8 @@ private:
     std::vector<std::string> posFilteredShowtimeIds;
     std::vector<std::string> posAvailableDates;
     std::vector<std::string> posAvailableMovieIds;
+    int posSeatScrollPage = 0;
+    int posFnbScrollPage = 0;
 
     // Staff CRM UI Components
     struct CrmPointHistoryRecord {
@@ -316,6 +330,7 @@ private:
     std::unique_ptr<RoundRectButton> btnShiftPrevPage;
     std::unique_ptr<RoundRectButton> btnShiftNextPage;
     long long shiftCalculatedSysRev;
+    long long shiftCalculatedCashRev;
     long long shiftCalculatedActualCash;
     long long shiftCalculatedDiff;
     bool shiftIsClosed;
@@ -329,6 +344,10 @@ private:
     std::unique_ptr<UIInputBox> inputAdminManagerPin;
     std::unique_ptr<RoundRectButton> btnAdminCashierHandover;
     std::unique_ptr<RoundRectButton> btnAdminManagerApprove;
+    std::unique_ptr<RoundRectButton> btnAdminManagerReject;
+    std::string currentShiftId;
+    std::string currentShiftStartTime;
+    std::string currentPosTerminal;
     bool adminShiftApproved;
     bool adminShowHistorySubView;
     int adminSelectedShiftIdx;
@@ -663,7 +682,7 @@ private:
         double soTien;            // e.g. 87000, 135000
         std::string hinhThuc;     // "TienMat" (CASH), "QueQR" (QR Pay), "TheNganHang" (CARD)
         std::string maNhanVien;   // "U002"
-        std::string tenNhanVien;  // "Nguyễn Tiến Dũng"
+        std::string tenNhanVien;  // "Phạm Như Anh Thư"
         std::string maGiaoDich;   // "TXN-17754..." or "SIM-17754..."
     };
 

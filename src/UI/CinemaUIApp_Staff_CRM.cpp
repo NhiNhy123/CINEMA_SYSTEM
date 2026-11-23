@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <ctime>
+#include <atomic>
+#include <chrono>
 #include <sqlite3.h>
 
 namespace UI {
@@ -175,7 +177,7 @@ void CinemaUIApp::setupCRMView() {
         "Từ ngày - Đến ngày",
         12
     );
-    crmDateRangeInput->setText("02/04/2026 - 06/05/2026");
+    crmDateRangeInput->setText("01/01/2026 - 31/12/2026");
 
     btnCrmSearch = std::make_unique<RoundRectButton>(
         "Tìm kiếm",
@@ -221,9 +223,9 @@ void CinemaUIApp::setupCRMView() {
     // 3. Pagination Controls (used when > 9 rows or in Customer list)
     btnCrmPrevPage = std::make_unique<RoundRectButton>(
         "< Trước",
-        sf::Vector2f(startX + contentW - 190.f, 922.f),
-        sf::Vector2f(80.f, 28.f),
-        ButtonStyle::Secondary,
+        sf::Vector2f(startX + contentW - 190.f, 916.f),
+        sf::Vector2f(80.f, 26.f),
+        ButtonStyle::Primary,
         6.f
     );
     btnCrmPrevPage->setFontSize(11);
@@ -233,9 +235,9 @@ void CinemaUIApp::setupCRMView() {
 
     btnCrmNextPage = std::make_unique<RoundRectButton>(
         "Sau >",
-        sf::Vector2f(startX + contentW - 100.f, 922.f),
-        sf::Vector2f(80.f, 28.f),
-        ButtonStyle::Secondary,
+        sf::Vector2f(startX + contentW - 100.f, 916.f),
+        sf::Vector2f(80.f, 26.f),
+        ButtonStyle::Primary,
         6.f
     );
     btnCrmNextPage->setFontSize(11);
@@ -308,37 +310,94 @@ void CinemaUIApp::setupCRMView() {
             }
         }
 
-        int maxId = 4;
-        for (const auto& c : customerList) {
-            std::string id = c.getMaKH();
-            std::string digits;
-            for (char ch : id) if (ch >= '0' && ch <= '9') digits.push_back(ch);
-            if (!digits.empty()) {
-                try {
-                    int val = std::stoi(digits);
-                    if (val > maxId) maxId = val;
-                } catch (...) {}
+        sqlite3* dbConn = nullptr;
+        if (sqlite3_open("DATA/cinema.db", &dbConn) != SQLITE_OK) {
+            if (confirmPopup) {
+                confirmPopup->show("LỖI CSDL", "Không thể kết nối cơ sở dữ liệu để lưu hội viên!", ButtonStyle::Danger, "Đóng", "");
             }
+            return;
         }
+
+        // Check if phone number already exists in SQLite users table
+        bool phoneExists = false;
+        std::string existingOwner = "";
+        std::string qPhoneChk = "SELECT maNguoiDung, hoTen FROM users WHERE soDienThoai = '" + phone + "' LIMIT 1;";
+        sqlite3_stmt* pStmt = nullptr;
+        if (sqlite3_prepare_v2(dbConn, qPhoneChk.c_str(), -1, &pStmt, nullptr) == SQLITE_OK) {
+            if (sqlite3_step(pStmt) == SQLITE_ROW) {
+                phoneExists = true;
+                const char* oName = reinterpret_cast<const char*>(sqlite3_column_text(pStmt, 1));
+                const char* oId = reinterpret_cast<const char*>(sqlite3_column_text(pStmt, 0));
+                existingOwner = (oName ? std::string(oName) : "") + " (" + (oId ? std::string(oId) : "") + ")";
+            }
+            sqlite3_finalize(pStmt);
+        }
+
+        if (phoneExists) {
+            sqlite3_close(dbConn);
+            if (confirmPopup) {
+                confirmPopup->show(
+                    "SỐ ĐIỆN THOẠI ĐÃ ĐƯỢC ĐĂNG KÝ",
+                    "Số điện thoại '" + phone + "' đã tồn tại trong hệ thống thuộc về:\n" + existingOwner + "\nVui lòng kiểm tra lại số điện thoại hoặc tra cứu hội viên hiện có.",
+                    ButtonStyle::Danger,
+                    "Đóng",
+                    ""
+                );
+            }
+            return;
+        }
+
+        // Generate next unique CUS ID from SQLite
+        int maxId = 4;
+        sqlite3_stmt* mStmt = nullptr;
+        const char* qMax = "SELECT MAX(CAST(SUBSTR(maNguoiDung, 4) AS INTEGER)) FROM users WHERE maNguoiDung LIKE 'CUS%';";
+        if (sqlite3_prepare_v2(dbConn, qMax, -1, &mStmt, nullptr) == SQLITE_OK) {
+            if (sqlite3_step(mStmt) == SQLITE_ROW) {
+                int dbMax = sqlite3_column_int(mStmt, 0);
+                if (dbMax > maxId) maxId = dbMax;
+            }
+            sqlite3_finalize(mStmt);
+        }
+
         char genId[32];
         std::snprintf(genId, sizeof(genId), "CUS%03d", maxId + 1);
 
-        sqlite3* dbConn = nullptr;
-        if (sqlite3_open("DATA/cinema.db", &dbConn) == SQLITE_OK) {
-            std::string sqlUser = "INSERT OR REPLACE INTO users (maNguoiDung, hoTen, soDienThoai, email, ngaySinh, gioiTinh, cccd, taiKhoan, matKhau, vaiTro, trangThaiLamViec, trangThaiTaiKhoan) "
-                                  "VALUES ('" + std::string(genId) + "', '" + name + "', '" + phone + "', '" + email + "', '01/01/2000', 'Nam', '079200001234', 'khach_" + phone + "', '123456', 'Customer', 'DangLam', 'HoatDong');";
-            sqlite3_exec(dbConn, sqlUser.c_str(), nullptr, nullptr, nullptr);
+        std::time_t tNow = std::time(nullptr);
+        char curTimeBuf[32];
+        std::strftime(curTimeBuf, sizeof(curTimeBuf), "%d/%m/%Y %H:%M", std::localtime(&tNow));
 
-            std::string sqlCust = "INSERT OR REPLACE INTO customers (maKhachHang, diemTichLuy, hangThanhVien, tongChiTieu) "
-                                  "VALUES ('" + std::string(genId) + "', '50', 'Thuong', '0');";
-            sqlite3_exec(dbConn, sqlCust.c_str(), nullptr, nullptr, nullptr);
+        std::string genCccd = "0792" + phone.substr(std::max(0, (int)phone.size() - 8));
+        while (genCccd.size() < 12) genCccd.push_back('0');
 
-            // Also record initial welcome bonus points in customer_points_history
-            std::string gdId = "GD" + std::to_string(crmPointHistoryList.size() + 1);
-            std::string sqlHist = "INSERT INTO customer_points_history VALUES ('" + gdId + "', '" + std::string(genId) + "', 'TichDiem', '50', 'Tích điểm thưởng mở thẻ hội viên mới', '06/05/2026 19:00');";
-            sqlite3_exec(dbConn, sqlHist.c_str(), nullptr, nullptr, nullptr);
+        static std::atomic<unsigned long long> s_crmSeq{100};
+        auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        std::string gdId = "GD-" + std::to_string(nowMs % 10000000) + "-" + std::to_string(s_crmSeq++);
 
+        // Execute unified transaction for user, customer record, and welcome bonus points
+        sqlite3_exec(dbConn, "BEGIN IMMEDIATE TRANSACTION;", nullptr, nullptr, nullptr);
+
+        std::string sqlUser = "INSERT INTO users (maNguoiDung, hoTen, soDienThoai, email, ngaySinh, gioiTinh, cccd, taiKhoan, matKhau, vaiTro, trangThaiLamViec, trangThaiTaiKhoan) "
+                              "VALUES ('" + std::string(genId) + "', '" + name + "', '" + phone + "', '" + email + "', '01/01/2000', 'Nam', '" + genCccd + "', 'khach_" + phone + "', '123456', 'Customer', 'DangLam', 'HoatDong');";
+        int rcUser = sqlite3_exec(dbConn, sqlUser.c_str(), nullptr, nullptr, nullptr);
+
+        std::string sqlCust = "INSERT INTO customers (maKhachHang, diemTichLuy, hangThanhVien, tongChiTieu) "
+                              "VALUES ('" + std::string(genId) + "', '50', 'Thuong', '0');";
+        int rcCust = sqlite3_exec(dbConn, sqlCust.c_str(), nullptr, nullptr, nullptr);
+
+        std::string sqlHist = "INSERT INTO customer_points_history (maGiaoDichDiem, maKhachHang, loaiGiaoDich, soDiem, noiDung, thoiGian) "
+                              "VALUES ('" + gdId + "', '" + std::string(genId) + "', 'TichDiem', '50', 'Tích điểm thưởng mở thẻ hội viên mới', '" + std::string(curTimeBuf) + "');";
+        int rcHist = sqlite3_exec(dbConn, sqlHist.c_str(), nullptr, nullptr, nullptr);
+
+        if (rcUser == SQLITE_OK && rcCust == SQLITE_OK && rcHist == SQLITE_OK) {
+            sqlite3_exec(dbConn, "COMMIT;", nullptr, nullptr, nullptr);
             sqlite3_close(dbConn);
+        } else {
+            sqlite3_exec(dbConn, "ROLLBACK;", nullptr, nullptr, nullptr);
+            sqlite3_close(dbConn);
+            if (confirmPopup) {
+                confirmPopup->show("LỖI LƯU HỘI VIÊN", "Không thể ghi nhận hội viên vào CSDL. Thao tác đã được hoàn tác!", ButtonStyle::Danger, "Đóng", "");
+            }
+            return;
         }
 
         ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_HOI_VIEN", "Thêm mới hội viên " + name + " (" + phone + ")");
@@ -368,59 +427,8 @@ void CinemaUIApp::setupCRMView() {
 void CinemaUIApp::reloadCRMData() {
     sqlite3* dbConn = nullptr;
     if (sqlite3_open("DATA/cinema.db", &dbConn) == SQLITE_OK) {
-        // Ensure clean UTF-8 names in users & customers
-        sqlite3_exec(dbConn, "UPDATE users SET hoTen='Lê Tuyết Nhi' WHERE maNguoiDung='U001';", nullptr, nullptr, nullptr);
-        sqlite3_exec(dbConn, "UPDATE users SET hoTen='Nguyễn Tiến Dũng' WHERE maNguoiDung='U002';", nullptr, nullptr, nullptr);
-        sqlite3_exec(dbConn, "UPDATE users SET hoTen='Lâm Văn Dĩ', soDienThoai='0934731259' WHERE maNguoiDung='U03';", nullptr, nullptr, nullptr);
-        sqlite3_exec(dbConn, "UPDATE users SET hoTen='Nguyễn Thị Hoa', soDienThoai='0329388318' WHERE maNguoiDung='U02';", nullptr, nullptr, nullptr);
-        sqlite3_exec(dbConn, "UPDATE users SET hoTen='Trần Văn Khoa', soDienThoai='0594947717' WHERE maNguoiDung='U04';", nullptr, nullptr, nullptr);
-        sqlite3_exec(dbConn, "UPDATE users SET hoTen='Trần Thị B', soDienThoai='0901234567' WHERE maNguoiDung='U05';", nullptr, nullptr, nullptr);
-
         sqlite3_exec(dbConn, "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_maNguoiDung ON users (maNguoiDung);", nullptr, nullptr, nullptr);
         sqlite3_exec(dbConn, "CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_maKhachHang ON customers (maKhachHang);", nullptr, nullptr, nullptr);
-
-        sqlite3_exec(dbConn, "INSERT OR REPLACE INTO users VALUES ('CUS003', 'Lê Thị Lan', '0923456789', 'lethilan@gmail.com', '15/08/1999', 'Nu', '079199002345', 'khach_0923456789', '123456', 'Customer', 'DangLam', 'HoatDong');", nullptr, nullptr, nullptr);
-        sqlite3_exec(dbConn, "INSERT OR REPLACE INTO users VALUES ('CUS004', 'Phạm Đình Mạnh', '0934567890', 'phamdinhmanh@gmail.com', '20/11/1995', 'Nam', '079195003456', 'khach_0934567890', '123456', 'Customer', 'DangLam', 'HoatDong');", nullptr, nullptr, nullptr);
-
-        sqlite3_exec(dbConn, "INSERT OR REPLACE INTO customers VALUES ('CUS003', '760', 'ThanThiet', '1920000');", nullptr, nullptr, nullptr);
-        sqlite3_exec(dbConn, "INSERT OR REPLACE INTO customers VALUES ('CUS004', '836', 'ThanThiet', '2100000');", nullptr, nullptr, nullptr);
-
-        // Check if GD04 is still the old '6' point row; if so, upgrade customer_points_history to full 18 UTF-8 audit records
-        bool needsSeed = false;
-        sqlite3_stmt* chkStmt = nullptr;
-        if (sqlite3_prepare_v2(dbConn, "SELECT soDiem FROM customer_points_history WHERE maGiaoDichDiem='GD04';", -1, &chkStmt, nullptr) == SQLITE_OK) {
-            if (sqlite3_step(chkStmt) == SQLITE_ROW) {
-                const char* sd = reinterpret_cast<const char*>(sqlite3_column_text(chkStmt, 0));
-                if (!sd || std::string(sd) != "6750") needsSeed = true;
-            } else {
-                needsSeed = true;
-            }
-            sqlite3_finalize(chkStmt);
-        }
-
-        if (needsSeed) {
-            sqlite3_exec(dbConn, "DELETE FROM customer_points_history;", nullptr, nullptr, nullptr);
-            const char* seedSql =
-                "INSERT INTO customer_points_history VALUES ('GD01', 'U03', 'TichDiem', '21', 'Tích điểm từ hóa đơn HD01', '06/05/2026 18:30');"
-                "INSERT INTO customer_points_history VALUES ('GD02', 'U02', 'TichDiem', '30', 'Tích điểm hóa đơn đầu tiên', '06/05/2026 18:30');"
-                "INSERT INTO customer_points_history VALUES ('GD03', 'U03', 'TichDiem', '9', 'Tích điểm hóa đơn đầu tiên', '06/05/2026 18:30');"
-                "INSERT INTO customer_points_history VALUES ('GD04', 'U03', 'DoiDiem', '6750', 'Dùng 6750 điểm giảm giá vé xem phim', '06/04/2026 16:59');"
-                "INSERT INTO customer_points_history VALUES ('GD05', 'CUS004', 'DoiDiem', '500', 'Dùng điểm giảm giá hóa đơn bắp nước', '03/04/2026 09:20');"
-                "INSERT INTO customer_points_history VALUES ('GD06', 'CUS003', 'TichDiem', '32', 'Tích điểm từ hóa đơn INV-8821', '02/04/2026 16:01');"
-                "INSERT INTO customer_points_history VALUES ('GD07', 'CUS003', 'DoiDiem', '100', 'Dùng điểm đổi voucher nước ngọt', '02/04/2026 16:00');"
-                "INSERT INTO customer_points_history VALUES ('GD08', 'U04', 'TichDiem', '30', 'Tích điểm từ hóa đơn INV-7712', '02/04/2026 14:16');"
-                "INSERT INTO customer_points_history VALUES ('GD09', 'U02', 'TichDiem', '45', 'Tích điểm từ hóa đơn INV-6650', '02/04/2026 10:31');"
-                "INSERT INTO customer_points_history VALUES ('GD10', 'U03', 'TichDiem', '450', 'Tích điểm gói Combo VIP Gia Đình', '01/04/2026 20:15');"
-                "INSERT INTO customer_points_history VALUES ('GD11', 'U02', 'TichDiem', '520', 'Tích điểm vé IMAX 3D & Bắp Caramel', '30/03/2026 19:40');"
-                "INSERT INTO customer_points_history VALUES ('GD12', 'CUS004', 'TichDiem', '610', 'Tích điểm đặt vé nhóm 6 người', '28/03/2026 18:10');"
-                "INSERT INTO customer_points_history VALUES ('GD13', 'CUS003', 'TichDiem', '480', 'Tích điểm sự kiện Premiere cuối tuần', '25/03/2026 15:20');"
-                "INSERT INTO customer_points_history VALUES ('GD14', 'U04', 'TichDiem', '390', 'Tích điểm từ hóa đơn INV-5520', '22/03/2026 14:05');"
-                "INSERT INTO customer_points_history VALUES ('GD15', 'U03', 'TichDiem', '540', 'Tích điểm nâng hạng thẻ VIP StarMember', '18/03/2026 11:30');"
-                "INSERT INTO customer_points_history VALUES ('GD16', 'U02', 'TichDiem', '490', 'Tích điểm từ hóa đơn INV-4810', '15/03/2026 17:45');"
-                "INSERT INTO customer_points_history VALUES ('GD17', 'CUS003', 'TichDiem', '410', 'Tích điểm mua vé & Combo My Sweet', '12/03/2026 16:20');"
-                "INSERT INTO customer_points_history VALUES ('GD18', 'CUS004', 'TichDiem', '389', 'Tích điểm thưởng sinh nhật thành viên', '10/03/2026 09:15');";
-            sqlite3_exec(dbConn, seedSql, nullptr, nullptr, nullptr);
-        }
 
         // Load crmPointHistoryList joined with users
         crmPointHistoryList.clear();
@@ -450,13 +458,7 @@ void CinemaUIApp::reloadCRMData() {
                 rec.thoiGian = colStr(7);
 
                 if (rec.hoTen.empty()) rec.hoTen = "Khách thành viên";
-                if (rec.soDienThoai.empty()) rec.soDienThoai = "0934731259";
-
-                // Match display tag format from mockup e.g. "(AThu - U03)", "(NhyNhy - U02)", "(CUS004)"
-                if (rec.maKhachHang == "U03") rec.aliasTag = "(AThu - U03)";
-                else if (rec.maKhachHang == "U02" && rec.maGiaoDich == "GD02") rec.aliasTag = "(NhyNhy - U02)";
-                else if (rec.maKhachHang == "U04") rec.aliasTag = "(Nam - U04)";
-                else rec.aliasTag = "(" + rec.maKhachHang + ")";
+                rec.aliasTag = "(" + rec.maKhachHang + ")";
 
                 crmPointHistoryList.push_back(rec);
             }
@@ -711,10 +713,7 @@ void CinemaUIApp::renderCRMView() {
 
     for (const auto& r : crmPointHistoryList) {
         if (r.loaiGiaoDich == "DoiDiem") {
-            // Note: GD04 (6750) + GD05 (500) = 7250 matching reference KPI card
-            if (r.maGiaoDich != "GD07") {
-                totalRedeemedPts += r.soDiem;
-            }
+            totalRedeemedPts += r.soDiem;
         } else {
             totalAccumulatedPts += r.soDiem;
         }
@@ -730,7 +729,7 @@ void CinemaUIApp::renderCRMView() {
         drawTxt("điểm", c1X + 28.f + static_cast<float>(accStr.size()) * 12.5f, kpiY + 49.f, 12, sf::Color(71, 85, 105), true);
 
         RoundedRectRenderer::render(window, sf::Vector2f(c1X + 20.f, kpiY + 78.f), sf::Vector2f(148.f, 22.f), 6.f, sf::Color(236, 253, 245));
-        drawCenteredTxt("+12.4% so với ca trước", c1X + 20.f + 74.f, kpiY + 89.f, 10, sf::Color(5, 150, 105), true);
+        drawCenteredTxt("Tổng điểm tích lũy thực tế", c1X + 20.f + 74.f, kpiY + 89.f, 10, sf::Color(5, 150, 105), true);
 
         // Right Green '+' Icon Box
         RoundedRectRenderer::render(window, sf::Vector2f(c1X + kpiW - 64.f, kpiY + 34.f), sf::Vector2f(44.f, 44.f), 10.f, sf::Color(236, 253, 245));
@@ -855,11 +854,38 @@ void CinemaUIApp::renderCRMView() {
     int filterIdx = crmTierDropdown ? crmTierDropdown->getSelectedIndex() : 0;
 
     if (crmSubTab == 1) {
+        // Parse date filter range
+        std::string rawRange = crmDateRangeInput ? crmDateRangeInput->getText() : "";
+        std::string fromNorm = "", toNorm = "";
+        size_t dashPos = rawRange.find('-');
+        if (dashPos != std::string::npos) {
+            std::string fromPart = rawRange.substr(0, dashPos);
+            std::string toPart = rawRange.substr(dashPos + 1);
+            auto trimS = [](std::string& s) {
+                s.erase(0, s.find_first_not_of(" \t\r\n"));
+                if (!s.empty()) s.erase(s.find_last_not_of(" \t\r\n") + 1);
+            };
+            trimS(fromPart);
+            trimS(toPart);
+            fromNorm = DateFormat::normalizeDate(fromPart);
+            toNorm = DateFormat::normalizeDate(toPart);
+        }
+
         // Filter points transaction history
         std::vector<CrmPointHistoryRecord> filteredHist;
         for (const auto& r : crmPointHistoryList) {
             if (filterIdx == 1 && r.loaiGiaoDich != "TichDiem") continue;
             if (filterIdx == 2 && r.loaiGiaoDich != "DoiDiem") continue;
+
+            if (!fromNorm.empty() && !toNorm.empty() && !r.thoiGian.empty()) {
+                std::string recDatePart = r.thoiGian;
+                size_t sp = recDatePart.find(' ');
+                if (sp != std::string::npos) recDatePart = recDatePart.substr(0, sp);
+                std::string normRecDate = DateFormat::normalizeDate(recDatePart);
+                if (!normRecDate.empty()) {
+                    if (normRecDate < fromNorm || normRecDate > toNorm) continue;
+                }
+            }
 
             if (!q.empty()) {
                 std::string hay = r.maGiaoDich + " " + r.maKhachHang + " " + r.hoTen + " " + r.aliasTag + " " + r.soDienThoai + " " + r.noiDung;
@@ -869,7 +895,7 @@ void CinemaUIApp::renderCRMView() {
             filteredHist.push_back(r);
         }
 
-        int rowsPerPage = 9;
+        int rowsPerPage = 8;
         int totalPages = std::max(1, static_cast<int>((filteredHist.size() + rowsPerPage - 1) / rowsPerPage));
         if (crmCurrentPage >= totalPages) crmCurrentPage = totalPages - 1;
         if (crmCurrentPage < 0) crmCurrentPage = 0;
@@ -904,9 +930,9 @@ void CinemaUIApp::renderCRMView() {
         window.draw(legRed);
         drawTxt("Đổi vé & voucher", startX + contentW - 128.f, tableCardY + 15.f, 11, sf::Color(100, 116, 139));
 
-        // Column Header Row (y = 472.f, h = 44.f)
-        float thY = tableCardY + 44.f;
-        float thH = 44.f;
+        // Column Header Row (y = 468.f, h = 38.f)
+        float thY = tableCardY + 40.f;
+        float thH = 38.f;
         sf::RectangleShape thBg(sf::Vector2f(contentW - 2.f, thH));
         thBg.setPosition(startX + 1.f, thY);
         thBg.setFillColor(sf::Color(248, 250, 252));
@@ -931,24 +957,24 @@ void CinemaUIApp::renderCRMView() {
         float col5X = startX + 855.f;  // NỘI DUNG
         float col6Right = startX + contentW - 24.f; // THỜI GIAN right-aligned
 
-        drawTxt("MÃ", col0X, thY + 7.f, 10.5, sf::Color(100, 116, 139), true);
-        drawTxt("GD", col0X, thY + 23.f, 10.5, sf::Color(100, 116, 139), true);
+        drawTxt("MÃ", col0X, thY + 5.f, 10.5, sf::Color(100, 116, 139), true);
+        drawTxt("GD", col0X, thY + 20.f, 10.5, sf::Color(100, 116, 139), true);
 
-        drawTxt("KHÁCH HÀNG", col1X, thY + 15.f, 10.5, sf::Color(100, 116, 139), true);
+        drawTxt("KHÁCH HÀNG", col1X, thY + 12.f, 10.5, sf::Color(100, 116, 139), true);
 
-        drawTxt("SỐ ĐIỆN", col2X + 20.f, thY + 7.f, 10.5, sf::Color(100, 116, 139), true);
-        drawTxt("THOẠI", col2X + 20.f, thY + 23.f, 10.5, sf::Color(100, 116, 139), true);
+        drawTxt("SỐ ĐIỆN", col2X + 20.f, thY + 5.f, 10.5, sf::Color(100, 116, 139), true);
+        drawTxt("THOẠI", col2X + 20.f, thY + 20.f, 10.5, sf::Color(100, 116, 139), true);
 
-        drawTxt("LOẠI GIAO", col3X + 12.f, thY + 7.f, 10.5, sf::Color(100, 116, 139), true);
-        drawTxt("DỊCH", col3X + 12.f, thY + 23.f, 10.5, sf::Color(100, 116, 139), true);
+        drawTxt("LOẠI GIAO", col3X + 12.f, thY + 5.f, 10.5, sf::Color(100, 116, 139), true);
+        drawTxt("DỊCH", col3X + 12.f, thY + 20.f, 10.5, sf::Color(100, 116, 139), true);
 
-        drawRightTxt("SỐ ĐIỂM", col4X + 110.f, thY + 15.f, 10.5, sf::Color(100, 116, 139), true);
-        drawTxt("NỘI DUNG", col5X, thY + 15.f, 10.5, sf::Color(100, 116, 139), true);
-        drawRightTxt("THỜI GIAN", col6Right, thY + 15.f, 10.5, sf::Color(100, 116, 139), true);
+        drawRightTxt("SỐ ĐIỂM", col4X + 110.f, thY + 12.f, 10.5, sf::Color(100, 116, 139), true);
+        drawTxt("NỘI DUNG", col5X, thY + 12.f, 10.5, sf::Color(100, 116, 139), true);
+        drawRightTxt("THỜI GIAN", col6Right, thY + 12.f, 10.5, sf::Color(100, 116, 139), true);
 
-        // Render Data Rows (9 rows, height 48.f each)
+        // Render Data Rows (9 rows, height 44.f each: 506.f to 902.f, perfectly clear of footer at 916.f)
         float rowStartY = thY + thH;
-        float rowH = 48.f;
+        float rowH = 44.f;
 
         for (int i = startIdx; i < endIdx; ++i) {
             const auto& r = filteredHist[i];
@@ -960,9 +986,9 @@ void CinemaUIApp::renderCRMView() {
             window.draw(rLine);
 
             // 1. MÃ GD
-            drawTxt(r.maGiaoDich, col0X, ry + 16.f, 11.5, sf::Color(2, 132, 199), true);
+            drawTxt(r.maGiaoDich, col0X, ry + 13.f, 11.5, sf::Color(2, 132, 199), true);
 
-            // 2. KHÁCH HÀNG (Bold Name + Gray Alias Tag, wrapped cleanly if long)
+            // 2. KHÁCH HÀNG (Bold Name + Gray Alias Tag)
             sf::Text tName;
             tName.setFont(Theme::FontPrimary);
             tName.setCharacterSize(12);
@@ -971,19 +997,12 @@ void CinemaUIApp::renderCRMView() {
             tName.setString(toSfString(r.hoTen));
             sf::FloatRect nb = tName.getLocalBounds();
 
-            if (r.aliasTag == "(NhyNhy - U02)") {
-                tName.setPosition(std::round(col1X), std::round(ry + 8.f));
-                window.draw(tName);
-                drawTxt("(NhyNhy -", col1X + nb.width + 6.f, ry + 8.f, 11.5, sf::Color(148, 163, 184));
-                drawTxt("U02)", col1X, ry + 26.f, 11.5, sf::Color(148, 163, 184));
-            } else {
-                tName.setPosition(std::round(col1X), std::round(ry + 16.f));
-                window.draw(tName);
-                drawTxt(r.aliasTag, col1X + nb.width + 6.f, ry + 16.f, 11.5, sf::Color(148, 163, 184));
-            }
+            tName.setPosition(std::round(col1X), std::round(ry + 13.f));
+            window.draw(tName);
+            drawTxt(r.aliasTag, col1X + nb.width + 6.f, ry + 13.f, 11.5, sf::Color(148, 163, 184));
 
             // 3. SỐ ĐIỆN THOẠI
-            drawTxt(r.soDienThoai, col2X + 16.f, ry + 16.f, 11.5, sf::Color(71, 85, 105));
+            drawTxt(r.soDienThoai, col2X + 16.f, ry + 13.f, 11.5, sf::Color(71, 85, 105));
 
             // 4. LOẠI GIAO DỊCH Sticker Pill (+ Tích điểm / - Đổi điểm)
             bool isRedeem = (r.loaiGiaoDich == "DoiDiem");
@@ -993,24 +1012,24 @@ void CinemaUIApp::renderCRMView() {
 
             RoundedRectRenderer::render(
                 window,
-                sf::Vector2f(col3X + 8.f, ry + 12.f),
+                sf::Vector2f(col3X + 8.f, ry + 10.f),
                 sf::Vector2f(96.f, 24.f),
                 12.f,
                 pFill
             );
-            drawCenteredTxt(pLabel, col3X + 8.f + 48.f, ry + 24.f, 10.5, pTxt, true);
+            drawCenteredTxt(pLabel, col3X + 8.f + 48.f, ry + 22.f, 10.5, pTxt, true);
 
             // 5. SỐ ĐIỂM (Right-aligned in column)
             std::string ptsValStr = (isRedeem ? "-" : "+") + formatCommaNumber(r.soDiem);
             if (r.soDiem >= 1000) {
-                drawRightTxt(ptsValStr, col4X + 110.f, ry + 8.f, 12, pTxt, true);
-                drawRightTxt("điểm", col4X + 110.f, ry + 25.f, 11, sf::Color(148, 163, 184));
+                drawRightTxt(ptsValStr, col4X + 110.f, ry + 6.f, 12, pTxt, true);
+                drawRightTxt("điểm", col4X + 110.f, ry + 22.f, 11, sf::Color(148, 163, 184));
             } else {
-                drawRightTxt("điểm", col4X + 110.f, ry + 16.f, 11.5, sf::Color(148, 163, 184));
-                drawRightTxt(ptsValStr, col4X + 76.f, ry + 16.f, 12, pTxt, true);
+                drawRightTxt("điểm", col4X + 110.f, ry + 13.f, 11.5, sf::Color(148, 163, 184));
+                drawRightTxt(ptsValStr, col4X + 76.f, ry + 13.f, 12, pTxt, true);
             }
 
-            // 6. NỘI DUNG (Wraps to 2 lines cleanly if > 36 chars so font size is never reduced)
+            // 6. NỘI DUNG (Wraps to 2 lines cleanly if > 34 chars)
             sf::String sfNd = toSfString(r.noiDung);
             bool boldContent = isRedeem && (r.maGiaoDich == "GD04" || r.maGiaoDich == "GD05");
             sf::Color ndCol = boldContent ? sf::Color(30, 41, 59) : sf::Color(71, 85, 105);
@@ -1018,13 +1037,13 @@ void CinemaUIApp::renderCRMView() {
                 size_t splitPos = r.noiDung.rfind(' ', 44);
                 if (splitPos == std::string::npos || splitPos < 15) splitPos = r.noiDung.find(' ', 25);
                 if (splitPos != std::string::npos) {
-                    drawTxt(r.noiDung.substr(0, splitPos), col5X, ry + 8.f, 11.5, ndCol, boldContent);
-                    drawTxt(r.noiDung.substr(splitPos + 1), col5X, ry + 25.f, 11.5, ndCol, boldContent);
+                    drawTxt(r.noiDung.substr(0, splitPos), col5X, ry + 6.f, 11.5, ndCol, boldContent);
+                    drawTxt(r.noiDung.substr(splitPos + 1), col5X, ry + 22.f, 11.5, ndCol, boldContent);
                 } else {
-                    drawTxt(r.noiDung, col5X, ry + 16.f, 11.5, ndCol, boldContent);
+                    drawTxt(r.noiDung, col5X, ry + 13.f, 11.5, ndCol, boldContent);
                 }
             } else {
-                drawTxt(r.noiDung, col5X, ry + 16.f, 11.5, ndCol, boldContent);
+                drawTxt(r.noiDung, col5X, ry + 13.f, 11.5, ndCol, boldContent);
             }
 
             // 7. THỜI GIAN (Date on line 1, Time on line 2, right-aligned)
@@ -1036,13 +1055,18 @@ void CinemaUIApp::renderCRMView() {
                 timePart = r.thoiGian.substr(spPos + 1);
                 if (timePart.size() > 5) timePart = timePart.substr(0, 5);
             }
-            drawRightTxt(datePart, col6Right, ry + 8.f, 11, sf::Color(100, 116, 139));
-            drawRightTxt(timePart, col6Right, ry + 25.f, 11, sf::Color(148, 163, 184));
+            drawRightTxt(datePart, col6Right, ry + 6.f, 11, sf::Color(100, 116, 139));
+            drawRightTxt(timePart, col6Right, ry + 22.f, 11, sf::Color(148, 163, 184));
         }
 
         // Subtle pagination footer if multiple pages exist
         if (totalPages > 1) {
-            drawTxt("Trang " + std::to_string(crmCurrentPage + 1) + " / " + std::to_string(totalPages) + " (Tổng " + std::to_string(filteredHist.size()) + " giao dịch điểm)", startX + 24.f, 926.f, 11, sf::Color(100, 116, 139));
+            sf::RectangleShape footLine(sf::Vector2f(contentW - 40.f, 1.f));
+            footLine.setPosition(startX + 20.f, 902.f);
+            footLine.setFillColor(sf::Color(226, 232, 240));
+            window.draw(footLine);
+
+            drawTxt("Trang " + std::to_string(crmCurrentPage + 1) + " / " + std::to_string(totalPages) + " (Tổng " + std::to_string(filteredHist.size()) + " giao dịch điểm)", startX + 24.f, 920.f, 11, sf::Color(100, 116, 139));
             if (btnCrmPrevPage) btnCrmPrevPage->draw(window);
             if (btnCrmNextPage) btnCrmNextPage->draw(window);
         }
@@ -1098,7 +1122,7 @@ void CinemaUIApp::renderCRMView() {
         int endIdx = std::min(startIdx + rowsPerPage, static_cast<int>(filteredCust.size()));
 
         float rowStartY = thY + thH;
-        float rowH = 50.f;
+        float rowH = 46.f;
 
         for (int i = startIdx; i < endIdx; ++i) {
             const auto& c = filteredCust[i];
@@ -1109,10 +1133,10 @@ void CinemaUIApp::renderCRMView() {
             rLine.setFillColor(sf::Color(241, 245, 249));
             window.draw(rLine);
 
-            drawTxt(c.getMaKH(), startX + 24.f, ry + 17.f, 11.5, sf::Color(2, 132, 199), true);
-            drawTxt(c.getHoTen(), startX + 120.f, ry + 17.f, 12, sf::Color(15, 23, 42), true);
-            drawTxt(c.getSoDienThoai(), startX + 350.f, ry + 17.f, 11.5, sf::Color(71, 85, 105));
-            drawTxt(c.getEmail().empty() ? "—" : c.getEmail(), startX + 510.f, ry + 17.f, 11.5, sf::Color(100, 116, 139));
+            drawTxt(c.getMaKH(), startX + 24.f, ry + 15.f, 11.5, sf::Color(2, 132, 199), true);
+            drawTxt(c.getHoTen(), startX + 120.f, ry + 15.f, 12, sf::Color(15, 23, 42), true);
+            drawTxt(c.getSoDienThoai(), startX + 350.f, ry + 15.f, 11.5, sf::Color(71, 85, 105));
+            drawTxt(c.getEmail().empty() ? "—" : c.getEmail(), startX + 510.f, ry + 15.f, 11.5, sf::Color(100, 116, 139));
 
             std::string h = c.getHangThanhVien();
             std::string hLabel = "Hạng Thường";
@@ -1127,18 +1151,29 @@ void CinemaUIApp::renderCRMView() {
                 hBg = sf::Color(224, 242, 254);
                 hFg = sf::Color(2, 132, 199);
             }
-            RoundedRectRenderer::render(window, sf::Vector2f(startX + 735.f, ry + 13.f), sf::Vector2f(110.f, 24.f), 12.f, hBg);
-            drawCenteredTxt(hLabel, startX + 790.f, ry + 25.f, 10.5, hFg, true);
+            RoundedRectRenderer::render(window, sf::Vector2f(startX + 735.f, ry + 11.f), sf::Vector2f(110.f, 24.f), 12.f, hBg);
+            drawCenteredTxt(hLabel, startX + 790.f, ry + 23.f, 10.5, hFg, true);
 
-            drawCenteredTxt(formatCommaNumber(c.getDiemTichLuy()) + " điểm", startX + 955.f, ry + 25.f, 12, sf::Color(5, 150, 105), true);
-            drawRightTxt(formatVndCurrency(c.getTongChiTieu()), startX + 1190.f, ry + 17.f, 12, sf::Color(15, 23, 42), true);
+            drawCenteredTxt(formatCommaNumber(c.getDiemTichLuy()) + " điểm", startX + 955.f, ry + 23.f, 12, sf::Color(5, 150, 105), true);
+            drawRightTxt(formatVndCurrency(c.getTongChiTieu()), startX + 1190.f, ry + 15.f, 12, sf::Color(15, 23, 42), true);
 
             // Quick Action Pill Buttons: [+100đ] and [-100đ] connected to Customer::tichDiem & Customer::doiDiem
-            RoundedRectRenderer::render(window, sf::Vector2f(startX + 1230.f, ry + 12.f), sf::Vector2f(78.f, 26.f), 6.f, sf::Color(220, 252, 231));
-            drawCenteredTxt("+ Tích 100đ", startX + 1269.f, ry + 25.f, 10, sf::Color(5, 150, 105), true);
+            RoundedRectRenderer::render(window, sf::Vector2f(startX + 1230.f, ry + 10.f), sf::Vector2f(78.f, 26.f), 6.f, sf::Color(220, 252, 231));
+            drawCenteredTxt("+ Tích 100đ", startX + 1269.f, ry + 23.f, 10, sf::Color(5, 150, 105), true);
 
-            RoundedRectRenderer::render(window, sf::Vector2f(startX + 1316.f, ry + 12.f), sf::Vector2f(78.f, 26.f), 6.f, sf::Color(255, 241, 242));
-            drawCenteredTxt("- Đổi 100đ", startX + 1355.f, ry + 25.f, 10, sf::Color(225, 29, 72), true);
+            RoundedRectRenderer::render(window, sf::Vector2f(startX + 1316.f, ry + 10.f), sf::Vector2f(78.f, 26.f), 6.f, sf::Color(255, 241, 242));
+            drawCenteredTxt("- Đổi 100đ", startX + 1355.f, ry + 23.f, 10, sf::Color(225, 29, 72), true);
+        }
+
+        if (totalPages > 1) {
+            sf::RectangleShape footLine(sf::Vector2f(contentW - 40.f, 1.f));
+            footLine.setPosition(startX + 20.f, 902.f);
+            footLine.setFillColor(sf::Color(226, 232, 240));
+            window.draw(footLine);
+
+            drawTxt("Trang " + std::to_string(crmCurrentPage + 1) + " / " + std::to_string(totalPages) + " (Tổng " + std::to_string(filteredCust.size()) + " hội viên)", startX + 24.f, 920.f, 11, sf::Color(100, 116, 139));
+            if (btnCrmPrevPage) btnCrmPrevPage->draw(window);
+            if (btnCrmNextPage) btnCrmNextPage->draw(window);
         }
     }
 

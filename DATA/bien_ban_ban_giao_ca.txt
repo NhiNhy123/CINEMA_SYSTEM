@@ -1,0 +1,18 @@
+=================================================================
+          CINESTAR CINEMA - BIÊN BẢN KẾT CA & BÀN GIAO           
+=================================================================
+Mã ca / Quầy           : CA08 - Ca Sáng (Quầy 01)
+Thu ngân bàn giao      : Nguyễn Văn A (NV-0842)
+Nhân viên nhận ca sau  : Lê Tuyết Nhi (U001)
+Khung giờ trực         : 07:00 – 15:30 (8 giờ 30 phút) • 20/11/2026
+-----------------------------------------------------------------
+1. TỔNG DOANH THU CA (HT)          : 18.450.000 VNĐ (1 GD)
+   - Doanh thu vé xem phim         : 18.450.000 VNĐ (0 vé)
+   - Doanh thu bắp nước (F&B)      : 0 VNĐ (0 combo/món)
+   - Voucher / Giảm giá            : -0 VNĐ (0 lượt)
+-----------------------------------------------------------------
+2. ĐỐI SOÁT PHƯƠNG THỨC THANH TOÁN :
+   - Tiền mặt (Cash)               : 18.450.000 đ | Thực tế: 18.450.000 đ (Chênh lệch: 0 đ)
+   - Quét mã QR                    : 0 đ | Thực tế: 0 đ (Khớp 0 đ)
+   - Cà thẻ POS EDC                : 0 đ | Thực tế: 0 đ (Khớp 0 đ)
+=================================================================

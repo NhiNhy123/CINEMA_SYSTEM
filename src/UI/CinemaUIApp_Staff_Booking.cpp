@@ -8,19 +8,17 @@
 #include <ctime>
 #include <map>
 #include <set>
+#include <atomic>
+#include <chrono>
 #include <sqlite3.h>
 
 namespace UI {
 
-static std::string formatNumberDots(long long val) {
-    if (val < 0) val = 0;
-    std::string s = std::to_string(val);
-    int n = static_cast<int>(s.length()) - 3;
-    while (n > 0) {
-        s.insert(n, ".");
-        n -= 3;
-    }
-    return s;
+static std::string getTodayDateStr() {
+    std::time_t t = std::time(nullptr);
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%d/%m/%Y", std::localtime(&t));
+    return std::string(buf);
 }
 
 static std::string formatVND(double amount) {
@@ -231,11 +229,8 @@ void CinemaUIApp::recalculatePosTotals() {
         }
 
         if (!matchedSql) {
-            if (upperCode == "CINEMA20") {
-                posDiscountAmount = std::min(20000.0, subTotal * 0.15);
-            } else {
-                posDiscountAmount = std::min(20000.0, subTotal * 0.10);
-            }
+            posDiscountAmount = 0.0;
+            posVoucherApplied = false;
         }
         if (posDiscountAmount > subTotal) posDiscountAmount = subTotal;
     } else if (!posMemberName.empty() && posDiscountAmount <= 0.0 && !posVoucherApplied) {
@@ -463,6 +458,9 @@ void CinemaUIApp::setupSeatBookingView() {
             ActivityLog::ghiNhan(currentUserId, currentUserRole, "DANG_XUAT", "Đổi ca / Đăng xuất khỏi quầy POS");
         }
         isLoggedIn = false;
+        if (loginInputUser) loginInputUser->setText("");
+        if (loginInputPass) loginInputPass->setText("");
+        loginErrorMsg = "";
     });
 
     btnPosLock = std::make_unique<RoundRectButton>("", sf::Vector2f(-1000.f, -1000.f), sf::Vector2f(1.f, 1.f), ButtonStyle::Secondary);
@@ -503,6 +501,7 @@ void CinemaUIApp::setupSeatBookingView() {
         db.docDanhSachFAndB(fnbList);
     }
     for (const auto& item : fnbList) {
+        if (item.getTrangThaiKinhDoanh() == "NgungBan") continue;
         std::string label = item.getTenMatHang() + " (" + formatShortPrice(item.getGiaTien()) + ")";
         fnbOptions.push_back(label);
     }
@@ -565,10 +564,11 @@ void CinemaUIApp::setupSeatBookingView() {
         "Nhập SĐT hoặc Mã thẻ thành viên...",
         11
     );
-    inputPosMemberPhone->setText("0901234567");
-    posMemberName = "Trần Thị B";
-    posMemberTier = "VIP";
-    posMemberPoints = 1250;
+    inputPosMemberPhone->setText("");
+    posMemberId = "";
+    posMemberName = "";
+    posMemberTier = "";
+    posMemberPoints = 0;
 
     btnPosApplyMember = std::make_unique<RoundRectButton>(
         "Tra cứu",
@@ -588,6 +588,7 @@ void CinemaUIApp::setupSeatBookingView() {
     btnPosApplyMember->setOnClick([this]() {
         std::string query = inputPosMemberPhone ? inputPosMemberPhone->getText() : "";
         if (query.empty()) {
+            posMemberId = "";
             posMemberName = "";
             posMemberTier = "";
             posMemberPoints = 0;
@@ -599,15 +600,18 @@ void CinemaUIApp::setupSeatBookingView() {
         sqlite3* dbPtr = nullptr;
         bool found = false;
         if (sqlite3_open("DATA/cinema.db", &dbPtr) == SQLITE_OK) {
-            std::string sql = "SELECT u.hoTen, c.hangThanhVien, c.diemTichLuy "
-                              "FROM users u LEFT JOIN customers c ON u.maNguoiDung = c.maNguoiDung "
-                              "WHERE u.soDienThoai LIKE '%" + query + "%' OR u.maNguoiDung = '" + query + "' LIMIT 1;";
+            std::string sql = "SELECT u.maNguoiDung, u.hoTen, c.hangThanhVien, c.diemTichLuy "
+                              "FROM users u INNER JOIN customers c ON u.maNguoiDung = c.maKhachHang "
+                              "WHERE (u.vaiTro = 'Customer' OR u.vaiTro IS NULL) AND "
+                              "(u.soDienThoai = '" + query + "' OR u.soDienThoai LIKE '" + query + "%' OR u.maNguoiDung = '" + query + "' OR c.maKhachHang = '" + query + "') LIMIT 1;";
             sqlite3_stmt* stmt = nullptr;
             if (sqlite3_prepare_v2(dbPtr, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
                 if (sqlite3_step(stmt) == SQLITE_ROW) {
-                    const char* name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-                    const char* tier = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-                    int pts = sqlite3_column_int(stmt, 2);
+                    const char* uid = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+                    const char* name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+                    const char* tier = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+                    int pts = sqlite3_column_int(stmt, 3);
+                    posMemberId = uid ? uid : "";
                     posMemberName = name ? name : "Khách thành viên";
                     posMemberTier = tier ? tier : "Thường";
                     posMemberPoints = pts;
@@ -619,6 +623,7 @@ void CinemaUIApp::setupSeatBookingView() {
         }
 
         if (!found) {
+            posMemberId = "";
             posMemberName = "";
             posMemberTier = "";
             posMemberPoints = 0;
@@ -688,22 +693,37 @@ void CinemaUIApp::setupSeatBookingView() {
             }
         }
 
+        bool isExpired = false;
+        std::string expDate = "";
         if (!validInDb) {
             sqlite3* dbPtr = nullptr;
             if (sqlite3_open("DATA/cinema.db", &dbPtr) == SQLITE_OK) {
-                std::string q = "SELECT maCode, maKhuyenMai FROM promotions;";
+                std::string q = "SELECT maCode, maKhuyenMai, ngayBatDau, ngayKetThuc FROM promotions;";
                 sqlite3_stmt* stmt = nullptr;
                 if (sqlite3_prepare_v2(dbPtr, q.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+                    std::string todayNorm = DateFormat::normalizeDate(getTodayDateStr());
                     while (sqlite3_step(stmt) == SQLITE_ROW) {
                         const char* c1 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
                         const char* c2 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+                        const char* cStart = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+                        const char* cEnd = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
                         std::string s1 = c1 ? c1 : "";
                         std::string s2 = c2 ? c2 : "";
+                        std::string dStart = cStart ? cStart : "";
+                        std::string dEnd = cEnd ? cEnd : "";
                         std::transform(s1.begin(), s1.end(), s1.begin(), ::toupper);
                         std::transform(s2.begin(), s2.end(), s2.begin(), ::toupper);
                         if (upperV == s1 || upperV == s2) {
                             validInDb = true;
                             if (!s1.empty()) upperV = s1;
+                            expDate = dEnd;
+                            std::string startNorm = DateFormat::normalizeDate(dStart);
+                            std::string endNorm = DateFormat::normalizeDate(dEnd);
+                            if (!startNorm.empty() && !endNorm.empty()) {
+                                if (todayNorm < startNorm || todayNorm > endNorm) {
+                                    isExpired = true;
+                                }
+                            }
                             break;
                         }
                     }
@@ -713,7 +733,7 @@ void CinemaUIApp::setupSeatBookingView() {
             }
         }
 
-        if (validInDb) {
+        if (validInDb && !isExpired) {
             posVoucherCode = upperV;
             posVoucherApplied = true;
             if (inputPosVoucher) inputPosVoucher->setText(upperV);
@@ -723,6 +743,17 @@ void CinemaUIApp::setupSeatBookingView() {
             }
             posPromoDropdownOpen = false;
             recalculatePosTotals();
+        } else if (validInDb && isExpired) {
+            posVoucherApplied = false;
+            posVoucherCode = "";
+            if (btnPosApplyVoucher) {
+                btnPosApplyVoucher->setText("Áp dụng");
+                btnPosApplyVoucher->setCustomColors(sf::Color(2, 132, 199), sf::Color(3, 105, 161), sf::Color(7, 89, 133), sf::Color(148, 163, 184));
+            }
+            recalculatePosTotals();
+            if (confirmPopup) {
+                confirmPopup->show("MÃ KHUYẾN MÃI HẾT HẠN", "Mã khuyến mãi '" + vCode + "' đã hết hạn áp dụng (Hạn cuối: " + expDate + ")!\nVui lòng chọn mã khuyến mãi khác.", ButtonStyle::Danger, "Đóng", "");
+            }
         } else {
             posVoucherApplied = false;
             posVoucherCode = "";
@@ -767,6 +798,21 @@ void CinemaUIApp::setupSeatBookingView() {
             return;
         }
 
+        if (posPaymentMethod == 0) { // CASH
+            if (posCashGivenAmount < posGrandTotal) {
+                if (confirmPopup) {
+                    confirmPopup->show(
+                        "TIỀN KHÁCH ĐƯA KHÔNG ĐỦ",
+                        "Số tiền khách đưa (" + formatVND(posCashGivenAmount) + ") không đủ để thanh toán đơn hàng (" + formatVND(posGrandTotal) + ")!\nVui lòng nhập đúng số tiền khách đưa trước khi thanh toán.",
+                        ButtonStyle::Danger,
+                        "Đóng",
+                        ""
+                    );
+                }
+                return;
+            }
+        }
+
         std::string payMethodStr = (posPaymentMethod == 0) ? "CASH" : ((posPaymentMethod == 1) ? "QR_PAY" : "CARD");
         std::string payMethodVN = (posPaymentMethod == 0) ? "Tiền mặt" : ((posPaymentMethod == 1) ? "Quét QR" : "Thẻ POS");
 
@@ -777,48 +823,142 @@ void CinemaUIApp::setupSeatBookingView() {
         }
 
         if (confirmPopup) {
-            confirmPopup->show(
-                "XÁC NHẬN THANH TOÁN & IN VÉ",
-                "Suất chiếu: " + currentShowtimeId +
+            std::string popupTitle = "XÁC NHẬN THANH TOÁN TIỀN MẶT & IN VÉ";
+            std::string popupBody = "Suất chiếu: " + currentShowtimeId +
                 "\nGhế đã chọn (" + std::to_string(selectedSeatCodes.size()) + " vé): " + (seatListStr.empty() ? "Không" : seatListStr) +
-                "\nPhương thức: " + payMethodVN +
-                "\nTỔNG THANH TOÁN: " + formatVND(posGrandTotal),
+                "\nPhương thức: Tiền mặt" +
+                "\nTổng đơn hàng: " + formatVND(posGrandTotal) +
+                "\nTiền khách đưa: " + formatVND(posCashGivenAmount) +
+                "\nTiền thối lại: " + formatVND(std::max(0.0, posCashGivenAmount - posGrandTotal));
+            std::string confirmBtnText = "Xác nhận & In vé";
+
+            if (posPaymentMethod == 1) {
+                popupTitle = "XÁC NHẬN THANH TOÁN QUÉT MÃ QR";
+                popupBody = "Yêu cầu khách quét mã QR để chuyển khoản:\n"
+                            "• Số tiền thanh toán: " + formatVND(posGrandTotal) + "\n"
+                            "• Cổng thanh toán: VietQR / MoMo POS\n"
+                            "• Suất chiếu: " + currentShowtimeId + " (" + std::to_string(selectedSeatCodes.size()) + " vé)\n\n"
+                            "Chỉ nhấn 'Xác nhận Đã Nhận Tiền' sau khi hệ thống cổng thanh toán báo Giao dịch thành công.";
+                confirmBtnText = "Xác nhận Đã Nhận Tiền";
+            } else if (posPaymentMethod == 2) {
+                popupTitle = "XÁC NHẬN THANH TOÁN THẺ POS";
+                popupBody = "Quẹt hoặc cắm thẻ qua thiết bị POS thanh toán:\n"
+                            "• Số tiền thanh toán: " + formatVND(posGrandTotal) + "\n"
+                            "• Thiết bị: Máy POS quầy " + (currentPosTerminal.empty() ? "01" : currentPosTerminal) + "\n"
+                            "• Suất chiếu: " + currentShowtimeId + " (" + std::to_string(selectedSeatCodes.size()) + " vé)\n\n"
+                            "Chỉ nhấn 'Xác nhận Đã Nhận Tiền' sau khi máy POS in hóa đơn cà thẻ thành công.";
+                confirmBtnText = "Xác nhận Đã Nhận Tiền";
+            }
+
+            confirmPopup->show(
+                popupTitle,
+                popupBody,
                 ButtonStyle::Primary,
-                "Xác nhận & In vé",
+                confirmBtnText,
                 "Quay lại"
             );
             confirmPopup->setOnConfirm([this, payMethodStr]() {
                 sqlite3* dbConn = nullptr;
-                int invNum = static_cast<int>(std::time(nullptr)) % 1000000;
-                std::string invId = "INV-" + std::to_string(invNum);
+                static std::atomic<unsigned long long> s_invSeq{100};
+                auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                std::string invId = "INV-" + std::to_string(nowMs % 10000000) + "-" + std::to_string(s_invSeq++);
 
                 if (sqlite3_open("DATA/cinema.db", &dbConn) == SQLITE_OK) {
+                    sqlite3_exec(dbConn, "BEGIN IMMEDIATE TRANSACTION;", nullptr, nullptr, nullptr);
+
+                    // Re-verify Double Booking in SQLite directly inside the active transaction
+                    bool conflict = false;
+                    std::vector<std::string> conflictSeats;
+                    if (!selectedSeatCodes.empty()) {
+                        for (const auto& code : selectedSeatCodes) {
+                            std::string chkSql = "SELECT trangThai FROM seat_status WHERE maSuatChieu = '" + currentShowtimeId + "' AND maGhe = '" + code + "';";
+                            sqlite3_stmt* chkStmt = nullptr;
+                            if (sqlite3_prepare_v2(dbConn, chkSql.c_str(), -1, &chkStmt, nullptr) == SQLITE_OK) {
+                                if (sqlite3_step(chkStmt) == SQLITE_ROW) {
+                                    const char* st = reinterpret_cast<const char*>(sqlite3_column_text(chkStmt, 0));
+                                    if (st && std::string(st) == "DaDat") {
+                                        conflict = true;
+                                        conflictSeats.push_back(code);
+                                    }
+                                }
+                                sqlite3_finalize(chkStmt);
+                            }
+                        }
+                        if (conflict) {
+                            sqlite3_exec(dbConn, "ROLLBACK;", nullptr, nullptr, nullptr);
+                            sqlite3_close(dbConn);
+                            refreshSeatsForShowtime(currentShowtimeId);
+                            std::string errSeats = "";
+                            for (size_t i = 0; i < conflictSeats.size(); ++i) {
+                                errSeats += conflictSeats[i] + (i + 1 < conflictSeats.size() ? ", " : "");
+                            }
+                            if (confirmPopup) {
+                                confirmPopup->show(
+                                    "GHẾ ĐÃ ĐƯỢC ĐẶT TRƯỚC",
+                                    "Ghế [" + errSeats + "] vừa được quầy khác hoặc khách online thanh toán thành công!\nVui lòng chọn ghế khác.",
+                                    ButtonStyle::Danger,
+                                    "Đóng",
+                                    ""
+                                );
+                            }
+                            return;
+                        }
+                    }
+
+                    // Look up or assign current active shift ID
+                    if (currentShiftId.empty()) {
+                        sqlite3_stmt* shStmt = nullptr;
+                        std::string qActiveShift = "SELECT maCa FROM shift_managements WHERE (trangThai = 'DangLam' OR trangThai = 'ChoDuyet') AND maNhanVien = '" + currentUserId + "' ORDER BY maCa DESC LIMIT 1;";
+                        if (sqlite3_prepare_v2(dbConn, qActiveShift.c_str(), -1, &shStmt, nullptr) == SQLITE_OK) {
+                            if (sqlite3_step(shStmt) == SQLITE_ROW) {
+                                const char* cCa = reinterpret_cast<const char*>(sqlite3_column_text(shStmt, 0));
+                                if (cCa) currentShiftId = cCa;
+                            }
+                            sqlite3_finalize(shStmt);
+                        }
+                        if (currentShiftId.empty()) currentShiftId = "CA09";
+                    }
+
                     std::time_t tNow = std::time(nullptr);
                     char tBuf[32];
                     std::strftime(tBuf, sizeof(tBuf), "%d/%m/%Y %H:%M:%S", std::localtime(&tNow));
 
-                    std::string qInv = "INSERT INTO invoices (maHoaDon, maKhachHang, maNhanVien, thoiGianLap, tongTien, hinhThucThanhToan, maGiaoDich, trangThaiThanhToan) VALUES ('"
+                    std::string qInv = "INSERT INTO invoices (maHoaDon, maKhachHang, maNhanVien, thoiGianLap, tongTien, hinhThucThanhToan, maGiaoDich, trangThaiThanhToan, maCa) VALUES ('"
                         + invId + "', '"
-                        + (posMemberName.empty() ? "KHACH_LE" : posMemberName) + "', '"
+                        + (posMemberId.empty() ? "KHACH_LE" : posMemberId) + "', '"
                         + currentUserId + "', '"
                         + std::string(tBuf) + "', '"
-                        + std::to_string(static_cast<long long>(std::round(posGrandTotal))) + "', '" + payMethodStr + "', 'POS-" + std::to_string(invNum) + "', 'DaThanhToan');";
+                        + std::to_string(static_cast<long long>(std::round(posGrandTotal))) + "', '" + payMethodStr + "', 'POS-" + invId.substr(4) + "', 'DaThanhToan', '" + currentShiftId + "');";
                     sqlite3_exec(dbConn, qInv.c_str(), nullptr, nullptr, nullptr);
 
-                    for (const auto& code : selectedSeatCodes) {
-                        double ticketPrice = 75000.0;
+                    double subTotal = posSeatTotal + posFnbTotal;
+                    double discountFactor = (subTotal > 0.0) ? (posGrandTotal / subTotal) : 1.0;
+                    long long accumulatedItemTotal = 0;
+
+                    for (size_t i = 0; i < selectedSeatCodes.size(); ++i) {
+                        const auto& code = selectedSeatCodes[i];
+                        double originalTicketPrice = 75000.0;
                         for (const auto& s : currentSeats) {
                             if (s.maGhe == code) {
-                                ticketPrice = s.donGia;
+                                originalTicketPrice = s.donGia;
                                 break;
                             }
                         }
-                        std::string tId = "T-" + std::to_string(invNum) + "-" + code;
+                        long long ticketPrice = static_cast<long long>(std::round(originalTicketPrice * discountFactor));
+                        if (i + 1 == selectedSeatCodes.size() && posSelectedFnb.empty()) {
+                            long long expectedGrand = static_cast<long long>(std::round(posGrandTotal));
+                            if (accumulatedItemTotal + ticketPrice != expectedGrand) {
+                                ticketPrice = expectedGrand - accumulatedItemTotal;
+                            }
+                        }
+                        accumulatedItemTotal += ticketPrice;
+
+                        std::string tId = "T-" + invId.substr(4) + "-" + code;
                         std::string qTick = "INSERT INTO tickets (maVe, maHoaDon, maSuatChieu, maGhe, giaVeThucTe, maQRCode, trangThaiSuDung) VALUES ('"
                             + tId + "', '"
                             + invId + "', '"
                             + currentShowtimeId + "', '"
-                            + code + "', '" + std::to_string(static_cast<long long>(std::round(ticketPrice))) + "', 'QR-" + code + "', 'DaSuDung');";
+                            + code + "', '" + std::to_string(ticketPrice) + "', 'QR-" + code + "', 'ChuaCheckIn');";
                         sqlite3_exec(dbConn, qTick.c_str(), nullptr, nullptr, nullptr);
 
                         std::string qStat = "INSERT OR REPLACE INTO seat_status (maSuatChieu, maGhe, trangThai) VALUES ('"
@@ -826,18 +966,47 @@ void CinemaUIApp::setupSeatBookingView() {
                         sqlite3_exec(dbConn, qStat.c_str(), nullptr, nullptr, nullptr);
                     }
 
-                    for (const auto& f : posSelectedFnb) {
+                    for (size_t i = 0; i < posSelectedFnb.size(); ++i) {
+                        const auto& f = posSelectedFnb[i];
+                        std::string realFbId = "FB_POS";
+                        for (const auto& fbItem : fnbList) {
+                            if (fbItem.getTenMatHang() == f.first) {
+                                realFbId = fbItem.getMaMatHang();
+                                break;
+                            }
+                        }
+                        long long fnbPrice = static_cast<long long>(std::round(f.second * discountFactor));
+                        if (i + 1 == posSelectedFnb.size()) {
+                            long long expectedGrand = static_cast<long long>(std::round(posGrandTotal));
+                            if (accumulatedItemTotal + fnbPrice != expectedGrand) {
+                                fnbPrice = expectedGrand - accumulatedItemTotal;
+                            }
+                        }
+                        accumulatedItemTotal += fnbPrice;
+
                         std::string qFb = "INSERT INTO invoice_fb_items (maHoaDon, maMatHang, tenMatHangTaiThoiDiem, soLuong, donGiaTaiThoiDiem, thanhTien) VALUES ('"
-                            + invId + "', 'FB_POS', '" + f.first + "', '1', '" + std::to_string(static_cast<long long>(std::round(f.second))) + "', '" + std::to_string(static_cast<long long>(std::round(f.second))) + "');";
+                            + invId + "', '" + realFbId + "', '" + f.first + "', '1', '" + std::to_string(fnbPrice) + "', '" + std::to_string(fnbPrice) + "');";
                         sqlite3_exec(dbConn, qFb.c_str(), nullptr, nullptr, nullptr);
                     }
 
-                    // Update customer loyalty points if member was looked up
-                    if (!posMemberName.empty()) {
+                    // Update customer loyalty points and total spending in SQLite if member was looked up
+                    if (!posMemberId.empty()) {
                         int addedPts = static_cast<int>(std::round(posGrandTotal / 10000.0));
-                        posMemberPoints += addedPts;
+                        if (addedPts > 0) {
+                            posMemberPoints += addedPts;
+                            std::string qUpd = "UPDATE customers SET diemTichLuy = CAST(CAST(diemTichLuy AS INTEGER) + " + std::to_string(addedPts) + " AS TEXT), "
+                                               "tongChiTieu = CAST(CAST(tongChiTieu AS INTEGER) + " + std::to_string(static_cast<long long>(std::round(posGrandTotal))) + " AS TEXT) "
+                                               "WHERE maKhachHang = '" + posMemberId + "';";
+                            sqlite3_exec(dbConn, qUpd.c_str(), nullptr, nullptr, nullptr);
+
+                            std::string gdId = "GD-" + std::to_string(nowMs % 10000000) + "-" + std::to_string(s_invSeq++);
+                            std::string qHist = "INSERT INTO customer_points_history (maGiaoDichDiem, maKhachHang, loaiGiaoDich, soDiem, noiDung, thoiGian) VALUES ('"
+                                + gdId + "', '" + posMemberId + "', 'TichDiem', '" + std::to_string(addedPts) + "', 'Tích điểm từ hóa đơn " + invId + "', '" + std::string(tBuf) + "');";
+                            sqlite3_exec(dbConn, qHist.c_str(), nullptr, nullptr, nullptr);
+                        }
                     }
 
+                    sqlite3_exec(dbConn, "COMMIT;", nullptr, nullptr, nullptr);
                     sqlite3_close(dbConn);
                 }
 
@@ -857,6 +1026,18 @@ void CinemaUIApp::setupSeatBookingView() {
                 selectedSeatCodes.clear();
                 posSelectedFnb.clear();
                 posCustomCashEdited = false;
+                posVoucherApplied = false;
+                posVoucherCode = "";
+                if (inputPosVoucher) inputPosVoucher->setText("");
+                if (btnPosApplyVoucher) {
+                    btnPosApplyVoucher->setText("Áp dụng");
+                    btnPosApplyVoucher->setCustomColors(sf::Color(2, 132, 199), sf::Color(3, 105, 161), sf::Color(7, 89, 133), sf::Color(148, 163, 184));
+                }
+                posMemberId = "";
+                posMemberName = "";
+                posMemberTier = "";
+                posMemberPoints = 0;
+                if (inputPosMemberPhone) inputPosMemberPhone->setText("");
                 recalculatePosTotals();
 
                 if (confirmPopup) {
@@ -921,6 +1102,18 @@ void CinemaUIApp::setupSeatBookingView() {
         selectedSeatCodes.clear();
         posSelectedFnb.clear();
         posCustomCashEdited = false;
+        posVoucherApplied = false;
+        posVoucherCode = "";
+        if (inputPosVoucher) inputPosVoucher->setText("");
+        if (btnPosApplyVoucher) {
+            btnPosApplyVoucher->setText("Áp dụng");
+            btnPosApplyVoucher->setCustomColors(sf::Color(2, 132, 199), sf::Color(3, 105, 161), sf::Color(7, 89, 133), sf::Color(148, 163, 184));
+        }
+        posMemberId = "";
+        posMemberName = "";
+        posMemberTier = "";
+        posMemberPoints = 0;
+        if (inputPosMemberPhone) inputPosMemberPhone->setText("");
         recalculatePosTotals();
     });
 
@@ -1819,9 +2012,20 @@ void CinemaUIApp::renderSeatBookingView() {
     drawTxt("GHẾ ĐANG CHỌN (" + std::to_string(selectedSeatCodes.size()) + " VÉ)", rightStartX + 36.f, rc1Y + 12.f, 11, sf::Color(2, 132, 199), true);
     if (btnPosSeatClear) btnPosSeatClear->draw(window);
 
+    int maxSeatPages = std::max(1, (static_cast<int>(selectedSeatCodes.size()) + 1) / 2);
+    if (posSeatScrollPage >= maxSeatPages) posSeatScrollPage = maxSeatPages - 1;
+    if (posSeatScrollPage < 0) posSeatScrollPage = 0;
+    if (maxSeatPages > 1) {
+        drawTxt("◀", rightStartX + rightW - 74.f, rc1Y + 12.f, 11, sf::Color(2, 132, 199), true);
+        drawTxt(std::to_string(posSeatScrollPage + 1) + "/" + std::to_string(maxSeatPages), rightStartX + rightW - 56.f, rc1Y + 13.f, 10, sf::Color(100, 116, 139), false);
+        drawTxt("▶", rightStartX + rightW - 28.f, rc1Y + 12.f, 11, sf::Color(2, 132, 199), true);
+    }
+
     if (!selectedSeatCodes.empty()) {
-        for (size_t i = 0; i < selectedSeatCodes.size() && i < 2; ++i) {
-            float itemY = rc1Y + 38.f + static_cast<float>(i) * 44.f;
+        size_t startSeatIdx = static_cast<size_t>(posSeatScrollPage * 2);
+        size_t endSeatIdx = std::min(startSeatIdx + 2, selectedSeatCodes.size());
+        for (size_t i = startSeatIdx; i < endSeatIdx; ++i) {
+            float itemY = rc1Y + 38.f + static_cast<float>(i - startSeatIdx) * 44.f;
             std::string code = selectedSeatCodes[i];
             std::string sType = "VIP";
             double sPrice = 90000.0;
@@ -1869,7 +2073,8 @@ void CinemaUIApp::renderSeatBookingView() {
             drawCenteredTxt("×", rightStartX + rightW - 26.f, itemY + 19.f, 14, sf::Color(148, 163, 184), true);
         }
         if (selectedSeatCodes.size() > 2) {
-            drawTxt("+" + std::to_string(selectedSeatCodes.size() - 2) + " ghế khác đã chọn", rightStartX + 18.f, rc1Y + 136.f, 10, sf::Color(100, 116, 139));
+            drawTxt("Trang " + std::to_string(posSeatScrollPage + 1) + "/" + std::to_string(maxSeatPages) + " (" + std::to_string(selectedSeatCodes.size()) + " ghế)", rightStartX + 18.f, rc1Y + 136.f, 10, sf::Color(100, 116, 139));
+            drawTxt("[Xóa ghế hiển thị]", rightStartX + 120.f, rc1Y + 136.f, 10, sf::Color(239, 68, 68), true);
         }
     } else {
         RoundedRectRenderer::render(
@@ -1927,9 +2132,20 @@ void CinemaUIApp::renderSeatBookingView() {
         }
     }
 
+    int maxFnbPages = std::max(1, (static_cast<int>(groupedFnb.size()) + 1) / 2);
+    if (posFnbScrollPage >= maxFnbPages) posFnbScrollPage = maxFnbPages - 1;
+    if (posFnbScrollPage < 0) posFnbScrollPage = 0;
+    if (maxFnbPages > 1) {
+        drawTxt("◀", rightStartX + rightW - 74.f, rc2Y + 11.f, 12, sf::Color(194, 65, 12), true);
+        drawTxt(std::to_string(posFnbScrollPage + 1) + "/" + std::to_string(maxFnbPages), rightStartX + rightW - 56.f, rc2Y + 12.f, 10, sf::Color(100, 116, 139), false);
+        drawTxt("▶", rightStartX + rightW - 28.f, rc2Y + 11.f, 12, sf::Color(194, 65, 12), true);
+    }
+
     if (!groupedFnb.empty()) {
-        for (size_t i = 0; i < groupedFnb.size() && i < 2; ++i) {
-            float fy = rc2Y + 38.f + static_cast<float>(i) * 42.f;
+        size_t startFnbIdx = static_cast<size_t>(posFnbScrollPage * 2);
+        size_t endFnbIdx = std::min(startFnbIdx + 2, groupedFnb.size());
+        for (size_t i = startFnbIdx; i < endFnbIdx; ++i) {
+            float fy = rc2Y + 38.f + static_cast<float>(i - startFnbIdx) * 42.f;
             float boxH = (groupedFnb.size() == 1) ? 54.f : 38.f;
             RoundedRectRenderer::render(
                 window,
@@ -1947,6 +2163,10 @@ void CinemaUIApp::renderSeatBookingView() {
             }
             drawRightTxt(formatVND(groupedFnb[i].total), rightStartX + rightW - 42.f, fy + (boxH - 16.f) / 2.f, 11, sf::Color(15, 23, 42), true);
             drawCenteredTxt("×", rightStartX + rightW - 26.f, fy + boxH / 2.f, 14, sf::Color(148, 163, 184), true);
+        }
+        if (groupedFnb.size() > 2) {
+            drawTxt("Trang " + std::to_string(posFnbScrollPage + 1) + "/" + std::to_string(maxFnbPages) + " (" + std::to_string(groupedFnb.size()) + " món)", rightStartX + 18.f, rc2Y + 124.f, 10, sf::Color(100, 116, 139));
+            drawTxt("[Xóa món hiển thị]", rightStartX + 120.f, rc2Y + 124.f, 10, sf::Color(239, 68, 68), true);
         }
     } else {
         RoundedRectRenderer::render(

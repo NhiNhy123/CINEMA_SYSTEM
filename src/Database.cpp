@@ -45,7 +45,7 @@ struct TableDefinition {
 const TableDefinition tables[] = {
     {"food_and_beverages", "CREATE TABLE IF NOT EXISTS food_and_beverages (maMatHang TEXT,tenMatHang TEXT,loai TEXT,giaTien TEXT,trangThaiKinhDoanh TEXT)", 5},
     {"promotions", "CREATE TABLE IF NOT EXISTS promotions (maKhuyenMai TEXT,tenKhuyenMai TEXT,maCode TEXT,phanTramGiam TEXT,mucGiamToiDa TEXT,ngayBatDau TEXT,ngayKetThuc TEXT,phamViApDung TEXT)", 8},
-    {"invoices", "CREATE TABLE IF NOT EXISTS invoices (maHoaDon TEXT,maKhachHang TEXT,maNhanVien TEXT,thoiGianLap TEXT,tongTien TEXT,hinhThucThanhToan TEXT,maGiaoDich TEXT,trangThaiThanhToan TEXT)", 8},
+    {"invoices", "CREATE TABLE IF NOT EXISTS invoices (maHoaDon TEXT,maKhachHang TEXT,maNhanVien TEXT,thoiGianLap TEXT,tongTien TEXT,hinhThucThanhToan TEXT,maGiaoDich TEXT,trangThaiThanhToan TEXT,maCa TEXT)", 9},
     {"invoice_fb_items", "CREATE TABLE IF NOT EXISTS invoice_fb_items (maHoaDon TEXT,maMatHang TEXT,tenMatHangTaiThoiDiem TEXT,soLuong TEXT,donGiaTaiThoiDiem TEXT,thanhTien TEXT)", 6},
     {"showtimes", "CREATE TABLE IF NOT EXISTS showtimes (maSuatChieu TEXT,maPhim TEXT,maPhong TEXT,ngayChieu TEXT,gioBatDau TEXT,gioKetThuc TEXT,giaVeCoBan TEXT)", 7},
     {"tickets", "CREATE TABLE IF NOT EXISTS tickets (maVe TEXT,maHoaDon TEXT,maSuatChieu TEXT,maGhe TEXT,giaVeThucTe TEXT,maQRCode TEXT,trangThaiSuDung TEXT)", 7},
