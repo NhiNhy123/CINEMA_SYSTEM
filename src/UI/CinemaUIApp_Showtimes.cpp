@@ -20,14 +20,20 @@ static bool validateShowtimeInput(
     const std::string& inputDateStr,
     const std::string& inputTimeStr,
     const std::string& roomId,
+    const std::string& movieId,
     int movieDur,
     const std::string& ignoreCode,
     const std::vector<Showtime>& stList,
     const std::vector<Movie>& mList,
+    const std::vector<Room>& rList,
     std::string& errMessage,
     std::string& outStartFmt,
     std::string& outEndFmt
 ) {
+    if (inputDateStr.empty()) {
+        errMessage = "Vui lòng tự nhập ngày chiếu theo định dạng DD/MM/YYYY (ví dụ: 25/11/2026)!";
+        return false;
+    }
     int dDay = 0, dMon = 0, dYear = 0;
     if (!DateFormat::parseDate(inputDateStr, dDay, dMon, dYear)) {
         errMessage = "Định dạng ngày không hợp lệ! Vui lòng nhập định dạng DD/MM/YYYY (ví dụ: 15/11/2026).";
@@ -57,14 +63,47 @@ static bool validateShowtimeInput(
         return false;
     }
 
-    // 2. Parse start time
+    // 2. Check movie release period [ngayKhoiChieu, ngayKetThuc]
+    for (const auto& m : mList) {
+        if (m.getMaPhim() == movieId) {
+            int kcD = 0, kcM = 0, kcY = 0;
+            int ktD = 0, ktM = 0, ktY = 0;
+            bool hasKc = DateFormat::parseDate(m.getNgayKhoiChieu(), kcD, kcM, kcY);
+            bool hasKt = DateFormat::parseDate(m.getNgayKetThuc(), ktD, ktM, ktY);
+            int kcKey = hasKc ? (kcY * 10000 + kcM * 100 + kcD) : 0;
+            int ktKey = hasKt ? (ktY * 10000 + ktM * 100 + ktD) : 0;
+
+            if (kcKey > 0 && targetDateKey < kcKey) {
+                errMessage = "Chưa đến ngày khởi chiếu của phim '" + m.getTenPhim() + "' (" + m.getNgayKhoiChieu() + ")!\nKhông thể xếp lịch chiếu trước ngày công chiếu.";
+                return false;
+            }
+            if (ktKey > 0 && targetDateKey > ktKey) {
+                errMessage = "Đã vượt quá thời hạn công chiếu của phim '" + m.getTenPhim() + "' (" + m.getNgayKetThuc() + ")!\nPhim đã kết thúc đợt chiếu tại rạp, không thể xếp thêm suất chiếu.";
+                return false;
+            }
+            break;
+        }
+    }
+
+    // 3. Check room maintenance status
+    for (const auto& r : rList) {
+        if (r.getMaPhong() == roomId) {
+            if (r.getTrangThaiPhong() == "TamNgung") {
+                errMessage = "Phòng chiếu " + r.getTenPhong() + " (" + roomId + ") đang ở trạng thái TẠM NGƯNG BẢO TRÌ!\nVui lòng chọn phòng chiếu khác hoặc kích hoạt lại phòng.";
+                return false;
+            }
+            break;
+        }
+    }
+
+    // 4. Parse start time
     int sMins = 0;
     if (!stParseTimeToMinutes(inputTimeStr, sMins)) {
         errMessage = "Định dạng giờ bắt đầu không hợp lệ! Vui lòng nhập dạng HH:MM (ví dụ: 09:30 AM hoặc 14:00).";
         return false;
     }
 
-    // 3. Check if start time has already passed for today
+    // 5. Check if start time has already passed for today
     int curMins = curHour * 60 + curMin;
     if (targetDateKey == curDateKey && sMins <= curMins) {
         char curTimeBuf[16];
@@ -77,32 +116,45 @@ static bool validateShowtimeInput(
     outStartFmt = stFormatHHMM(sMins);
     outEndFmt = stFormatHHMM(eMins);
 
-    // 4. Check overlapping showtime in same room on same date
+    long long targetAbsDays = 0;
+    if (!stDateToAbsDays(inputDateStr, targetAbsDays)) {
+        errMessage = "Định dạng ngày không hợp lệ!";
+        return false;
+    }
+    long long newAbsStart = targetAbsDays * 1440LL + sMins;
+    long long newAbsEnd   = targetAbsDays * 1440LL + eMins;
+
+    // 6. Check overlapping showtime in same room (supports any date format and cross-midnight showtimes)
     for (const auto& s : stList) {
         if (!ignoreCode.empty() && s.getMaSuatChieu() == ignoreCode) continue;
         if (s.getMaPhong() != roomId) continue;
-        if (s.getNgayChieu() != inputDateStr) continue;
+
+        long long exAbsDays = 0;
+        if (!stDateToAbsDays(s.getNgayChieu(), exAbsDays)) continue;
+        if (std::llabs(exAbsDays - targetAbsDays) > 1) continue;
 
         int exStart = 0;
         if (!stParseTimeToMinutes(s.getGioBatDau(), exStart)) continue;
-        int exEnd = 0;
-        if (!stParseTimeToMinutes(s.getGioKetThuc(), exEnd)) {
-            int exDur = 120;
-            for (const auto& m : mList) {
-                if (m.getMaPhim() == s.getMaPhim()) { exDur = m.getThoiLuong(); break; }
-            }
-            exEnd = exStart + exDur;
+        int exDur = 120;
+        for (const auto& m : mList) {
+            if (m.getMaPhim() == s.getMaPhim()) { exDur = m.getThoiLuong(); break; }
         }
+        int exEnd = exStart + exDur;
+        stParseEndMinutesRelativeToStart(s.getGioKetThuc(), exStart, exDur, exEnd);
 
-        // Overlap condition: newStart < exEnd && newEnd > exStart
-        if (sMins < exEnd && eMins > exStart) {
+        long long exAbsStart = exAbsDays * 1440LL + exStart;
+        long long exAbsEnd   = exAbsDays * 1440LL + exEnd;
+
+        // Overlap condition in absolute timeline: newAbsStart < exAbsEnd && newAbsEnd > exAbsStart
+        if (newAbsStart < exAbsEnd && newAbsEnd > exAbsStart) {
             std::string pName = s.getMaPhim();
             for (const auto& m : mList) {
                 if (m.getMaPhim() == s.getMaPhim()) { pName = m.getTenPhim(); break; }
             }
-            errMessage = "Trùng lịch chiếu! Phòng " + roomId + " vào ngày " + inputDateStr +
+            std::string exEndDisp = s.getGioKetThuc().empty() ? stFormatHHMM(exEnd) : s.getGioKetThuc();
+            errMessage = "Trùng lịch chiếu! Phòng " + roomId + " vào ngày " + DateFormat::normalizeDate(s.getNgayChieu()) +
                          " đã có suất chiếu " + s.getMaSuatChieu() + " (phim '" + pName + "') từ " +
-                         s.getGioBatDau() + " đến " + s.getGioKetThuc() + ".\n\nVui lòng chọn khung giờ khác hoặc phòng khác!";
+                         s.getGioBatDau() + " đến " + exEndDisp + ".\n\nVui lòng chọn khung giờ khác hoặc phòng khác!";
             return false;
         }
     }
@@ -110,17 +162,101 @@ static bool validateShowtimeInput(
     return true;
 }
 
+void CinemaUIApp::refreshFormMovieDropdownForDate() {
+    if (!stMovieDropdown) return;
+
+    // Preserve currently selected movie ID across date changes
+    std::string prevMovieId;
+    int prevDropSel = stMovieDropdown->getSelectedIndex();
+    if (prevDropSel >= 0 && prevDropSel < static_cast<int>(stFilteredMovieIndices.size())) {
+        int mIdx = stFilteredMovieIndices[prevDropSel];
+        if (mIdx >= 0 && mIdx < static_cast<int>(movieList.size())) {
+            prevMovieId = movieList[mIdx].getMaPhim();
+        }
+    }
+    if (prevMovieId.empty() && selectedShowtimeRowIdx >= 0 && selectedShowtimeRowIdx < static_cast<int>(showtimeList.size())) {
+        prevMovieId = showtimeList[selectedShowtimeRowIdx].getMaPhim();
+    }
+    if (prevMovieId.empty() && stFormMovieIdx >= 0 && stFormMovieIdx < static_cast<int>(movieList.size())) {
+        prevMovieId = movieList[stFormMovieIdx].getMaPhim();
+    }
+
+    stFilteredMovieIndices.clear();
+
+    std::string curDateStr = inputStDate ? inputStDate->getText() : "";
+    int dDay = 0, dMon = 0, dYear = 0;
+    bool validDate = DateFormat::parseDate(curDateStr, dDay, dMon, dYear);
+    int targetDateKey = validDate ? (dYear * 10000 + dMon * 100 + dDay) : 0;
+
+    // When date input is empty or incomplete, list movies currently in release period (or upcoming)
+    int todayD = 0, todayM = 0, todayY = 0;
+    DateFormat::parseDate(stTodayStr(), todayD, todayM, todayY);
+    int todayKey = (todayY > 0) ? (todayY * 10000 + todayM * 100 + todayD) : 0;
+
+    std::vector<std::string> opts;
+    for (size_t i = 0; i < movieList.size(); ++i) {
+        const auto& m = movieList[i];
+        int kcD = 0, kcM = 0, kcY = 0;
+        int ktD = 0, ktM = 0, ktY = 0;
+        bool hasKc = DateFormat::parseDate(m.getNgayKhoiChieu(), kcD, kcM, kcY);
+        bool hasKt = DateFormat::parseDate(m.getNgayKetThuc(), ktD, ktM, ktY);
+        int kcKey = hasKc ? (kcY * 10000 + kcM * 100 + kcD) : 0;
+        int ktKey = hasKt ? (ktY * 10000 + ktM * 100 + ktD) : 0;
+
+        bool withinWindow = true;
+        if (validDate) {
+            if (kcKey > 0 && targetDateKey < kcKey) withinWindow = false;
+            if (ktKey > 0 && targetDateKey > ktKey) withinWindow = false;
+        } else {
+            // No specific date typed yet: show movies currently active or upcoming (not expired before today)
+            if (ktKey > 0 && todayKey > 0 && ktKey < todayKey) withinWindow = false;
+        }
+
+        if (withinWindow) {
+            stFilteredMovieIndices.push_back(static_cast<int>(i));
+            std::string opt = m.getTenPhim() + " (" + std::to_string(m.getThoiLuong()) + " phút)";
+            if (hasKc && hasKt) {
+                opt += " [" + m.getNgayKhoiChieu().substr(0, 5) + " - " + m.getNgayKetThuc().substr(0, 5) + "]";
+            }
+            opts.push_back(opt);
+        }
+    }
+
+    // Fallback when no date is typed and all movies in DB had older dates
+    if (!validDate && opts.empty()) {
+        for (size_t i = 0; i < movieList.size(); ++i) {
+            const auto& m = movieList[i];
+            stFilteredMovieIndices.push_back(static_cast<int>(i));
+            std::string opt = m.getTenPhim() + " (" + std::to_string(m.getThoiLuong()) + " phút)";
+            opts.push_back(opt);
+        }
+    }
+
+    if (opts.empty()) {
+        opts.push_back("Không có phim công chiếu vào " + curDateStr);
+        stMovieDropdown->setOptions(opts, 0);
+    } else {
+        int newDropSel = 0;
+        if (!prevMovieId.empty()) {
+            for (size_t fi = 0; fi < stFilteredMovieIndices.size(); ++fi) {
+                int mIdx = stFilteredMovieIndices[fi];
+                if (mIdx >= 0 && mIdx < static_cast<int>(movieList.size()) &&
+                    movieList[mIdx].getMaPhim() == prevMovieId) {
+                    newDropSel = static_cast<int>(fi);
+                    break;
+                }
+            }
+        }
+        stMovieDropdown->setOptions(opts, newDropSel);
+        stFormMovieIdx = stFilteredMovieIndices[newDropSel];
+    }
+}
+
 void CinemaUIApp::syncShowtimeSelectionToForm(int idx) {
     if (idx < 0 || idx >= static_cast<int>(showtimeList.size())) return;
     selectedShowtimeRowIdx = idx;
     const Showtime& st = showtimeList[idx];
 
-    for (size_t m = 0; m < movieList.size(); ++m) {
-        if (movieList[m].getMaPhim() == st.getMaPhim()) {
-            stFormMovieIdx = static_cast<int>(m);
-            break;
-        }
-    }
     for (size_t r = 0; r < roomList.size(); ++r) {
         if (roomList[r].getMaPhong() == st.getMaPhong()) {
             stFormRoomIdx = static_cast<int>(r);
@@ -128,9 +264,31 @@ void CinemaUIApp::syncShowtimeSelectionToForm(int idx) {
         }
     }
 
-    if (stMovieDropdown) stMovieDropdown->setSelectedIndex(stFormMovieIdx);
     if (stRoomFormDropdown) stRoomFormDropdown->setSelectedIndex(stFormRoomIdx);
-    if (inputStDate) inputStDate->setText(st.getNgayChieu());
+    if (inputStDate) inputStDate->setText(DateFormat::normalizeDate(st.getNgayChieu()));
+    refreshFormMovieDropdownForDate();
+
+    // Map st.getMaPhim() to filtered dropdown index and sync stFormMovieIdx
+    int mappedDropIdx = 0;
+    for (size_t fi = 0; fi < stFilteredMovieIndices.size(); ++fi) {
+        int mIdx = stFilteredMovieIndices[fi];
+        if (mIdx >= 0 && mIdx < static_cast<int>(movieList.size()) && movieList[mIdx].getMaPhim() == st.getMaPhim()) {
+            mappedDropIdx = static_cast<int>(fi);
+            break;
+        }
+    }
+    if (stMovieDropdown) stMovieDropdown->setSelectedIndex(mappedDropIdx);
+    if (!stFilteredMovieIndices.empty() && mappedDropIdx >= 0 && mappedDropIdx < static_cast<int>(stFilteredMovieIndices.size())) {
+        stFormMovieIdx = stFilteredMovieIndices[mappedDropIdx];
+    } else {
+        for (size_t mi = 0; mi < movieList.size(); ++mi) {
+            if (movieList[mi].getMaPhim() == st.getMaPhim()) {
+                stFormMovieIdx = static_cast<int>(mi);
+                break;
+            }
+        }
+    }
+
     if (inputStTime) {
         std::string startT = st.getGioBatDau();
         int h = 9, m = 0;
@@ -169,14 +327,7 @@ void CinemaUIApp::refreshShowtimesDropdowns() {
         }
         stMovieFilterDropdown->setOptions(movieFilterOpts, curSel);
     }
-    if (stMovieDropdown) {
-        std::vector<std::string> movieOpts;
-        for (const auto& m : movieList) {
-            movieOpts.push_back(m.getTenPhim() + " (" + std::to_string(m.getThoiLuong()) + " phút)");
-        }
-        if (movieOpts.empty()) movieOpts.push_back("Chưa có phim");
-        stMovieDropdown->setOptions(movieOpts, stFormMovieIdx);
-    }
+    refreshFormMovieDropdownForDate();
     if (stDateDropdown) {
         int curSel = stDateDropdown->getSelectedIndex();
         std::string today = stTodayStr();
@@ -259,8 +410,9 @@ void CinemaUIApp::setupShowtimesView() {
     btnStNew->setOnClick([this]() {
         selectedShowtimeRowIdx = -1;
         if (inputStTime) inputStTime->setText("");
-        if (inputStDate) inputStDate->setText(stTodayStr());
+        if (inputStDate) inputStDate->setText("");
         stLastValidMinutes = -1;
+        refreshFormMovieDropdownForDate();
     });
 
     // Sub-Tabs (y = ST_TAB_Y, h = 38.f)
@@ -402,7 +554,9 @@ void CinemaUIApp::setupShowtimesView() {
     stMovieDropdown->setLightStyle(true);
     stMovieDropdown->setMaxVisibleItems(6);
     stMovieDropdown->setOnSelect([this](int idx, const std::string& val) {
-        if (idx >= 0 && idx < static_cast<int>(movieList.size())) {
+        if (idx >= 0 && idx < static_cast<int>(stFilteredMovieIndices.size())) {
+            stFormMovieIdx = stFilteredMovieIndices[idx];
+        } else if (idx >= 0 && idx < static_cast<int>(movieList.size())) {
             stFormMovieIdx = idx;
         }
     });
@@ -433,13 +587,13 @@ void CinemaUIApp::setupShowtimesView() {
     inputStDate = std::unique_ptr<UIInputBox>(new UIInputBox(
         sf::Vector2f(formX, ST_FORM_DATE_Y),
         sf::Vector2f(halfFormW, 38.f),
-        stTodayStr(),
+        "Nhập ngày (DD/MM/YYYY)...",
         13
     ));
     inputStDate->setTextInset(14.f);
     inputStDate->setColors(sf::Color(248, 250, 252), sf::Color(203, 213, 225), sf::Color(2, 132, 199), sf::Color(15, 23, 42), sf::Color(148, 163, 184));
     inputStDate->setCornerRadius(8.f);
-    inputStDate->setText(stTodayStr());
+    inputStDate->setText("");
 
     inputStTime = std::unique_ptr<UIInputBox>(new UIInputBox(
         sf::Vector2f(formX + halfFormW + 14.f, ST_FORM_DATE_Y),
@@ -475,17 +629,24 @@ void CinemaUIApp::setupShowtimesView() {
             if (confirmPopup) confirmPopup->show("THÔNG BÁO", "Vui lòng chọn một suất chiếu trong bảng để chỉnh sửa!", ButtonStyle::Primary, "Đóng", "");
             return;
         }
-        int mIdx = stMovieDropdown ? stMovieDropdown->getSelectedIndex() : stFormMovieIdx;
-        if (mIdx < 0 || mIdx >= static_cast<int>(movieList.size())) mIdx = 0;
-        std::string mId = !movieList.empty() ? movieList[mIdx].getMaPhim() : "P01";
-        int dur = !movieList.empty() ? movieList[mIdx].getThoiLuong() : 120;
+        std::string date = inputStDate ? inputStDate->getText() : "";
+        if (date.empty()) {
+            if (confirmPopup) confirmPopup->show("THÔNG BÁO", "Vui lòng tự nhập ngày chiếu theo định dạng DD/MM/YYYY (ví dụ: 25/11/2026)!", ButtonStyle::Danger, "Đóng", "");
+            return;
+        }
+        int mDropIdx = stMovieDropdown ? stMovieDropdown->getSelectedIndex() : 0;
+        if (stFilteredMovieIndices.empty() || mDropIdx < 0 || mDropIdx >= static_cast<int>(stFilteredMovieIndices.size())) {
+            if (confirmPopup) confirmPopup->show("THÔNG BÁO", "Không có phim nào hợp lệ cho ngày " + date + "!\nVui lòng kiểm tra lại ngày chiếu hoặc đợt công chiếu của phim.", ButtonStyle::Danger, "Đóng", "");
+            return;
+        }
+        int mIdx = stFilteredMovieIndices[mDropIdx];
+        std::string mId = movieList[mIdx].getMaPhim();
+        int dur = movieList[mIdx].getThoiLuong();
 
         int rIdx = stRoomFormDropdown ? stRoomFormDropdown->getSelectedIndex() : stFormRoomIdx;
         if (rIdx < 0 || rIdx >= static_cast<int>(roomList.size())) rIdx = 0;
         std::string rId = !roomList.empty() ? roomList[rIdx].getMaPhong() : "R01";
 
-        std::string date = inputStDate ? inputStDate->getText() : stTodayStr();
-        if (date.empty()) date = stTodayStr();
         std::string startT = inputStTime ? inputStTime->getText() : "";
         if (startT.empty()) {
             if (confirmPopup) confirmPopup->show("THÔNG BÁO", "Vui lòng tự nhập giờ bắt đầu suất chiếu (ví dụ: 09:30 hoặc 14:00)!", ButtonStyle::Danger, "Đóng", "");
@@ -495,13 +656,19 @@ void CinemaUIApp::setupShowtimesView() {
         Showtime& cur = showtimeList[selectedShowtimeRowIdx];
         std::string err;
         std::string sFmt, eFmt;
-        if (!validateShowtimeInput(date, startT, rId, dur, cur.getMaSuatChieu(), showtimeList, movieList, err, sFmt, eFmt)) {
+        if (!validateShowtimeInput(date, startT, rId, mId, dur, cur.getMaSuatChieu(), showtimeList, movieList, roomList, err, sFmt, eFmt)) {
             if (confirmPopup) confirmPopup->show("LỖI KHÔNG HỢP LỆ", err, ButtonStyle::Danger, "Đóng", "");
             return;
         }
 
-        cur = Showtime(cur.getMaSuatChieu(), mId, rId, date, sFmt, eFmt, cur.getGiaVeCoBan() > 0 ? cur.getGiaVeCoBan() : 85000.0);
-        db.ghiDanhSachSuatChieu(showtimeList);
+        std::string normDate = DateFormat::normalizeDate(date);
+        Showtime prevSt = cur;
+        cur = Showtime(cur.getMaSuatChieu(), mId, rId, normDate, sFmt, eFmt, cur.getGiaVeCoBan() > 0 ? cur.getGiaVeCoBan() : 85000.0);
+        if (!db.ghiDanhSachSuatChieu(showtimeList)) {
+            cur = prevSt;
+            if (confirmPopup) confirmPopup->show("LỖI CƠ SỞ DỮ LIỆU", "Không thể lưu suất chiếu xuống cơ sở dữ liệu! Đã hoàn tác thay đổi.", ButtonStyle::Danger, "Đóng", "");
+            return;
+        }
         ActivityLog::ghiNhan(currentUserId, currentUserRole, "CAP_NHAT_SUAT_CHIEU", "Cap nhat suat: " + cur.getMaSuatChieu());
         refreshShowtimesDropdowns();
         syncShowtimeSelectionToForm(selectedShowtimeRowIdx);
@@ -518,17 +685,24 @@ void CinemaUIApp::setupShowtimesView() {
     btnStCreate->setFontSize(13);
     btnStCreate->setCustomColors(sf::Color(22, 163, 74), sf::Color(21, 128, 61), sf::Color(15, 118, 54), sf::Color(203, 213, 225));
     btnStCreate->setOnClick([this]() {
-        int mIdx = stMovieDropdown ? stMovieDropdown->getSelectedIndex() : stFormMovieIdx;
-        if (mIdx < 0 || mIdx >= static_cast<int>(movieList.size())) mIdx = 0;
-        std::string mId = !movieList.empty() ? movieList[mIdx].getMaPhim() : "P01";
-        int dur = !movieList.empty() ? movieList[mIdx].getThoiLuong() : 120;
+        std::string date = inputStDate ? inputStDate->getText() : "";
+        if (date.empty()) {
+            if (confirmPopup) confirmPopup->show("THÔNG BÁO", "Vui lòng tự nhập ngày chiếu theo định dạng DD/MM/YYYY (ví dụ: 25/11/2026)!", ButtonStyle::Danger, "Đóng", "");
+            return;
+        }
+        int mDropIdx = stMovieDropdown ? stMovieDropdown->getSelectedIndex() : 0;
+        if (stFilteredMovieIndices.empty() || mDropIdx < 0 || mDropIdx >= static_cast<int>(stFilteredMovieIndices.size())) {
+            if (confirmPopup) confirmPopup->show("THÔNG BÁO", "Không có phim nào hợp lệ cho ngày " + date + "!\nVui lòng kiểm tra lại ngày chiếu hoặc đợt công chiếu của phim.", ButtonStyle::Danger, "Đóng", "");
+            return;
+        }
+        int mIdx = stFilteredMovieIndices[mDropIdx];
+        std::string mId = movieList[mIdx].getMaPhim();
+        int dur = movieList[mIdx].getThoiLuong();
 
         int rIdx = stRoomFormDropdown ? stRoomFormDropdown->getSelectedIndex() : stFormRoomIdx;
         if (rIdx < 0 || rIdx >= static_cast<int>(roomList.size())) rIdx = 0;
         std::string rId = !roomList.empty() ? roomList[rIdx].getMaPhong() : "R01";
 
-        std::string date = inputStDate ? inputStDate->getText() : stTodayStr();
-        if (date.empty()) date = stTodayStr();
         std::string startT = inputStTime ? inputStTime->getText() : "";
         if (startT.empty()) {
             if (confirmPopup) confirmPopup->show("THÔNG BÁO", "Vui lòng tự nhập giờ bắt đầu suất chiếu (ví dụ: 09:30 hoặc 14:00)!", ButtonStyle::Danger, "Đóng", "");
@@ -537,7 +711,7 @@ void CinemaUIApp::setupShowtimesView() {
 
         std::string err;
         std::string sFmt, eFmt;
-        if (!validateShowtimeInput(date, startT, rId, dur, "", showtimeList, movieList, err, sFmt, eFmt)) {
+        if (!validateShowtimeInput(date, startT, rId, mId, dur, "", showtimeList, movieList, roomList, err, sFmt, eFmt)) {
             if (confirmPopup) confirmPopup->show("LỖI KHÔNG HỢP LỆ", err, ButtonStyle::Danger, "Đóng", "");
             return;
         }
@@ -553,9 +727,14 @@ void CinemaUIApp::setupShowtimesView() {
             for (const auto& s : showtimeList) { if (s.getMaSuatChieu() == nextCode) { exists = true; break; } }
         } while (exists);
 
-        Showtime newSt(nextCode, mId, rId, date, sFmt, eFmt, 85000.0);
+        std::string normDate = DateFormat::normalizeDate(date);
+        Showtime newSt(nextCode, mId, rId, normDate, sFmt, eFmt, 85000.0);
         showtimeList.push_back(newSt);
-        db.ghiDanhSachSuatChieu(showtimeList);
+        if (!db.ghiDanhSachSuatChieu(showtimeList)) {
+            showtimeList.pop_back();
+            if (confirmPopup) confirmPopup->show("LỖI CƠ SỞ DỮ LIỆU", "Không thể ghi suất chiếu mới xuống cơ sở dữ liệu!", ButtonStyle::Danger, "Đóng", "");
+            return;
+        }
         refreshShowtimesDropdowns();
         selectedShowtimeRowIdx = static_cast<int>(showtimeList.size()) - 1;
         showtimeCurrentPage = selectedShowtimeRowIdx / 4;
@@ -578,8 +757,13 @@ void CinemaUIApp::setupShowtimesView() {
     btnStDelete->setOnClick([this]() {
         if (selectedShowtimeRowIdx >= 0 && selectedShowtimeRowIdx < static_cast<int>(showtimeList.size())) {
             std::string code = showtimeList[selectedShowtimeRowIdx].getMaSuatChieu();
+            std::vector<Showtime> backup = showtimeList;
             showtimeList.erase(showtimeList.begin() + selectedShowtimeRowIdx);
-            db.ghiDanhSachSuatChieu(showtimeList);
+            if (!db.ghiDanhSachSuatChieu(showtimeList)) {
+                showtimeList = backup;
+                if (confirmPopup) confirmPopup->show("LỖI CƠ SỞ DỮ LIỆU", "Không thể xóa suất chiếu khỏi cơ sở dữ liệu!", ButtonStyle::Danger, "Đóng", "");
+                return;
+            }
             refreshShowtimesDropdowns();
             if (selectedShowtimeRowIdx >= static_cast<int>(showtimeList.size())) {
                 selectedShowtimeRowIdx = static_cast<int>(showtimeList.size()) - 1;
@@ -609,11 +793,11 @@ void CinemaUIApp::setupShowtimesView() {
         selectedShowtimeRowIdx = -1;
         stFormMovieIdx = 0;
         stFormRoomIdx = 0;
-        if (stMovieDropdown) stMovieDropdown->setSelectedIndex(0);
         if (stRoomFormDropdown) stRoomFormDropdown->setSelectedIndex(0);
         if (inputStTime) inputStTime->setText("");
-        if (inputStDate) inputStDate->setText(stTodayStr());
+        if (inputStDate) inputStDate->setText("");
         stLastValidMinutes = -1;
+        refreshFormMovieDropdownForDate();
     });
 
     refreshShowtimesDropdowns();
@@ -670,14 +854,14 @@ void CinemaUIApp::renderShowtimesView() {
     uAv.setPosition(uPillX + 4.f, topNavY + 1.f);
     window.draw(uAv);
 
-    sf::Text uIni(toSfString("LT"), Theme::FontPrimary, 9);
+    sf::Text uIni(toSfString("AD"), Theme::FontPrimary, 9);
     uIni.setStyle(sf::Text::Bold);
     uIni.setFillColor(sf::Color::White);
-    uIni.setPosition(uPillX + 6.5f, topNavY + 2.f);
+    uIni.setPosition(uPillX + 5.5f, topNavY + 2.f);
     window.draw(uIni);
 
-    std::string dispUser = currentUserName.empty() ? "Lê Minh Tuấn" : currentUserName;
-    std::string dispRole = currentUserRole.empty() ? "Trưởng Ca Vận Hành" : currentUserRole;
+    std::string dispUser = (currentUserName.empty() || currentUserName == "Chưa đăng nhập") ? "Admin" : currentUserName;
+    std::string dispRole = currentUserRole.empty() ? "Quản trị viên" : currentUserRole;
     sf::Text uName(toSfString(dispUser + " (" + dispRole + ")"), Theme::FontPrimary, 10);
     uName.setStyle(sf::Text::Bold);
     uName.setFillColor(sf::Color(30, 41, 59));
@@ -1111,6 +1295,23 @@ void CinemaUIApp::renderShowtimesView() {
             rSub.setFillColor(sf::Color(100, 116, 139));
             rSub.setPosition(rColX + 16.f, ry + 56.f);
             window.draw(rSub);
+
+            // Warning badge if room is in TamNgung
+            bool isRoomPaused = false;
+            for (const auto& rm : roomList) {
+                if (rm.getMaPhong() == item.getMaPhong() && rm.getTrangThaiPhong() == "TamNgung") {
+                    isRoomPaused = true;
+                    break;
+                }
+            }
+            if (isRoomPaused) {
+                RoundedRectRenderer::render(window, sf::Vector2f(rColX + 16.f, ry + 76.f), sf::Vector2f(170.f, 20.f), 4.f, sf::Color(254, 242, 242), 1.f, sf::Color(252, 165, 165));
+                sf::Text warnBadge(toSfString("⚠️ Tạm ngưng (Đề nghị đổi phòng)"), Theme::FontPrimary, 9);
+                warnBadge.setStyle(sf::Text::Bold);
+                warnBadge.setFillColor(sf::Color(220, 38, 38));
+                warnBadge.setPosition(rColX + 20.f, ry + 79.f);
+                window.draw(warnBadge);
+            }
 
             // Col 4: Khung giờ chiếu
             float tColX = leftColX + 600.f;
@@ -1604,7 +1805,15 @@ void CinemaUIApp::renderShowtimesView() {
 
     if (stMovieDropdown) stMovieDropdown->draw(window);
 
-    int curDur = (!movieList.empty() && stFormMovieIdx >= 0 && stFormMovieIdx < static_cast<int>(movieList.size())) ? movieList[stFormMovieIdx].getThoiLuong() : 120;
+    int activeMovieIdx = stFormMovieIdx;
+    if (stMovieDropdown && !stFilteredMovieIndices.empty()) {
+        int dropSel = stMovieDropdown->getSelectedIndex();
+        if (dropSel >= 0 && dropSel < static_cast<int>(stFilteredMovieIndices.size())) {
+            activeMovieIdx = stFilteredMovieIndices[dropSel];
+            stFormMovieIdx = activeMovieIdx;
+        }
+    }
+    int curDur = (!movieList.empty() && activeMovieIdx >= 0 && activeMovieIdx < static_cast<int>(movieList.size())) ? movieList[activeMovieIdx].getThoiLuong() : 120;
     sf::Text mInfo(toSfString("Thời lượng gốc: " + std::to_string(curDur) + " phút   •   Hỗ trợ: 2D, 3D, IMAX Laser"), Theme::FontPrimary, 11);
     mInfo.setFillColor(sf::Color(100, 116, 139));
     mInfo.setPosition(formX, ST_FORM_MOVIE_INFO_Y);
@@ -1654,16 +1863,28 @@ void CinemaUIApp::renderShowtimesView() {
     estLbl.setPosition(formX + 16.f, estY + 12.f);
     window.draw(estLbl);
 
-    // Calculate finish time based on start time + movie duration
+    // Calculate finish time based on start time + movie duration (handle cross-midnight)
     std::string sTimeStr = inputStTime ? inputStTime->getText() : "09:00";
     int sMins = 540;
     stParseTimeToMinutes(sTimeStr, sMins);
     int totalM = sMins + curDur;
+    int dayOffset = totalM / 1440;
     int eH = (totalM / 60) % 24;
     int eM = totalM % 60;
     std::string periodStr = (eH >= 12 && eH < 18) ? "Chiều" : ((eH >= 18) ? "Tối" : ((eH >= 11) ? "Trưa" : "Sáng"));
-    char timeFinBuf[32];
-    snprintf(timeFinBuf, sizeof(timeFinBuf), "%02d:%02d:00  %s", eH, eM, periodStr.c_str());
+    char timeFinBuf[64];
+    if (dayOffset > 0) {
+        std::string curDateStr = inputStDate ? inputStDate->getText() : "";
+        int dd = 0, mm = 0, yy = 0;
+        if (DateFormat::parseDate(curDateStr, dd, mm, yy)) {
+            std::string nextDate = stAddDays(DateFormat::normalizeDate(curDateStr), dayOffset);
+            snprintf(timeFinBuf, sizeof(timeFinBuf), "%02d:%02d:00  %s (+%d ngày: %s)", eH, eM, periodStr.c_str(), dayOffset, nextDate.c_str());
+        } else {
+            snprintf(timeFinBuf, sizeof(timeFinBuf), "%02d:%02d:00  %s (+%d ngày)", eH, eM, periodStr.c_str(), dayOffset);
+        }
+    } else {
+        snprintf(timeFinBuf, sizeof(timeFinBuf), "%02d:%02d:00  %s", eH, eM, periodStr.c_str());
+    }
 
     sf::Text estTime(toSfString(timeFinBuf), Theme::FontPrimary, 18);
     estTime.setStyle(sf::Text::Bold);

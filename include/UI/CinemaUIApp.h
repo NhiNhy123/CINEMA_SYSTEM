@@ -212,7 +212,7 @@ private:
     std::map<std::string, int> genreColorMap;
     bool genreSortAsc;
 
-    // View 2: Seat Booking Components (Bán Vé - POS Kiosk Mode)
+    // View 2: Seat Booking Components (Bán Vé - POS Kiosk Mode CineOS v4.2 PRO)
     std::string currentShowtimeId;
     std::unique_ptr<DropdownBox> showtimeDropdown;
     std::vector<VisualSeat> currentSeats;
@@ -221,14 +221,32 @@ private:
     std::unique_ptr<UIInputBox> inputCustomerPhone;
     std::unique_ptr<RoundRectButton> btnCheckoutTickets;
 
-    // POS Kiosk UI Elements (Matching Image Reference)
-    std::unique_ptr<RoundRectButton> btnPosRefresh;       // "Làm mới lịch chiếu"
-    std::unique_ptr<RoundRectButton> btnPosDate;          // "Hôm nay, 06/04"
-    std::unique_ptr<RoundRectButton> btnPosMovie;         // "Thỏ Ơi"
-    std::unique_ptr<RoundRectButton> btnPosShowtime;      // "17:00 - Phòng 1 - Standard"
-    std::unique_ptr<RoundRectButton> btnPosAddFnb;        // "+ Thêm bắp/nước"
-    std::unique_ptr<RoundRectButton> btnPosCheckout;      // "Thanh toán (F5)"
-    std::unique_ptr<RoundRectButton> btnPosCancel;        // "Hủy đơn"
+    // POS Kiosk UI Elements (Matching Image Reference media_1794932715513_8ac7f81e.jpg)
+    std::unique_ptr<RoundRectButton> btnPosRefresh;          // "Làm mới lịch chiếu"
+    std::unique_ptr<DropdownBox> posDateDropdown;            // Dropdown cuộn chọn Ngày
+    std::unique_ptr<DropdownBox> posMovieDropdown;           // Dropdown cuộn chọn Phim
+    std::unique_ptr<DropdownBox> posShowtimeDropdown;        // Dropdown cuộn chọn Suất chiếu
+    std::unique_ptr<RoundRectButton> btnPosDateToday;        // "Hôm nay, 06/04"
+    std::unique_ptr<RoundRectButton> btnPosDateTomorrow;     // "Mai, 07/04"
+    std::unique_ptr<RoundRectButton> btnPosMovie1;           // "Thỏ Ơi"
+    std::unique_ptr<RoundRectButton> btnPosMovie2;           // "Siêu Nhân"
+    std::unique_ptr<RoundRectButton> btnPosShowtime;         // "19:00 - Phòng 1 - Standard"
+    std::unique_ptr<RoundRectButton> btnPosSeatRefresh;      // "Làm mới"
+    std::unique_ptr<RoundRectButton> btnPosSeatClear;        // "Hủy tất cả"
+    std::unique_ptr<RoundRectButton> btnPosAddQuickCombo;    // "+ Thêm" on Combo Star 1
+    std::unique_ptr<DropdownBox> posFnbDropdown;             // Dropdown cuộn chọn món hoặc combo
+    std::unique_ptr<RoundRectButton> btnPosAddFnb;           // "+ Thêm món"
+    std::unique_ptr<RoundRectButton> btnPosClearFnb;         // "Xóa F&B"
+    std::unique_ptr<UIInputBox> inputPosMemberPhone;         // "Nhập SĐT / Mã thẻ thành viên"
+    std::unique_ptr<RoundRectButton> btnPosApplyMember;      // "Tra cứu"
+    std::unique_ptr<UIInputBox> inputPosVoucher;             // "Mã khuyến mãi / Voucher"
+    std::unique_ptr<RoundRectButton> btnPosApplyVoucher;     // "Áp dụng" / "Đã áp dụng"
+    std::unique_ptr<UIInputBox> inputPosCashGiven;           // "Tiền khách đưa"
+    std::unique_ptr<RoundRectButton> btnPosCheckout;         // "THANH TOÁN & IN VÉ (F5)"
+    std::unique_ptr<RoundRectButton> btnPosPrintProforma;    // "In vé thử / Giữ ghế"
+    std::unique_ptr<RoundRectButton> btnPosCancel;           // "Hủy đơn (Esc)"
+    std::unique_ptr<RoundRectButton> btnPosLock;             // "Khóa máy"
+    std::unique_ptr<RoundRectButton> btnPosLogout;           // "Đổi ca / Thoát"
 
     std::vector<std::pair<std::string, double>> posSelectedFnb;
     double posSeatTotal;
@@ -236,7 +254,84 @@ private:
     double posGrandTotal;
     int posSelectedMovieIdx;
     int posSelectedShowtimeIdx;
+    int posSelectedDateIdx;
     bool posShowSeatMap;
+    std::string posMemberName;
+    std::string posMemberTier;
+    int posMemberPoints;
+    double posDiscountAmount;
+    std::string posVoucherCode;
+    bool posVoucherApplied;
+    bool posPromoDropdownOpen;
+    int posPromoScrollOffset;
+    int posPaymentMethod; // 0: Tiền mặt (CASH), 1: Quét QR (QR_PAY), 2: Thẻ POS (CARD)
+    double posCashGivenAmount;
+    bool posCustomCashEdited;
+    std::string posSelectedDateStr;
+    std::string posSelectedMovieId;
+    int posDateScrollOffset;
+    int posMovieScrollOffset;
+    int posShowtimeScrollOffset;
+    std::vector<std::string> posFilteredShowtimeIds;
+    std::vector<std::string> posAvailableDates;
+    std::vector<std::string> posAvailableMovieIds;
+
+    // Staff CRM UI Components
+    struct CrmPointHistoryRecord {
+        std::string maGiaoDich;
+        std::string maKhachHang;
+        std::string hoTen;
+        std::string aliasTag;
+        std::string soDienThoai;
+        std::string loaiGiaoDich;
+        int soDiem;
+        std::string noiDung;
+        std::string thoiGian;
+    };
+    int crmSubTab; // 0: Quản lý Khách hàng, 1: Lịch sử tích điểm
+    std::unique_ptr<UIInputBox> crmSearchInput;
+    std::unique_ptr<UIInputBox> crmDateRangeInput;
+    std::vector<CrmPointHistoryRecord> crmPointHistoryList;
+    std::unique_ptr<RoundRectButton> btnCrmSearch;
+    std::unique_ptr<RoundRectButton> btnCrmExport;
+    std::unique_ptr<RoundRectButton> btnCrmAddModal;
+    std::unique_ptr<RoundRectButton> btnCrmRefresh;
+    std::unique_ptr<RoundRectButton> btnCrmPrevPage;
+    std::unique_ptr<RoundRectButton> btnCrmNextPage;
+    std::unique_ptr<UIInputBox> inputCrmName;
+    std::unique_ptr<UIInputBox> inputCrmPhone;
+    std::unique_ptr<UIInputBox> inputCrmEmail;
+    std::unique_ptr<DropdownBox> crmTierDropdown;
+    std::unique_ptr<RoundRectButton> btnCrmSave;
+    std::unique_ptr<RoundRectButton> btnCrmCancel;
+    bool showCrmAddModal;
+    int crmCurrentPage;
+
+    // Staff Shift Report (Chốt ca & Báo cáo) UI Components
+    std::unique_ptr<UIInputBox> inputShiftActualCash;
+    std::unique_ptr<RoundRectButton> btnShiftCalculate;
+    std::unique_ptr<RoundRectButton> btnShiftCloseShift;
+    std::unique_ptr<RoundRectButton> btnShiftExportReport;
+    std::unique_ptr<RoundRectButton> btnShiftRefresh;
+    std::unique_ptr<RoundRectButton> btnShiftPrevPage;
+    std::unique_ptr<RoundRectButton> btnShiftNextPage;
+    long long shiftCalculatedSysRev;
+    long long shiftCalculatedActualCash;
+    long long shiftCalculatedDiff;
+    bool shiftIsClosed;
+    int shiftCurrentPage;
+
+    // Admin Shift Reconciliation (Báo cáo kết ca & Đối soát doanh thu) UI Components
+    std::unique_ptr<RoundRectButton> btnAdminShiftRefresh;
+    std::unique_ptr<RoundRectButton> btnAdminShiftExit;
+    std::unique_ptr<RoundRectButton> btnAdminShiftHistory;
+    std::unique_ptr<DropdownBox> adminNextCashierDropdown;
+    std::unique_ptr<UIInputBox> inputAdminManagerPin;
+    std::unique_ptr<RoundRectButton> btnAdminCashierHandover;
+    std::unique_ptr<RoundRectButton> btnAdminManagerApprove;
+    bool adminShiftApproved;
+    bool adminShowHistorySubView;
+    int adminSelectedShiftIdx;
 
     // View 3: F&B Concessions Components
     std::vector<int> fnbQuantities;
@@ -450,6 +545,7 @@ private:
 
     // Right Card Form Components
     int stFormMovieIdx;
+    std::vector<int> stFilteredMovieIndices;
     int stFormRoomIdx;
     std::unique_ptr<DropdownBox> stMovieDropdown;
     std::unique_ptr<DropdownBox> stRoomFormDropdown;
@@ -632,6 +728,10 @@ private:
     void setupPromotionsView();
     void setupStaffView();
     void setupAccountsView();
+    void setupCRMView();
+    void reloadCRMData();
+    void setupShiftReportView();
+    void reloadShiftReportData();
     void setupLogsView();
     void setupReportsView();
     void reloadReportsData();
@@ -662,11 +762,15 @@ private:
     std::vector<SeatMapBox> buildCurrentRoomSeatMapBoxes() const;
     std::vector<int> getFilteredRoomSeatIndices() const;
 
+    void refreshPosShowtimesDropdown();
+    void recalculatePosTotals();
+    int getPosRemainingSeats(const std::string& maSuatChieu) const;
     void refreshSeatsForShowtime(const std::string& maSuatChieu);
     void syncShowtimeSelectionToForm(int idx);
     void syncRoomSelectionToForm(int idx);
     void generateSeatsForRoom(const std::string& roomId, int capacity, const std::string& techType);
     void refreshShowtimesDropdowns();
+    void refreshFormMovieDropdownForDate();
     void refreshAgeRatingDropdowns();
     void syncMovieFormAgeDropdown(const std::string& ageCode);
     void addNewAgeRating(const std::string& newAge);

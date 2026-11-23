@@ -150,7 +150,7 @@ public:
 
     // Typography Fonts
     static sf::Font FontPrimary;     // Segoe UI (Main UI, Vietnamese Unicode)
-    static sf::Font FontSecondary;   // Quicksand Medium (Sub details, modern rounded)
+    static sf::Font FontSecondary;   // Segoe UI (Secondary / Sub details, standardized for Vietnamese Unicode)
     static sf::Font FontTitle;       // Segoe UI Bold (Titles, Headings with full Vietnamese Unicode)
     static sf::Font FontCinema;      // Bebas Neue (Cinema Latin title: CINESTAR CINEMA)
     static bool FontsLoaded;

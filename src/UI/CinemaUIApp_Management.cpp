@@ -576,18 +576,18 @@ void CinemaUIApp::setupReportsView() {
     inputReportStartDate = std::make_unique<UIInputBox>(
         sf::Vector2f(285.f, 84.f),
         sf::Vector2f(125.f, 30.f),
-        "06/04/2026",
+        "DD/MM/YYYY",
         11
     );
-    inputReportStartDate->setText("06/04/2026");
+    inputReportStartDate->setText("");
 
     inputReportEndDate = std::make_unique<UIInputBox>(
         sf::Vector2f(425.f, 84.f),
         sf::Vector2f(125.f, 30.f),
-        "06/04/2026",
+        "DD/MM/YYYY",
         11
     );
-    inputReportEndDate->setText("06/04/2026");
+    inputReportEndDate->setText("");
 
     // NOTE: Strictly no count numbers on dropdown options per user rule
     std::vector<std::string> shiftOpts = {
@@ -603,11 +603,12 @@ void CinemaUIApp::setupReportsView() {
         0
     );
 
-    std::vector<std::string> cashierOpts = {
-        "Tất cả thu ngân",
-        "NV-060420 (Nguyễn Tiến Dũng)",
-        "NV-060421 (Lê Tuyết Nhi)"
-    };
+    std::vector<std::string> cashierOpts = {"Tất cả thu ngân"};
+    for (const auto& u : staffUserList) {
+        if (u.vaiTro == "Staff" || u.vaiTro == "Admin") {
+            cashierOpts.push_back(u.maNguoiDung + " (" + u.hoTen + ")");
+        }
+    }
     reportCashierDropdown = std::make_unique<DropdownBox>(
         sf::Vector2f(790.f, 84.f),
         sf::Vector2f(210.f, 30.f),
@@ -691,7 +692,7 @@ void CinemaUIApp::setupReportsView() {
         if (confirmPopup) {
             confirmPopup->show(
                 "CÂN ĐỐI KÉT TIỀN THÀNH CÔNG",
-                "Hệ thống đã đối soát dữ liệu với két tiền thực tế:\n- Tiền mặt hệ thống: 135.000 đ\n- Tiền thực tế trong két: 135.000 đ\n- Chênh lệch kết ca: 0 đ\n\n✓ Dòng tiền khớp 100% với két tiền!",
+                "Hệ thống đã đối soát dữ liệu với két tiền thực tế:\n- Tiền mặt hệ thống: 135.000 đ\n- Tiền thực tế trong két: 135.000 đ\n- Chênh lệch kết ca: 0 đ\n\n● Dòng tiền khớp 100% với két tiền!",
                 ButtonStyle::Success,
                 "Xác nhận",
                 "Đóng"
@@ -874,6 +875,17 @@ void CinemaUIApp::reloadReportsData() {
 
     sqlite3_close(db);
 
+    std::vector<std::string> cashierOpts = {"Tất cả thu ngân"};
+    for (const auto& u : staffUserList) {
+        if (u.vaiTro == "Staff" || u.vaiTro == "Admin") {
+            cashierOpts.push_back(u.maNguoiDung + " (" + u.hoTen + ")");
+        }
+    }
+    if (reportCashierDropdown) {
+        int curSel = reportCashierDropdown->getSelectedIndex();
+        reportCashierDropdown->setOptions(cashierOpts, (curSel >= 0 && curSel < static_cast<int>(cashierOpts.size())) ? curSel : 0);
+    }
+
     applyReportFilters();
 }
 
@@ -882,6 +894,13 @@ void CinemaUIApp::applyReportFilters() {
 
     std::string startDate = inputReportStartDate ? inputReportStartDate->getText() : "";
     int paymentIdx = reportPaymentDropdown ? reportPaymentDropdown->getSelectedIndex() : 0;
+    int cashierIdx = reportCashierDropdown ? reportCashierDropdown->getSelectedIndex() : 0;
+    std::string selCashierId = "";
+    if (cashierIdx > 0 && reportCashierDropdown) {
+        std::string cVal = reportCashierDropdown->getSelectedValue();
+        size_t sp = cVal.find(' ');
+        selCashierId = (sp != std::string::npos) ? cVal.substr(0, sp) : cVal;
+    }
 
     std::string searchLow = reportSearchQuery;
     std::transform(searchLow.begin(), searchLow.end(), searchLow.begin(), ::tolower);
@@ -890,7 +909,9 @@ void CinemaUIApp::applyReportFilters() {
         if (reportFilterTab == 1 && rec.loaiGD != 0) continue;
         if (reportFilterTab == 2 && rec.loaiGD != 1) continue;
 
-        if (!startDate.empty() && rec.ngay.find(startDate) == std::string::npos) continue;
+        if (!startDate.empty() && startDate != "DD/MM/YYYY" && rec.ngay.find(startDate) == std::string::npos) continue;
+
+        if (!selCashierId.empty() && rec.maNhanVien != selCashierId) continue;
 
         if (paymentIdx == 1 && rec.hinhThuc != "TienMat") continue;
         if (paymentIdx == 2 && rec.hinhThuc != "QueQR") continue;
@@ -1017,7 +1038,7 @@ void CinemaUIApp::printShiftReceipt() {
     file << "========================================================\n";
     file << "Ngày làm việc: " << (inputReportStartDate ? inputReportStartDate->getText() : "06/04/2026") << "\n";
     file << "Ca làm việc  : " << (reportShiftDropdown ? reportShiftDropdown->getSelectedValue() : "Tất cả các ca") << "\n";
-    file << "Thu ngân     : Lê Minh Tuấn (Trưởng Ca)\n";
+    file << "Người lập    : " << (currentUserName.empty() ? "Admin" : currentUserName) << " (Quản trị viên)\n";
     file << "Thời gian in : 06/04/2026 23:59:59\n";
     file << "--------------------------------------------------------\n";
     file << "TỔNG THU CA TRỰC        : " << formatVndMoney(reportTotalRevenue) << "\n";
@@ -1166,9 +1187,9 @@ void CinemaUIApp::renderReportsView() {
     avCircle.setFillColor(sf::Color(2, 132, 199));
     avCircle.setPosition(userBadgeX, 13.f);
     window.draw(avCircle);
-    drawCenteredTxt("MT", userBadgeX + 15.f, 28.f, 11, sf::Color::White, true);
-    drawTxt("Lê Minh Tuấn", userBadgeX + 38.f, 13.f, 11, sf::Color::White, true);
-    drawTxt("Trưởng Ca • Rạp Quốc Thanh", userBadgeX + 38.f, 29.f, 9, sf::Color(148, 163, 184));
+    drawCenteredTxt("AD", userBadgeX + 15.f, 28.f, 11, sf::Color::White, true);
+    drawTxt(currentUserName.empty() ? "Admin" : currentUserName, userBadgeX + 38.f, 13.f, 11, sf::Color::White, true);
+    drawTxt("Quản trị viên hệ thống", userBadgeX + 38.f, 29.f, 9, sf::Color(148, 163, 184));
 
     // ==========================================
     // 3. FILTER CARD ROW (y = 64.f, h = 54.f)
@@ -1233,7 +1254,7 @@ void CinemaUIApp::renderReportsView() {
         11.f,
         sf::Color(220, 252, 231)
     );
-    drawCenteredTxt("✓ Kết toán khớp 100%", leftColX + c1W - 80.f, kpiY + 23.f, 10, sf::Color(21, 128, 61), true);
+    drawCenteredTxt("● Kết toán khớp 100%", leftColX + c1W - 80.f, kpiY + 23.f, 10, sf::Color(21, 128, 61), true);
 
     drawTxt("THỰC THU THỰC TẾ", leftColX + 16.f, kpiY + 44.f, 10, sf::Color(100, 116, 139), true);
     RoundedRectRenderer::render(
@@ -1276,7 +1297,7 @@ void CinemaUIApp::renderReportsView() {
         1.f,
         sf::Color(203, 213, 225)
     );
-    drawCenteredTxt("✓ Chuẩn quỹ tiền mặt", leftColX + c1W - 80.f, kpiY + 132.f, 9.5, sf::Color(71, 85, 105), true);
+    drawCenteredTxt("● Chuẩn quỹ tiền mặt", leftColX + c1W - 80.f, kpiY + 132.f, 9.5, sf::Color(71, 85, 105), true);
 
     // Card 2: TIỀN MẶT (CASH)
     float c2X = leftColX + c1W + 14.f;
@@ -1546,7 +1567,7 @@ void CinemaUIApp::renderReportsView() {
 
     // Table Footer / Pagination
     float footY = lowerY + lowerH - 45.f;
-    std::string countStatus = "✓ Hiển thị " + std::to_string(endIdx - startIdx) + " trên " + std::to_string(reportFilteredTxList.size()) + " giao dịch đã ghi nhận";
+    std::string countStatus = "Hiển thị " + std::to_string(endIdx - startIdx) + " trên " + std::to_string(reportFilteredTxList.size()) + " giao dịch đã ghi nhận";
     drawTxt(countStatus, leftColX + 26.f, footY + 6.f, 10.5, sf::Color(100, 116, 139));
 
     if (btnReportPrevPage) btnReportPrevPage->draw(window);
@@ -1732,7 +1753,18 @@ void CinemaUIApp::renderReportsView() {
     cCheck.setFillColor(sf::Color(22, 163, 74));
     cCheck.setPosition(rightPanelX + 37.f, boxY + 17.f);
     window.draw(cCheck);
-    drawCenteredTxt("✓", rightPanelX + 45.f, boxY + 25.f, 10, sf::Color::White, true);
+    {
+        sf::RectangleShape ck1(sf::Vector2f(3.5f, 1.5f));
+        ck1.setRotation(45.f);
+        ck1.setPosition(rightPanelX + 42.f, boxY + 24.5f);
+        ck1.setFillColor(sf::Color::White);
+        sf::RectangleShape ck2(sf::Vector2f(6.5f, 1.5f));
+        ck2.setRotation(-50.f);
+        ck2.setPosition(rightPanelX + 44.5f, boxY + 27.f);
+        ck2.setFillColor(sf::Color::White);
+        window.draw(ck1);
+        window.draw(ck2);
+    }
 
     drawTxt("Chênh lệch kết ca: 0 đ", rightPanelX + 60.f, boxY + 10.f, 11.5, sf::Color(15, 23, 42), true);
     drawTxt("Dòng tiền khớp 100% với kết tiền", rightPanelX + 60.f, boxY + 27.f, 10, sf::Color(21, 128, 61));
@@ -1804,14 +1836,14 @@ void CinemaUIApp::renderLogsView() {
     uAv.setPosition(uPillX + 4.f, topNavY + 1.f);
     window.draw(uAv);
 
-    sf::Text uIni(toSfString("LT"), Theme::FontPrimary, 9);
+    sf::Text uIni(toSfString("AD"), Theme::FontPrimary, 9);
     uIni.setStyle(sf::Text::Bold);
     uIni.setFillColor(sf::Color::White);
-    uIni.setPosition(uPillX + 6.5f, topNavY + 2.f);
+    uIni.setPosition(uPillX + 5.5f, topNavY + 2.f);
     window.draw(uIni);
 
-    std::string dispUser = currentUserName.empty() ? "Lê Minh Tuấn" : currentUserName;
-    std::string dispRole = currentUserRole.empty() ? "Quản lý / Trưởng Ca" : currentUserRole;
+    std::string dispUser = (currentUserName.empty() || currentUserName == "Chưa đăng nhập") ? "Admin" : currentUserName;
+    std::string dispRole = currentUserRole.empty() ? "Quản trị viên" : currentUserRole;
     sf::Text uName(toSfString(dispUser + " (" + dispRole + ")"), Theme::FontPrimary, 10);
     uName.setStyle(sf::Text::Bold);
     uName.setFillColor(sf::Color(30, 41, 59));
@@ -2310,269 +2342,7 @@ void CinemaUIApp::renderLogsView() {
     window.draw(footHotline);
 }
 
-void CinemaUIApp::renderCRMView() {
-    float contentX = sidebarWidth + 30.f;
-    float contentY = topbarHeight + 25.f;
-
-    sf::Text title;
-    title.setFont(Theme::FontTitle);
-    title.setCharacterSize(24);
-    title.setFillColor(Theme::TextPrimary);
-    title.setString(toSfString("QUẢN LÝ KHÁCH HÀNG & HỘI VIÊN (CRM - SQLite cinema.db)"));
-    title.setPosition(contentX, contentY);
-    window.draw(title);
-
-    if (btnAddCustomer) btnAddCustomer->draw(window);
-
-    sf::Text sub;
-    sub.setFont(Theme::FontSecondary);
-    sub.setCharacterSize(13);
-    sub.setFillColor(Theme::TextSecondary);
-    sub.setString(toSfString("Dữ liệu hội viên đọc trực tiếp từ bảng users & customers trong DATA/cinema.db"));
-    sub.setPosition(contentX, contentY + 34.f);
-    window.draw(sub);
-
-    int countStandard = 0, countVip = 0, countDiamond = 0;
-    for (const auto& kh : customerList) {
-        std::string tier = kh.getHangThanhVien();
-        if (tier.find("Kim") != std::string::npos || tier.find("Diamond") != std::string::npos || tier.find("Vang") != std::string::npos) {
-            countDiamond++;
-        } else if (tier.find("VIP") != std::string::npos || tier.find("Bac") != std::string::npos) {
-            countVip++;
-        } else {
-            countStandard++;
-        }
-    }
-
-    // 3 Tier Cards
-    std::vector<std::tuple<std::string, std::string, std::string, sf::Color>> tiers = {
-        {"HỘI VIÊN TIÊU CHUẨN / ĐỒNG", std::to_string(countStandard) + " Hội Viên", "Tích lũy điểm thưởng trực tiếp trên cinema.db", sf::Color(6, 182, 212)},
-        {"HỘI VIÊN BẠC / VIP", std::to_string(countVip) + " Hội Viên", "Tích lũy điểm & ưu đãi giảm giá F&B", sf::Color(245, 158, 11)},
-        {"HỘI VIÊN VÀNG / KIM CƯƠNG", std::to_string(countDiamond) + " Hội Viên", "Tổng số khách hàng hệ thống: " + std::to_string(customerList.size()), sf::Color(168, 85, 247)}
-    };
-
-    float cardW = 440.f;
-    float cardH = 130.f;
-    float gap = 20.f;
-    float startY = contentY + 70.f;
-
-    for (size_t i = 0; i < tiers.size(); ++i) {
-        float cx = contentX + i * (cardW + gap);
-        RoundedRectRenderer::render(window, sf::Vector2f(cx, startY), sf::Vector2f(cardW, cardH), Theme::RadiusMedium, Theme::CardBg, 1.f, Theme::CardBorder);
-        RoundedRectRenderer::render(window, sf::Vector2f(cx, startY), sf::Vector2f(cardW, 4.f), 2.f, std::get<3>(tiers[i]));
-
-        sf::Text tName;
-        tName.setFont(Theme::FontTitle);
-        tName.setCharacterSize(16);
-        tName.setFillColor(std::get<3>(tiers[i]));
-        tName.setString(toSfString(std::get<0>(tiers[i])));
-        tName.setPosition(cx + 20.f, startY + 16.f);
-        window.draw(tName);
-
-        sf::Text tCount;
-        tCount.setFont(Theme::FontTitle);
-        tCount.setCharacterSize(26);
-        tCount.setFillColor(Theme::TextPrimary);
-        tCount.setString(toSfString(std::get<1>(tiers[i])));
-        tCount.setPosition(cx + 20.f, startY + 44.f);
-        window.draw(tCount);
-
-        sf::Text tDesc;
-        tDesc.setFont(Theme::FontSecondary);
-        tDesc.setCharacterSize(12);
-        tDesc.setFillColor(Theme::TextSecondary);
-        tDesc.setString(toSfString(std::get<2>(tiers[i])));
-        tDesc.setPosition(cx + 20.f, startY + 90.f);
-        window.draw(tDesc);
-    }
-
-    // Recent Customers Table Card
-    float tblY = startY + cardH + 28.f;
-    float tblW = 1360.f;
-    float tblH = 430.f;
-    RoundedRectRenderer::render(window, sf::Vector2f(contentX, tblY), sf::Vector2f(tblW, tblH), Theme::RadiusMedium, Theme::CardBg, 1.f, Theme::CardBorder);
-
-    sf::Text tblTitle;
-    tblTitle.setFont(Theme::FontTitle);
-    tblTitle.setCharacterSize(16);
-    tblTitle.setFillColor(Theme::TextPrimary);
-    tblTitle.setString(toSfString("DANH SÁCH KHÁCH HÀNG TRONG CƠ SỞ DỮ LIỆU SQLITE"));
-    tblTitle.setPosition(contentX + 24.f, tblY + 18.f);
-    window.draw(tblTitle);
-
-    // Table Header
-    sf::RectangleShape thBg(sf::Vector2f(tblW - 48.f, 36.f));
-    thBg.setPosition(contentX + 24.f, tblY + 54.f);
-    thBg.setFillColor(sf::Color(15, 23, 42));
-    window.draw(thBg);
-
-    std::vector<std::string> cols = {"MÃ KH / SĐT", "TÊN KHÁCH HÀNG", "HẠNG THẺ", "ĐIỂM TÍCH LŨY", "TỔNG CHI TIÊU", "EMAIL"};
-    std::vector<float> colX = {contentX + 40.f, contentX + 240.f, contentX + 520.f, contentX + 720.f, contentX + 920.f, contentX + 1120.f};
-
-    for (size_t c = 0; c < cols.size(); ++c) {
-        sf::Text ch;
-        ch.setFont(Theme::FontPrimary);
-        ch.setCharacterSize(11);
-        ch.setStyle(sf::Text::Bold);
-        ch.setFillColor(Theme::TextSecondary);
-        ch.setString(toSfString(cols[c]));
-        ch.setPosition(colX[c], tblY + 64.f);
-        window.draw(ch);
-    }
-
-    for (size_t r = 0; r < customerList.size() && r < 7; ++r) {
-        float ry = tblY + 102.f + r * 44.f;
-        sf::RectangleShape rLine(sf::Vector2f(tblW - 48.f, 1.f));
-        rLine.setPosition(contentX + 24.f, ry + 36.f);
-        rLine.setFillColor(sf::Color(51, 65, 85, 80));
-        window.draw(rLine);
-
-        const auto& kh = customerList[r];
-        std::vector<std::string> vals = {
-            kh.getMaKH() + " - " + kh.getSoDienThoai(),
-            kh.getHoTen(),
-            kh.getHangThanhVien(),
-            std::to_string(kh.getDiemTichLuy()) + " Điểm",
-            std::to_string(kh.getTongChiTieu()) + " đ",
-            kh.getEmail()
-        };
-        for (size_t c = 0; c < vals.size(); ++c) {
-            sf::Text cv;
-            cv.setFont(Theme::FontPrimary);
-            cv.setCharacterSize(12);
-            cv.setFillColor((c == 2) ? Theme::Cyan : ((c == 4) ? Theme::Success : Theme::TextPrimary));
-            cv.setString(toSfString(vals[c]));
-            cv.setPosition(colX[c], ry + 8.f);
-            window.draw(cv);
-        }
-    }
-}
-
-
-void CinemaUIApp::renderShiftReportView() {
-    float contentX = sidebarWidth + 30.f;
-    float contentY = topbarHeight + 25.f;
-
-    sf::Text title;
-    title.setFont(Theme::FontTitle);
-    title.setCharacterSize(24);
-    title.setFillColor(Theme::TextPrimary);
-    title.setString(toSfString("BÁO CÁO DOANH THU & KẾT TOÁN CA (SQLite cinema.db)"));
-    title.setPosition(contentX, contentY);
-    window.draw(title);
-
-    if (btnApproveShift) btnApproveShift->draw(window);
-    if (btnCloseShift) btnCloseShift->draw(window);
-
-    sf::Text sub;
-    sub.setFont(Theme::FontSecondary);
-    sub.setCharacterSize(13);
-    sub.setFillColor(Theme::TextSecondary);
-    sub.setString(toSfString("Dữ liệu ca trực đọc trực tiếp từ bảng shift_managements trong DATA/cinema.db"));
-    sub.setPosition(contentX, contentY + 34.f);
-    window.draw(sub);
-
-    long long totalSysRev = 0, totalActualCash = 0, totalDiff = 0;
-    for (const auto& s : shiftList) {
-        totalSysRev += s.getDoanhThuHeThong();
-        totalActualCash += s.getTienThucTe();
-        totalDiff += s.getChenhLech();
-    }
-
-    // 3 Summary Cards
-    std::vector<std::tuple<std::string, std::string, std::string, sf::Color>> shifts = {
-        {"TỔNG DOANH THU HỆ THỐNG", std::to_string(totalSysRev) + " VNĐ", "Tổng số ca ghi nhận: " + std::to_string(shiftList.size()) + " ca", Theme::Cyan},
-        {"TỔNG TIỀN MẶT THỰC TẾ", std::to_string(totalActualCash) + " VNĐ", "Tiền mặt kiểm kê trong ngăn kéo", Theme::Warning},
-        {"CHÊNH LỆCH KẾT TOÁN", std::to_string(totalDiff) + " VNĐ", (totalDiff == 0 ? "Khớp 100% két tiền mặt" : "Có chênh lệch cần đối soát"), Theme::Success}
-    };
-
-    float cardW = 440.f;
-    float cardH = 130.f;
-    float gap = 20.f;
-    float startY = contentY + 70.f;
-
-    for (size_t i = 0; i < shifts.size(); ++i) {
-        float cx = contentX + i * (cardW + gap);
-        RoundedRectRenderer::render(window, sf::Vector2f(cx, startY), sf::Vector2f(cardW, cardH), Theme::RadiusMedium, Theme::CardBg, 1.f, Theme::CardBorder);
-        RoundedRectRenderer::render(window, sf::Vector2f(cx, startY), sf::Vector2f(cardW, 4.f), 2.f, std::get<3>(shifts[i]));
-
-        sf::Text tName;
-        tName.setFont(Theme::FontTitle);
-        tName.setCharacterSize(15);
-        tName.setFillColor(std::get<3>(shifts[i]));
-        tName.setString(toSfString(std::get<0>(shifts[i])));
-        tName.setPosition(cx + 20.f, startY + 16.f);
-        window.draw(tName);
-
-        sf::Text tCount;
-        tCount.setFont(Theme::FontTitle);
-        tCount.setCharacterSize(26);
-        tCount.setFillColor(Theme::TextPrimary);
-        tCount.setString(toSfString(std::get<1>(shifts[i])));
-        tCount.setPosition(cx + 20.f, startY + 44.f);
-        window.draw(tCount);
-
-        sf::Text tDesc;
-        tDesc.setFont(Theme::FontSecondary);
-        tDesc.setCharacterSize(12);
-        tDesc.setFillColor(Theme::TextSecondary);
-        tDesc.setString(toSfString(std::get<2>(shifts[i])));
-        tDesc.setPosition(cx + 20.f, startY + 90.f);
-        window.draw(tDesc);
-    }
-
-    // Shift table from SQLite
-    float tblY = startY + cardH + 28.f;
-    float tblW = 1360.f;
-    float tblH = 420.f;
-    RoundedRectRenderer::render(window, sf::Vector2f(contentX, tblY), sf::Vector2f(tblW, tblH), Theme::RadiusMedium, Theme::CardBg, 1.f, Theme::CardBorder);
-
-    sf::RectangleShape thBg(sf::Vector2f(tblW - 48.f, 36.f));
-    thBg.setPosition(contentX + 24.f, tblY + 20.f);
-    thBg.setFillColor(sf::Color(15, 23, 42));
-    window.draw(thBg);
-
-    std::vector<std::string> cols = {"MÃ CA", "NHÂN VIÊN", "NGÀY LÀM", "KHUNG GIỜ", "DOANH THU HT", "TIỀN THỰC TẾ", "TRẠNG THÁI"};
-    std::vector<float> colX = {contentX + 40.f, contentX + 160.f, contentX + 420.f, contentX + 580.f, contentX + 760.f, contentX + 980.f, contentX + 1180.f};
-    for (size_t c = 0; c < cols.size(); ++c) {
-        sf::Text ch;
-        ch.setFont(Theme::FontPrimary);
-        ch.setCharacterSize(11);
-        ch.setStyle(sf::Text::Bold);
-        ch.setFillColor(Theme::TextSecondary);
-        ch.setString(toSfString(cols[c]));
-        ch.setPosition(colX[c], tblY + 30.f);
-        window.draw(ch);
-    }
-
-    for (size_t r = 0; r < shiftList.size() && r < 7; ++r) {
-        float ry = tblY + 68.f + r * 44.f;
-        sf::RectangleShape rLine(sf::Vector2f(tblW - 48.f, 1.f));
-        rLine.setPosition(contentX + 24.f, ry + 36.f);
-        rLine.setFillColor(sf::Color(51, 65, 85, 80));
-        window.draw(rLine);
-
-        const auto& s = shiftList[r];
-        std::vector<std::string> vals = {
-            s.getMaCa(),
-            s.getMaNhanVien() + " - " + s.getTenNhanVien(),
-            s.getNgayLam(),
-            s.getGioBatDau() + " - " + s.getGioKetThuc(),
-            std::to_string(s.getDoanhThuHeThong()) + " đ",
-            std::to_string(s.getTienThucTe()) + " đ",
-            s.getTrangThai()
-        };
-        for (size_t c = 0; c < vals.size(); ++c) {
-            sf::Text cv;
-            cv.setFont(Theme::FontPrimary);
-            cv.setCharacterSize(12);
-            cv.setFillColor((c == 0) ? Theme::Cyan : ((c == 6) ? Theme::Success : Theme::TextPrimary));
-            cv.setString(toSfString(vals[c]));
-            cv.setPosition(colX[c], ry + 8.f);
-            window.draw(cv);
-        }
-    }
-}
+// Note: CRM and Shift Report views are now modularized in CinemaUIApp_Staff_CRM.cpp and CinemaUIApp_Staff_ShiftReport.cpp.
 
 namespace {
 std::string formatVndDots(long long val) {
@@ -4169,16 +3939,36 @@ void CinemaUIApp::setupStaffView() {
             if (confirmPopup) confirmPopup->show("THIẾU THÔNG TIN", "Vui lòng nhập Họ tên nhân viên!", ButtonStyle::Danger, "Đóng", "");
             return;
         }
+        std::string phone = inputStaffPhone ? inputStaffPhone->getText() : "";
+        bool validPhone = (phone.length() == 10);
+        for (char c : phone) {
+            if (!std::isdigit(static_cast<unsigned char>(c))) { validPhone = false; break; }
+        }
+        if (!validPhone) {
+            if (confirmPopup) confirmPopup->show("SỐ ĐIỆN THOẠI KHÔNG HỢP LỆ", "Số điện thoại phải gồm đúng 10 chữ số (VD: 0901234567)!", ButtonStyle::Danger, "Đóng", "");
+            return;
+        }
+
+        std::string cccd = inputStaffCCCD ? inputStaffCCCD->getText() : "";
+        bool validCccd = (cccd.length() == 12);
+        for (char c : cccd) {
+            if (!std::isdigit(static_cast<unsigned char>(c))) { validCccd = false; break; }
+        }
+        if (!validCccd) {
+            if (confirmPopup) confirmPopup->show("CCCD KHÔNG HỢP LỆ", "Số Căn cước công dân (CCCD) phải gồm đúng 12 chữ số!", ButtonStyle::Danger, "Đóng", "");
+            return;
+        }
+
         std::string id = inputStaffId ? inputStaffId->getText() : generateNextStaffId();
         if (id.empty()) id = generateNextStaffId();
 
         StaffAccountInfo newSt;
         newSt.maNguoiDung = id;
         newSt.hoTen = n;
-        newSt.soDienThoai = inputStaffPhone ? inputStaffPhone->getText() : "";
+        newSt.soDienThoai = phone;
         newSt.ngaySinh = inputStaffBirthDate ? inputStaffBirthDate->getText() : "";
         newSt.gioiTinh = staffGenderDropdown ? staffGenderDropdown->getSelectedValue() : "Nam";
-        newSt.cccd = inputStaffCCCD ? inputStaffCCCD->getText() : "";
+        newSt.cccd = cccd;
         newSt.email = inputStaffEmail ? inputStaffEmail->getText() : "";
         newSt.taiKhoan = removeVietnameseDiacritics(id);
         std::transform(newSt.taiKhoan.begin(), newSt.taiKhoan.end(), newSt.taiKhoan.begin(), ::tolower);
@@ -4205,11 +3995,36 @@ void CinemaUIApp::setupStaffView() {
             return;
         }
         auto& st = staffUserList[selectedStaffRowIdx];
+        if (st.vaiTro == "Admin" && staffFormResigned) {
+            if (confirmPopup) confirmPopup->show("KHÔNG THỂ THAO TÁC", "Không thể cho Admin nghỉ việc tại đây để đảm bảo hệ thống luôn có ít nhất một Quản trị viên hoạt động. Vui lòng quản lý tài khoản tại mục Quản lý tài khoản!", ButtonStyle::Danger, "Đóng", "");
+            return;
+        }
+
+        std::string phone = inputStaffPhone ? inputStaffPhone->getText() : "";
+        bool validPhone = (phone.length() == 10);
+        for (char c : phone) {
+            if (!std::isdigit(static_cast<unsigned char>(c))) { validPhone = false; break; }
+        }
+        if (!validPhone) {
+            if (confirmPopup) confirmPopup->show("SỐ ĐIỆN THOẠI KHÔNG HỢP LỆ", "Số điện thoại phải gồm đúng 10 chữ số (VD: 0901234567)!", ButtonStyle::Danger, "Đóng", "");
+            return;
+        }
+
+        std::string cccd = inputStaffCCCD ? inputStaffCCCD->getText() : "";
+        bool validCccd = (cccd.length() == 12);
+        for (char c : cccd) {
+            if (!std::isdigit(static_cast<unsigned char>(c))) { validCccd = false; break; }
+        }
+        if (!validCccd) {
+            if (confirmPopup) confirmPopup->show("CCCD KHÔNG HỢP LỆ", "Số Căn cước công dân (CCCD) phải gồm đúng 12 chữ số!", ButtonStyle::Danger, "Đóng", "");
+            return;
+        }
+
         if (inputStaffName) st.hoTen = inputStaffName->getText();
-        if (inputStaffPhone) st.soDienThoai = inputStaffPhone->getText();
+        st.soDienThoai = phone;
         if (inputStaffBirthDate) st.ngaySinh = inputStaffBirthDate->getText();
         if (staffGenderDropdown) st.gioiTinh = staffGenderDropdown->getSelectedValue();
-        if (inputStaffCCCD) st.cccd = inputStaffCCCD->getText();
+        st.cccd = cccd;
         if (inputStaffEmail) st.email = inputStaffEmail->getText();
         st.trangThaiLamViec = staffFormResigned ? "DaNghiViec" : "DangLam";
         if (staffFormResigned) st.trangThaiTaiKhoan = "BiKhoa";
@@ -4357,29 +4172,16 @@ void CinemaUIApp::renderStaffView() {
     window.draw(qLens);
     drawTxt("Tìm tác vụ nhanh... (Ctrl+K)", 1172.f, 16.f, 11, sf::Color(148, 163, 184), false);
 
-    // Bell Notification Icon
-    RoundedRectRenderer::render(window, sf::Vector2f(1400.f, 9.f), sf::Vector2f(30.f, 30.f), 15.f, sf::Color(248, 250, 252), 1.f, sf::Color(226, 232, 240));
-    drawCenteredTxt("🔔", 1415.f, 24.f, 11, sf::Color(71, 85, 105), false);
-    sf::CircleShape bellDot(3.5f);
-    bellDot.setFillColor(sf::Color(239, 68, 68));
-    bellDot.setPosition(1420.f, 11.f);
-    window.draw(bellDot);
-
-    sf::RectangleShape vSep2(sf::Vector2f(1.f, 24.f));
-    vSep2.setPosition(1446.f, 12.f);
-    vSep2.setFillColor(sf::Color(226, 232, 240));
-    window.draw(vSep2);
-
-    // User profile badge
+    // User profile badge (Admin)
     sf::CircleShape avatarCir(15.f);
     avatarCir.setFillColor(sf::Color(224, 242, 254));
     avatarCir.setOutlineThickness(1.5f);
     avatarCir.setOutlineColor(sf::Color(2, 132, 199));
     avatarCir.setPosition(1462.f, 9.f);
     window.draw(avatarCir);
-    drawCenteredTxt("LT", 1477.f, 24.f, 11, sf::Color(3, 105, 161), true);
-    drawTxt("Lê Minh Tuấn", 1500.f, 8.f, 12, sf::Color(15, 23, 42), true);
-    drawTxt("Quản lý Trưởng Ca", 1500.f, 24.f, 11, sf::Color(100, 116, 139), false);
+    drawCenteredTxt("AD", 1477.f, 24.f, 11, sf::Color(3, 105, 161), true);
+    drawTxt(currentUserName.empty() ? "Admin" : currentUserName, 1500.f, 8.f, 12, sf::Color(15, 23, 42), true);
+    drawTxt("Quản trị viên hệ thống", 1500.f, 24.f, 11, sf::Color(100, 116, 139), false);
 
     // =========================================================================
     // 2. PAGE HEADER (y = 60..112)
@@ -4482,7 +4284,18 @@ void CinemaUIApp::renderStaffView() {
         } else if (i == 1) {
             sf::CircleShape h1(4.5f); h1.setFillColor(kpis[i].iconFg); h1.setPosition(ibX + 12.f, ibY + 10.f); window.draw(h1);
             RoundedRectRenderer::render(window, sf::Vector2f(ibX + 9.f, ibY + 21.f), sf::Vector2f(15.f, 8.f), 4.f, kpis[i].iconFg);
-            drawCenteredTxt("✓", ibX + 29.f, ibY + 19.f, 12, kpis[i].iconFg, true);
+            {
+                sf::RectangleShape ck1(sf::Vector2f(3.5f, 1.5f));
+                ck1.setRotation(45.f);
+                ck1.setPosition(ibX + 26.5f, ibY + 18.5f);
+                ck1.setFillColor(kpis[i].iconFg);
+                sf::RectangleShape ck2(sf::Vector2f(6.5f, 1.5f));
+                ck2.setRotation(-50.f);
+                ck2.setPosition(ibX + 29.f, ibY + 21.f);
+                ck2.setFillColor(kpis[i].iconFg);
+                window.draw(ck1);
+                window.draw(ck2);
+            }
         } else if (i == 2) {
             sf::CircleShape clk(10.f); clk.setFillColor(kpis[i].iconFg); clk.setPosition(ibX + 10.f, ibY + 10.f); window.draw(clk);
             sf::RectangleShape hand1(sf::Vector2f(2.f, 6.f)); hand1.setFillColor(sf::Color::White); hand1.setPosition(ibX + 19.f, ibY + 14.f); window.draw(hand1);
@@ -4744,13 +4557,6 @@ void CinemaUIApp::renderStaffView() {
     if (inputStaffPhone) inputStaffPhone->draw(window);
     if (inputStaffBirthDate) {
         inputStaffBirthDate->draw(window);
-        float calX = inputStaffBirthDate->getPosition().x + inputStaffBirthDate->getSize().x - 26.f;
-        float calY = inputStaffBirthDate->getPosition().y + 10.f;
-        RoundedRectRenderer::render(window, sf::Vector2f(calX, calY), sf::Vector2f(14.f, 14.f), 2.f, sf::Color::Transparent, 1.3f, sf::Color(148, 163, 184));
-        sf::RectangleShape calBar(sf::Vector2f(14.f, 3.f));
-        calBar.setPosition(calX, calY);
-        calBar.setFillColor(sf::Color(148, 163, 184));
-        window.draw(calBar);
     }
     if (staffGenderDropdown) staffGenderDropdown->draw(window);
     if (inputStaffCCCD) inputStaffCCCD->draw(window);
@@ -4767,7 +4573,16 @@ void CinemaUIApp::renderStaffView() {
         1.5f, staffFormResigned ? sf::Color(2, 132, 199) : sf::Color(203, 213, 225)
     );
     if (staffFormResigned) {
-        drawCenteredTxt("✓", chkBoxX + 9.f, chkY + 10.f, 12, sf::Color::White, true);
+        sf::RectangleShape ck1(sf::Vector2f(4.5f, 2.f));
+        ck1.setRotation(45.f);
+        ck1.setPosition(chkBoxX + 4.5f, chkY + 8.5f);
+        ck1.setFillColor(sf::Color::White);
+        sf::RectangleShape ck2(sf::Vector2f(8.5f, 2.f));
+        ck2.setRotation(-50.f);
+        ck2.setPosition(chkBoxX + 7.5f, chkY + 11.5f);
+        ck2.setFillColor(sf::Color::White);
+        window.draw(ck1);
+        window.draw(ck2);
     }
     drawTxt("Đã nghỉ làm", chkBoxX + 28.f, chkY + 2.f, 13, sf::Color(30, 41, 59), true);
     drawTxt("*Tick nếu nhân viên đã nghỉ việc để khóa tài khoản", chkBoxX, chkY + 26.f, 11, sf::Color(148, 163, 184), false, true);
@@ -4989,10 +4804,10 @@ void CinemaUIApp::setupAccountsView() {
     inputAccountEmployeeId->setColors(sf::Color::White, sf::Color(203, 213, 225), sf::Color(2, 132, 199), sf::Color(15, 23, 42), sf::Color(148, 163, 184));
 
     inputAccountFullName = std::unique_ptr<UIInputBox>(new UIInputBox(
-        sf::Vector2f(formInputX, 386.f), sf::Vector2f(formInputW, formInputH), "Nguyễn Văn An"
+        sf::Vector2f(formInputX, 386.f), sf::Vector2f(formInputW, formInputH), "Nhập họ và tên..."
     ));
-    inputAccountFullName->setColors(sf::Color(241, 245, 249), sf::Color(203, 213, 225), sf::Color(2, 132, 199), sf::Color(15, 23, 42), sf::Color(148, 163, 184));
-    inputAccountFullName->setEnabled(false);
+    inputAccountFullName->setColors(sf::Color::White, sf::Color(203, 213, 225), sf::Color(2, 132, 199), sf::Color(15, 23, 42), sf::Color(148, 163, 184));
+    inputAccountFullName->setEnabled(true);
 
     inputAccountUsername = std::unique_ptr<UIInputBox>(new UIInputBox(
         sf::Vector2f(formInputX, 458.f), sf::Vector2f(formInputW, formInputH), "admin"
@@ -5012,51 +4827,71 @@ void CinemaUIApp::setupAccountsView() {
 
     // Action Buttons
     btnAccountSave = std::unique_ptr<RoundRectButton>(new RoundRectButton(
-        "✓  Xác nhận", sf::Vector2f(formInputX, 718.f), sf::Vector2f(212.f, 40.f),
+        "Xác nhận", sf::Vector2f(formInputX, 718.f), sf::Vector2f(212.f, 40.f),
         ButtonStyle::Primary, 8.f
     ));
     btnAccountSave->setCustomColors(sf::Color(2, 132, 199), sf::Color(3, 105, 161), sf::Color(7, 89, 133), sf::Color(2, 132, 199));
     btnAccountSave->setTextColor(sf::Color::White);
     btnAccountSave->setFontSize(13);
     btnAccountSave->setOnClick([this]() {
-        if (selectedAccountRowIdx < 0 || selectedAccountRowIdx >= static_cast<int>(staffUserList.size())) {
-            std::string enteredId = inputAccountEmployeeId ? inputAccountEmployeeId->getText() : "";
-            for (size_t i = 0; i < staffUserList.size(); ++i) {
-                if (staffUserList[i].maNguoiDung == enteredId) {
-                    selectedAccountRowIdx = static_cast<int>(i);
-                    break;
-                }
-            }
-            if (selectedAccountRowIdx < 0) {
-                if (confirmPopup) confirmPopup->show("CHƯA CHỌN TÀI KHOẢN", "Vui lòng chọn tài khoản từ danh sách hoặc nhập Mã NV hợp lệ!", ButtonStyle::Danger, "Đóng", "");
-                return;
-            }
-        }
-
-        auto& st = staffUserList[selectedAccountRowIdx];
+        std::string enteredId = inputAccountEmployeeId ? inputAccountEmployeeId->getText() : "";
         std::string u = inputAccountUsername ? inputAccountUsername->getText() : "";
         std::string p = inputAccountPassword ? inputAccountPassword->getText() : "";
+        std::string fullName = inputAccountFullName ? inputAccountFullName->getText() : "";
+
         if (u.empty()) {
             if (confirmPopup) confirmPopup->show("THIẾU THÔNG TIN", "Vui lòng nhập Username (Tên đăng nhập)!", ButtonStyle::Danger, "Đóng", "");
             return;
         }
 
-        for (size_t i = 0; i < staffUserList.size(); ++i) {
-            if (static_cast<int>(i) != selectedAccountRowIdx && staffUserList[i].taiKhoan == u) {
-                if (confirmPopup) confirmPopup->show("TRÙNG TÊN ĐĂNG NHẬP", "Username '" + u + "' đã tồn tại trên hệ thống. Vui lòng chọn tên khác!", ButtonStyle::Danger, "Đóng", "");
+        if (selectedAccountRowIdx >= 0 && selectedAccountRowIdx < static_cast<int>(staffUserList.size())) {
+            for (size_t i = 0; i < staffUserList.size(); ++i) {
+                if (static_cast<int>(i) != selectedAccountRowIdx && staffUserList[i].taiKhoan == u) {
+                    if (confirmPopup) confirmPopup->show("TRÙNG TÊN ĐĂNG NHẬP", "Username '" + u + "' đã tồn tại trên hệ thống. Vui lòng chọn tên khác!", ButtonStyle::Danger, "Đóng", "");
+                    return;
+                }
+            }
+
+            auto& st = staffUserList[selectedAccountRowIdx];
+            if (!fullName.empty()) st.hoTen = fullName;
+            st.taiKhoan = u;
+            if (!p.empty() && p != "••••••••••••") {
+                st.matKhau = p;
+            }
+            st.vaiTro = (accountRoleDropdown && accountRoleDropdown->getSelectedIndex() == 0) ? "Admin" : "Staff";
+
+            saveStaffUsersToDatabase();
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "CAP_NHAT_TAI_KHOAN", "Cập nhật tài khoản cho NV: " + st.maNguoiDung + " (" + u + ")");
+            if (confirmPopup) confirmPopup->show("CẬP NHẬT THÀNH CÔNG", "Đã lưu tài khoản [" + u + "] cho nhân sự " + st.hoTen + " (" + st.maNguoiDung + ")!", ButtonStyle::Primary, "Đóng", "");
+        } else {
+            // Mode Cấp tài khoản mới
+            if (fullName.empty()) {
+                if (confirmPopup) confirmPopup->show("THIẾU THÔNG TIN", "Vui lòng nhập Họ và tên để cấp tài khoản mới!", ButtonStyle::Danger, "Đóng", "");
                 return;
             }
-        }
+            for (size_t i = 0; i < staffUserList.size(); ++i) {
+                if (staffUserList[i].taiKhoan == u) {
+                    if (confirmPopup) confirmPopup->show("TRÙNG TÊN ĐĂNG NHẬP", "Username '" + u + "' đã tồn tại trên hệ thống. Vui lòng chọn tên khác!", ButtonStyle::Danger, "Đóng", "");
+                    return;
+                }
+            }
+            std::string newId = enteredId.empty() ? generateNextStaffId() : enteredId;
+            StaffAccountInfo newAcc;
+            newAcc.maNguoiDung = newId;
+            newAcc.hoTen = fullName;
+            newAcc.taiKhoan = u;
+            newAcc.matKhau = p.empty() ? "123456" : p;
+            newAcc.vaiTro = (accountRoleDropdown && accountRoleDropdown->getSelectedIndex() == 0) ? "Admin" : "Staff";
+            newAcc.trangThaiLamViec = "DangLam";
+            newAcc.trangThaiTaiKhoan = "HoatDong";
 
-        st.taiKhoan = u;
-        if (!p.empty() && p != "••••••••••••") {
-            st.matKhau = p;
+            staffUserList.push_back(newAcc);
+            saveStaffUsersToDatabase();
+            selectedAccountRowIdx = static_cast<int>(staffUserList.size()) - 1;
+            refreshAccountEmployeeDropdown();
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "CAP_TAI_KHOAN_MOI", "Cấp tài khoản mới: " + newId + " (" + u + ")");
+            if (confirmPopup) confirmPopup->show("CẤP TÀI KHOẢN THÀNH CÔNG", "Đã cấp mới tài khoản [" + u + "] cho " + fullName + " (" + newId + ")!", ButtonStyle::Primary, "Đóng", "");
         }
-        st.vaiTro = (accountRoleDropdown && accountRoleDropdown->getSelectedIndex() == 0) ? "Admin" : "Staff";
-
-        saveStaffUsersToDatabase();
-        ActivityLog::ghiNhan(currentUserId, currentUserRole, "CAP_NHAT_TAI_KHOAN", "Cập nhật tài khoản cho NV: " + st.maNguoiDung + " (" + u + ")");
-        if (confirmPopup) confirmPopup->show("CẬP NHẬT THÀNH CÔNG", "Đã lưu tài khoản [" + u + "] cho nhân sự " + st.hoTen + " (" + st.maNguoiDung + ")!", ButtonStyle::Primary, "Đóng", "");
     });
 
     btnAccountToggleLock = std::unique_ptr<RoundRectButton>(new RoundRectButton(
@@ -5074,6 +4909,20 @@ void CinemaUIApp::setupAccountsView() {
         }
         auto& st = staffUserList[selectedAccountRowIdx];
         bool isCurrentlyLocked = (st.trangThaiTaiKhoan == "BiKhoa" || st.trangThaiTaiKhoan == "Bị khóa" || st.trangThaiTaiKhoan == "Khoa");
+
+        if (!isCurrentlyLocked && st.vaiTro == "Admin") {
+            int activeAdminCount = 0;
+            for (const auto& u : staffUserList) {
+                if (u.vaiTro == "Admin" && u.trangThaiTaiKhoan != "BiKhoa" && u.trangThaiTaiKhoan != "Bị khóa" && u.trangThaiTaiKhoan != "Khoa") {
+                    activeAdminCount++;
+                }
+            }
+            if (activeAdminCount <= 1) {
+                if (confirmPopup) confirmPopup->show("KHÔNG THỂ KHÓA", "Không thể khóa Admin này vì hệ thống bắt buộc phải có ít nhất một Quản trị viên đang hoạt động!", ButtonStyle::Danger, "Đóng", "");
+                return;
+            }
+        }
+
         st.trangThaiTaiKhoan = isCurrentlyLocked ? "HoatDong" : "BiKhoa";
 
         saveStaffUsersToDatabase();
@@ -5207,29 +5056,16 @@ void CinemaUIApp::renderAccountsView() {
     window.draw(qLens);
     drawTxt("Tìm tác vụ nhanh... (Ctrl+K)", 1172.f, 16.f, 11, sf::Color(148, 163, 184), false);
 
-    // Bell Notification Icon
-    RoundedRectRenderer::render(window, sf::Vector2f(1400.f, 9.f), sf::Vector2f(30.f, 30.f), 15.f, sf::Color(248, 250, 252), 1.f, sf::Color(226, 232, 240));
-    drawCenteredTxt("🔔", 1415.f, 24.f, 11, sf::Color(71, 85, 105), false);
-    sf::CircleShape bellDot(3.5f);
-    bellDot.setFillColor(sf::Color(239, 68, 68));
-    bellDot.setPosition(1420.f, 11.f);
-    window.draw(bellDot);
-
-    sf::RectangleShape vSep2(sf::Vector2f(1.f, 24.f));
-    vSep2.setPosition(1446.f, 12.f);
-    vSep2.setFillColor(sf::Color(226, 232, 240));
-    window.draw(vSep2);
-
-    // User profile badge
+    // User profile badge (Admin)
     sf::CircleShape avatarCir(15.f);
     avatarCir.setFillColor(sf::Color(224, 242, 254));
     avatarCir.setOutlineThickness(1.5f);
     avatarCir.setOutlineColor(sf::Color(2, 132, 199));
     avatarCir.setPosition(1462.f, 9.f);
     window.draw(avatarCir);
-    drawCenteredTxt("LT", 1477.f, 24.f, 11, sf::Color(3, 105, 161), true);
-    drawTxt("Lê Minh Tuấn", 1500.f, 8.f, 12, sf::Color(15, 23, 42), true);
-    drawTxt("Quản lý Trưởng Ca", 1500.f, 24.f, 11, sf::Color(100, 116, 139), false);
+    drawCenteredTxt("AD", 1477.f, 24.f, 11, sf::Color(3, 105, 161), true);
+    drawTxt(currentUserName.empty() ? "Admin" : currentUserName, 1500.f, 8.f, 12, sf::Color(15, 23, 42), true);
+    drawTxt("Quản trị viên hệ thống", 1500.f, 24.f, 11, sf::Color(100, 116, 139), false);
 
     // =========================================================================
     // 2. PAGE HEADER (y = 60..112)
@@ -5327,10 +5163,32 @@ void CinemaUIApp::renderAccountsView() {
             sf::CircleShape h3(3.f); h3.setFillColor(accKpis[i].iconFg); h3.setPosition(ibX + 25.f, ibY + 12.f); window.draw(h3);
         } else if (i == 1) {
             sf::CircleShape cir(10.f); cir.setFillColor(sf::Color::Transparent); cir.setOutlineThickness(2.f); cir.setOutlineColor(accKpis[i].iconFg); cir.setPosition(ibX + 10.f, ibY + 10.f); window.draw(cir);
-            drawCenteredTxt("✓", ibX + 20.f, ibY + 19.f, 12, accKpis[i].iconFg, true);
+            {
+                sf::RectangleShape ck1(sf::Vector2f(3.5f, 1.5f));
+                ck1.setRotation(45.f);
+                ck1.setPosition(ibX + 17.5f, ibY + 18.5f);
+                ck1.setFillColor(accKpis[i].iconFg);
+                sf::RectangleShape ck2(sf::Vector2f(6.5f, 1.5f));
+                ck2.setRotation(-50.f);
+                ck2.setPosition(ibX + 20.f, ibY + 21.f);
+                ck2.setFillColor(accKpis[i].iconFg);
+                window.draw(ck1);
+                window.draw(ck2);
+            }
         } else if (i == 2) {
             RoundedRectRenderer::render(window, sf::Vector2f(ibX + 12.f, ibY + 10.f), sf::Vector2f(16.f, 18.f), 5.f, accKpis[i].iconFg);
-            drawCenteredTxt("✓", ibX + 20.f, ibY + 18.f, 10, sf::Color::White, true);
+            {
+                sf::RectangleShape ck1(sf::Vector2f(3.f, 1.5f));
+                ck1.setRotation(45.f);
+                ck1.setPosition(ibX + 17.5f, ibY + 18.f);
+                ck1.setFillColor(sf::Color::White);
+                sf::RectangleShape ck2(sf::Vector2f(5.5f, 1.5f));
+                ck2.setRotation(-50.f);
+                ck2.setPosition(ibX + 19.5f, ibY + 20.f);
+                ck2.setFillColor(sf::Color::White);
+                window.draw(ck1);
+                window.draw(ck2);
+            }
         } else {
             RoundedRectRenderer::render(window, sf::Vector2f(ibX + 12.f, ibY + 16.f), sf::Vector2f(16.f, 14.f), 3.f, accKpis[i].iconFg);
             RoundedRectRenderer::render(window, sf::Vector2f(ibX + 15.f, ibY + 10.f), sf::Vector2f(10.f, 10.f), 5.f, sf::Color::Transparent, 2.f, accKpis[i].iconFg);
@@ -5595,7 +5453,7 @@ void CinemaUIApp::renderAccountsView() {
     drawTxt("Username (Tên đăng nhập):", rightColX + 24.f, 436.f, 13, sf::Color(51, 65, 85), true);
     if (inputAccountUsername) {
         inputAccountUsername->draw(window);
-        drawTxt("✓ Hợp lệ", inputAccountUsername->getPosition().x + inputAccountUsername->getSize().x - 62.f, inputAccountUsername->getPosition().y + 11.f, 12, sf::Color(22, 163, 74), true);
+        drawTxt("● Hợp lệ", inputAccountUsername->getPosition().x + inputAccountUsername->getSize().x - 62.f, inputAccountUsername->getPosition().y + 11.f, 12, sf::Color(22, 163, 74), true);
     }
 
     // 4. Mật khẩu

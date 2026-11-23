@@ -99,10 +99,48 @@ inline bool stParseTimeToMinutes(const std::string& raw, int& outMinutes) {
 }
 
 inline std::string stFormatHHMM(int minutes) {
-    minutes = ((minutes % 1440) + 1440) % 1440;
-    char buf[8];
-    snprintf(buf, sizeof(buf), "%02d:%02d", minutes / 60, minutes % 60);
+    int dayOffset = 0;
+    if (minutes >= 1440) {
+        dayOffset = minutes / 1440;
+    } else if (minutes < 0) {
+        dayOffset = -((-minutes + 1439) / 1440);
+    }
+    int wrapped = ((minutes % 1440) + 1440) % 1440;
+    char buf[24];
+    if (dayOffset > 0) {
+        snprintf(buf, sizeof(buf), "%02d:%02d (+%dd)", wrapped / 60, wrapped % 60, dayOffset);
+    } else {
+        snprintf(buf, sizeof(buf), "%02d:%02d", wrapped / 60, wrapped % 60);
+    }
     return buf;
+}
+
+inline bool stDateToAbsDays(const std::string& date, long long& outDays) {
+    int d = 0, mo = 0, y = 0;
+    if (!DateFormat::parseDate(date, d, mo, y)) return false;
+    // Civil calendar days from 1970-01-01 (Howard Hinnant algorithm)
+    long long yr = y - (mo <= 2 ? 1 : 0);
+    long long era = (yr >= 0 ? yr : yr - 399) / 400;
+    unsigned yoe = static_cast<unsigned>(yr - era * 400);
+    unsigned doy = (153 * (mo + (mo > 2 ? -3 : 9)) + 2) / 5 + static_cast<unsigned>(d) - 1;
+    unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    outDays = era * 146097LL + static_cast<long long>(doe) - 719468LL;
+    return true;
+}
+
+inline bool stParseEndMinutesRelativeToStart(const std::string& endRaw, int startMins, int fallbackDur, int& outEndMins) {
+    int parsedEnd = 0;
+    if (!stParseTimeToMinutes(endRaw, parsedEnd)) {
+        outEndMins = startMins + (fallbackDur > 0 ? fallbackDur : 120);
+        return true;
+    }
+    bool explicitNextDay = (endRaw.find("+1") != std::string::npos || endRaw.find("(+") != std::string::npos);
+    if (explicitNextDay || parsedEnd <= startMins) {
+        outEndMins = parsedEnd + 1440;
+    } else {
+        outEndMins = parsedEnd;
+    }
+    return true;
 }
 
 inline bool stDateToTm(const std::string& date, std::tm& out) {

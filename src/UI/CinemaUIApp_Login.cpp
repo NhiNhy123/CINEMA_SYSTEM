@@ -1,4 +1,4 @@
-﻿#include "../../include/UI/CinemaUIApp.h"
+#include "../../include/UI/CinemaUIApp.h"
 #include "../../include/ActivityLog.h"
 #include <sqlite3.h>
 #include <algorithm>
@@ -134,9 +134,9 @@ bool CinemaUIApp::authenticateUser(const std::string& inputUser, const std::stri
             std::string workStatus = getCol(6);
             std::string accStatus = getCol(7);
 
-            if (role == "Staff" && accStatus == "BiKhoa") {
-                statusErr = "Tài khoản nhân viên đã bị khóa!";
-            } else if (role == "Staff" && workStatus == "DaNghiViec") {
+            if (accStatus == "BiKhoa" || accStatus == "Khoa" || accStatus == "Locked" || accStatus.find("Khoa") != std::string::npos || accStatus.find("khoa") != std::string::npos) {
+                statusErr = "Tài khoản này đã bị khóa, không thể đăng nhập!";
+            } else if (workStatus == "DaNghiViec" || workStatus.find("Nghi") != std::string::npos || workStatus.find("nghi") != std::string::npos) {
                 statusErr = "Nhân viên đã nghỉ việc, không thể đăng nhập!";
             } else {
                 currentUserId = uid;
@@ -151,6 +151,7 @@ bool CinemaUIApp::authenticateUser(const std::string& inputUser, const std::stri
 
     if (found) {
         isLoggedIn = true;
+        shiftIsClosed = false;
         loginErrorMsg = "";
         loadDataFromDatabase();
 

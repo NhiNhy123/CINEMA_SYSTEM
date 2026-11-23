@@ -54,7 +54,7 @@ CinemaUIApp::CinemaUIApp()
       posGrandTotal(0.0),
       posSelectedMovieIdx(0),
       posSelectedShowtimeIdx(0),
-      posShowSeatMap(false),
+      posShowSeatMap(true),
       showtimeSubTab(0),
       selectedShowtimeRowIdx(0),
       showtimeCurrentPage(0),
@@ -322,15 +322,104 @@ void CinemaUIApp::setupUIComponents() {
     ));
     btnAutoGenerateSeats->setOnClick([this]() {
         if (!confirmPopup) return;
+        std::string targetRoomId = seatSelectedRoomId;
+        if (targetRoomId.empty() && !roomList.empty()) targetRoomId = roomList[0].getMaPhong();
+        int targetCap = 120;
+        std::string targetRoomName = targetRoomId;
+        for (const auto& rm : roomList) {
+            if (rm.getMaPhong() == targetRoomId) {
+                targetCap = std::max(1, rm.getSucChua());
+                targetRoomName = rm.getTenPhong();
+                break;
+            }
+        }
         confirmPopup->show(
             "TỰ ĐỘNG SINH SƠ ĐỒ GHẾ",
-            "Tự động tính toán và tạo danh sách ghế (Standard, VIP, Sweetbox) theo phòng chiếu?",
+            "Tự động tính toán và tạo sơ đồ ghế tiêu chuẩn (" + std::to_string(targetCap) + " chỗ) cho phòng " + targetRoomName + " (" + targetRoomId + ")?",
             ButtonStyle::Primary,
             "Tạo Tự Động",
             "Hủy"
         );
-        confirmPopup->setOnConfirm([this]() {
-            ActivityLog::ghiNhan(currentUserId, currentUserRole, "TAO_GHE_TU_DONG", "Khởi tạo sơ đồ ghế phòng chiếu thành công");
+        confirmPopup->setOnConfirm([this, targetRoomId, targetCap, targetRoomName]() {
+            if (targetRoomId.empty()) return;
+            for (const auto& s : allSeats) {
+                if (s.getMaPhong() == targetRoomId && isSeatBookedInRoom(targetRoomId, s.getMaGhe())) {
+                    if (confirmPopup) {
+                        confirmPopup->show("CẢNH BÁO NGHIỆP VỤ", "Phòng " + targetRoomName + " đang có ghế đã bán vé trong suất chiếu sắp tới. Không thể tạo đè sơ đồ!", ButtonStyle::Danger, "Đóng", "");
+                    }
+                    return;
+                }
+            }
+
+            std::vector<Seat> backupSeats = allSeats;
+            allSeats.erase(std::remove_if(allSeats.begin(), allSeats.end(), [&](const Seat& s) {
+                return s.getMaPhong() == targetRoomId;
+            }), allSeats.end());
+
+            double stdPrice = 100000.0;
+            double vipPrice = 150000.0;
+            double cplPrice = 200000.0;
+            bool hasStd = false, hasVip = false, hasCpl = false;
+            for (const auto& st : seatTypeList) {
+                if (st.tenLoai == "Standard" && st.kichHoatBan) { stdPrice = st.donGia; hasStd = true; }
+                else if (st.tenLoai == "VIP" && st.kichHoatBan) { vipPrice = st.donGia; hasVip = true; }
+                else if ((st.tenLoai == "Couple" || st.tenLoai == "Sweetbox") && st.kichHoatBan) { cplPrice = st.donGia; hasCpl = true; }
+            }
+            std::string fallbackType = !seatTypeList.empty() ? seatTypeList[0].tenLoai : "Standard";
+            double fallbackPrice = !seatTypeList.empty() ? seatTypeList[0].donGia : 100000.0;
+
+            int colsPerRow = (targetCap <= 24) ? 6 : ((targetCap <= 60) ? 10 : ((targetCap <= 120) ? 12 : 15));
+            int remainingSlots = targetCap;
+            int totalRowsEst = (targetCap + colsPerRow - 1) / colsPerRow;
+            int rowIdx = 0;
+            int createdRecords = 0;
+
+            while (remainingSlots > 0 && rowIdx < 26) {
+                char rowChar = static_cast<char>('A' + rowIdx);
+                int rowSlots = std::min(colsPerRow, remainingSlots);
+                bool isLastRow = (remainingSlots <= colsPerRow);
+
+                if (isLastRow && hasCpl && rowSlots >= 4 && (rowSlots % 2 == 0)) {
+                    for (int c = 1; c < rowSlots; c += 2) {
+                        std::string pairCode = std::string(1, rowChar) + std::to_string(c) + "-" + std::to_string(c + 1);
+                        allSeats.push_back(Seat(pairCode, targetRoomId, "Couple", cplPrice, "Trong"));
+                        createdRecords++;
+                    }
+                } else {
+                    std::string rType = fallbackType;
+                    double rPrice = fallbackPrice;
+                    if (rowIdx < std::max(1, totalRowsEst / 3) && hasStd) {
+                        rType = "Standard"; rPrice = stdPrice;
+                    } else if (hasVip) {
+                        rType = "VIP"; rPrice = vipPrice;
+                    } else if (hasStd) {
+                        rType = "Standard"; rPrice = stdPrice;
+                    }
+                    for (int c = 1; c <= rowSlots; ++c) {
+                        std::string code = std::string(1, rowChar) + std::to_string(c);
+                        allSeats.push_back(Seat(code, targetRoomId, rType, rPrice, "Trong"));
+                        createdRecords++;
+                    }
+                }
+                remainingSlots -= rowSlots;
+                rowIdx++;
+            }
+
+            if (!db.ghiDanhSachGhe(allSeats)) {
+                allSeats = backupSeats;
+                if (confirmPopup) {
+                    confirmPopup->show("LỖI CƠ SỞ DỮ LIỆU", "Không thể lưu sơ đồ ghế mới vào cơ sở dữ liệu SQLite!", ButtonStyle::Danger, "Đóng", "");
+                }
+                return;
+            }
+
+            seatSelectedCodes.clear();
+            refreshSeatsRoomDropdown();
+            refreshShowtimesDropdowns();
+            ActivityLog::ghiNhan(currentUserId, currentUserRole, "TAO_GHE_TU_DONG", "Khởi tạo sơ đồ " + std::to_string(targetCap) + " chỗ (" + std::to_string(createdRecords) + " ghế) cho phòng " + targetRoomId);
+            if (confirmPopup) {
+                confirmPopup->show("THÀNH CÔNG", "Đã tạo tự động sơ đồ " + std::to_string(targetCap) + " chỗ (" + std::to_string(createdRecords) + " ghế) cho phòng " + targetRoomName + "!", ButtonStyle::Primary, "Đóng", "");
+            }
         });
     });
 
@@ -351,9 +440,13 @@ void CinemaUIApp::setupUIComponents() {
             "Hủy"
         );
         confirmPopup->setOnConfirm([this]() {
-            Showtime sc("SC99", "P01", "R01", "21:00", "23:15", "10/11/2026", 85000.0);
+            Showtime sc("SC99", "P01", "R01", "10/11/2026", "21:00", "23:15", 85000.0);
             showtimeList.push_back(sc);
-            db.ghiDanhSachSuatChieu(showtimeList);
+            if (!db.ghiDanhSachSuatChieu(showtimeList)) {
+                showtimeList.pop_back();
+                if (confirmPopup) confirmPopup->show("LỖI CƠ SỞ DỮ LIỆU", "Không thể lưu suất chiếu xuống cơ sở dữ liệu!", ButtonStyle::Danger, "Đóng", "");
+                return;
+            }
             ActivityLog::ghiNhan(currentUserId, currentUserRole, "THEM_SUAT_CHIEU", "Thêm suất chiếu mới: SC99");
         });
     });
@@ -534,6 +627,8 @@ void CinemaUIApp::setupUIComponents() {
     setupRoomsView();
     setupSeatsView();
     setupSeatBookingView();
+    setupCRMView();
+    setupShiftReportView();
     setupConcessionsView();
     setupShowtimesView();
     setupPromotionsView();
@@ -563,15 +658,12 @@ void CinemaUIApp::setupNavigation() {
         navItems = {
             {"Bán vé (POS)",         ActiveTab::SeatBooking},
             {"Khách hàng (CRM)",     ActiveTab::CRM},
-            {"Quản lý Doanh thu",    ActiveTab::Reports},
-            {"Quản lý Báo cáo ca",   ActiveTab::ShiftReport},
-            {"Quản lý tài khoản",    ActiveTab::Accounts},
-            {"Nhật ký hoạt động",    ActiveTab::SystemLogs}
+            {"Chốt ca & Báo cáo",    ActiveTab::ShiftReport}
         };
     }
 
     navButtons.clear();
-    float startY = 72.f;
+    float startY = (currentUserRole == "Admin" || currentUserRole == "Khách") ? 72.f : 92.f;
     float itemH = 39.f;
 
     for (size_t i = 0; i < navItems.size(); ++i) {
@@ -586,7 +678,25 @@ void CinemaUIApp::setupNavigation() {
         ActiveTab targetTab = navItems[i].second;
         btn->setOnClick([this, targetTab]() {
             currentTab = targetTab;
-            if (targetTab == ActiveTab::Showtimes) {
+            if (targetTab == ActiveTab::Reports) {
+                reloadReportsData();
+            } else if (targetTab == ActiveTab::Concessions) {
+                auto rIndices = getRetailFnbIndices();
+                std::vector<std::string> retailOpts;
+                for (int ri : rIndices) {
+                    if (ri >= 0 && ri < static_cast<int>(fnbList.size())) {
+                        retailOpts.push_back(fnbList[ri].getTenMatHang() + " (" + std::to_string(static_cast<long long>(fnbList[ri].getGiaTien())) + " đ)");
+                    }
+                }
+                if (retailOpts.empty()) retailOpts.push_back("Chọn món lẻ...");
+                if (comboItem1Dropdown) comboItem1Dropdown->setOptions(retailOpts, (comboItem1Idx >= 0 && comboItem1Idx < static_cast<int>(retailOpts.size())) ? comboItem1Idx : 0);
+                if (comboItem2Dropdown) comboItem2Dropdown->setOptions(retailOpts, (comboItem2Idx >= 0 && comboItem2Idx < static_cast<int>(retailOpts.size())) ? comboItem2Idx : (retailOpts.size() > 1 ? 1 : 0));
+            } else if (targetTab == ActiveTab::CRM) {
+                reloadCRMData();
+            } else if (targetTab == ActiveTab::ShiftReport) {
+                adminShowHistorySubView = false;
+                reloadShiftReportData();
+            } else if (targetTab == ActiveTab::Showtimes) {
                 refreshShowtimesDropdowns();
             } else if (targetTab == ActiveTab::Promotions) {
                 refreshPromoScopeDropdown();
@@ -628,6 +738,18 @@ void CinemaUIApp::setupNavigation() {
     ));
 
     btnLogout->setOnClick([this]() {
+        if (currentUserRole != "Admin" && !shiftIsClosed) {
+            if (confirmPopup) {
+                confirmPopup->show(
+                    "CHƯA CHỐT CA TRỰC",
+                    "Bạn chưa thực hiện Khóa sổ & Chốt ca!\nVui lòng vào mục 'Chốt ca & Báo cáo' để bàn giao và chốt ca trước khi đăng xuất.",
+                    ButtonStyle::Danger,
+                    "Đã hiểu",
+                    ""
+                );
+            }
+            return;
+        }
         if (isLoggedIn) {
             ActivityLog::ghiNhan(currentUserId, currentUserRole, "DANG_XUAT", "Đăng xuất khỏi hệ thống");
         }
@@ -726,15 +848,46 @@ void CinemaUIApp::handleEvents() {
 
         // Dropdowns top priority
         bool capturedByDropdown = false;
-        if (currentTab == ActiveTab::SeatBooking && showtimeDropdown && showtimeDropdown->getExpanded()) {
+        if (currentTab == ActiveTab::SeatBooking) {
+            std::vector<DropdownBox*> posDrops = {
+                posDateDropdown.get(),
+                posMovieDropdown.get(),
+                posShowtimeDropdown.get(),
+                posFnbDropdown.get(),
+                showtimeDropdown.get()
+            };
+            for (auto* drp : posDrops) {
+                if (drp && drp->getExpanded()) {
+                    if (event.type == sf::Event::MouseWheelScrolled) {
+                        if (drp->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos)) {
+                            capturedByDropdown = true;
+                            break;
+                        }
+                    } else if (event.type == sf::Event::MouseButtonPressed) {
+                        capturedByDropdown = drp->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                        if (capturedByDropdown) break;
+                    } else if (event.type == sf::Event::MouseButtonReleased) {
+                        capturedByDropdown = drp->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                        if (capturedByDropdown) break;
+                    } else if (event.type == sf::Event::MouseMoved) {
+                        if (drp->handleMouseMove(mousePos)) {
+                            capturedByDropdown = true;
+                        }
+                    }
+                }
+            }
+            if (capturedByDropdown) continue;
+        }
+
+        if (currentTab == ActiveTab::CRM && crmTierDropdown && crmTierDropdown->getExpanded()) {
             if (event.type == sf::Event::MouseWheelScrolled) {
-                capturedByDropdown = showtimeDropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                capturedByDropdown = crmTierDropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
             } else if (event.type == sf::Event::MouseButtonPressed) {
-                capturedByDropdown = showtimeDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                capturedByDropdown = crmTierDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
             } else if (event.type == sf::Event::MouseButtonReleased) {
-                capturedByDropdown = showtimeDropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                capturedByDropdown = crmTierDropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
             } else if (event.type == sf::Event::MouseMoved) {
-                capturedByDropdown = showtimeDropdown->handleMouseMove(mousePos);
+                capturedByDropdown = crmTierDropdown->handleMouseMove(mousePos);
             }
             if (capturedByDropdown) continue;
         }
@@ -833,8 +986,12 @@ void CinemaUIApp::handleEvents() {
                 }
                 return false;
             };
-            if (captureSeatDrp(seatRoomDropdown)) continue;
-            if (captureSeatDrp(seatBatchTypeDropdown)) continue;
+            if (seatSubTab == 0) {
+                if (captureSeatDrp(seatRoomDropdown)) continue;
+                if (captureSeatDrp(seatBatchTypeDropdown)) continue;
+            } else if (seatSubTab == 1) {
+                if (captureSeatDrp(seatTypeFilterDropdown)) continue;
+            }
         }
         if (currentTab == ActiveTab::Promotions && promoScopeDropdown && promoScopeDropdown->getExpanded()) {
             if (event.type == sf::Event::MouseWheelScrolled) {
@@ -889,6 +1046,38 @@ void CinemaUIApp::handleEvents() {
             checkReportDrop(reportShiftDropdown);
             if (!capturedByDropdown) checkReportDrop(reportCashierDropdown);
             if (!capturedByDropdown) checkReportDrop(reportPaymentDropdown);
+            if (capturedByDropdown) continue;
+        }
+        if (currentTab == ActiveTab::ShiftReport && (currentUserRole == "Admin" || currentUserRole == "Khách") && !adminShowHistorySubView) {
+            if (adminNextCashierDropdown && adminNextCashierDropdown->getExpanded()) {
+                if (event.type == sf::Event::MouseWheelScrolled) {
+                    capturedByDropdown = adminNextCashierDropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                } else if (event.type == sf::Event::MouseButtonPressed) {
+                    capturedByDropdown = adminNextCashierDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                } else if (event.type == sf::Event::MouseButtonReleased) {
+                    capturedByDropdown = adminNextCashierDropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                } else if (event.type == sf::Event::MouseMoved) {
+                    capturedByDropdown = adminNextCashierDropdown->handleMouseMove(mousePos);
+                }
+                if (capturedByDropdown) continue;
+            }
+        }
+        if (currentTab == ActiveTab::Concessions && fnbFormLoai == "Combo") {
+            auto checkFnbDrop = [&](std::unique_ptr<DropdownBox>& drop) {
+                if (drop && drop->getExpanded()) {
+                    if (event.type == sf::Event::MouseWheelScrolled) {
+                        capturedByDropdown = drop->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                    } else if (event.type == sf::Event::MouseButtonPressed) {
+                        capturedByDropdown = drop->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    } else if (event.type == sf::Event::MouseButtonReleased) {
+                        capturedByDropdown = drop->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                    } else if (event.type == sf::Event::MouseMoved) {
+                        capturedByDropdown = drop->handleMouseMove(mousePos);
+                    }
+                }
+            };
+            checkFnbDrop(comboItem1Dropdown);
+            if (!capturedByDropdown) checkFnbDrop(comboItem2Dropdown);
             if (capturedByDropdown) continue;
         }
 
@@ -984,40 +1173,10 @@ void CinemaUIApp::handleEvents() {
                             showMovieSpotlight = false;
                             spotlightMovieIdx = -1;
                             if (matched.empty()) {
-                                // Tìm kiếm không trùng (ví dụ gõ jjj): KHÔNG hiển thị phim mặc định Lật Mặt 7 nữa!
-                                selectedMovieRowIdx = -1;
                                 showMovieSpotlight = false;
                                 spotlightMovieIdx = -1;
-                                if (inputMovieId) inputMovieId->setText("");
-                                if (inputMovieTitle) inputMovieTitle->setText("");
-                                if (inputMovieDuration) inputMovieDuration->setText("");
-                                if (inputMovieReleaseDate) inputMovieReleaseDate->setText("");
-                                if (inputMovieEndDate) inputMovieEndDate->setText("");
-                                if (inputMovieAgeRating) inputMovieAgeRating->setText("");
-                                syncMovieFormAgeDropdown("");
-                                if (inputMovieGenre) inputMovieGenre->setText("");
-                                if (inputMoviePoster) inputMoviePoster->setText("");
-                                if (inputMovieDesc) inputMovieDesc->setText("");
                             } else {
-                                int firstIdx = matched[0];
-                                selectedMovieRowIdx = firstIdx;
-                                if (showMovieSpotlight) spotlightMovieIdx = firstIdx;
-                                if (inputMovieId) inputMovieId->setText(movieList[firstIdx].getMaPhim());
-                                if (inputMovieTitle) inputMovieTitle->setText(movieList[firstIdx].getTenPhim());
-                                if (inputMovieDuration) inputMovieDuration->setText(std::to_string(movieList[firstIdx].getThoiLuong()));
-                                if (inputMovieReleaseDate) inputMovieReleaseDate->setText(movieList[firstIdx].getNgayKhoiChieu());
-                                if (inputMovieEndDate) inputMovieEndDate->setText(movieList[firstIdx].getNgayKetThuc());
-                                int ageVal = movieList[firstIdx].getNhanDoTuoi();
-                                std::string codeVal = (ageVal <= 0) ? "P" : ("T" + std::to_string(ageVal));
-                                if (inputMovieAgeRating) inputMovieAgeRating->setText(codeVal);
-                                syncMovieFormAgeDropdown(codeVal);
-                                if (inputMovieGenre) inputMovieGenre->setText(db.layTheLoaiCuaPhim(movieList[firstIdx].getMaPhim()));
-                                std::string pPath = movieList[firstIdx].getPoster();
-                                if (pPath.empty() || pPath == "assets/posters/poster_default.jpg") {
-                                    pPath = "assets/posters/" + movieList[firstIdx].getMaPhim() + ".jpg";
-                                }
-                                if (inputMoviePoster) inputMoviePoster->setText(pPath);
-                                if (inputMovieDesc) inputMovieDesc->setText(movieList[firstIdx].getMoTa());
+                                // Typing in movieSearchInput only filters the table, does NOT overwrite movie form inputs
                             }
                         }
                     }
@@ -1299,6 +1458,7 @@ void CinemaUIApp::handleEvents() {
                                         if (inputMovieTitle && inputMovieTitle->getText() != movieList[targetIdx].getTenPhim()) hasFormChanges = true;
                                         if (inputMovieDuration && inputMovieDuration->getText() != std::to_string(movieList[targetIdx].getThoiLuong())) hasFormChanges = true;
                                         if (inputMovieReleaseDate && DateFormat::normalizeDate(inputMovieReleaseDate->getText()) != DateFormat::normalizeDate(movieList[targetIdx].getNgayKhoiChieu())) hasFormChanges = true;
+                                        if (inputMovieEndDate && DateFormat::normalizeDate(inputMovieEndDate->getText()) != DateFormat::normalizeDate(movieList[targetIdx].getNgayKetThuc())) hasFormChanges = true;
                                         if (inputMovieAgeRating && inputMovieAgeRating->getText() != curAgeStr) hasFormChanges = true;
                                         if (inputMovieGenre && inputMovieGenre->getText() != curGenre) hasFormChanges = true;
                                         if (inputMoviePoster && inputMoviePoster->getText() != curPoster) hasFormChanges = true;
@@ -1421,21 +1581,253 @@ void CinemaUIApp::handleEvents() {
                 break;
 
             case ActiveTab::SeatBooking:
+                handleBtn(btnPosLock);
+                handleBtn(btnPosLogout);
                 handleBtn(btnPosRefresh);
-                handleBtn(btnPosDate);
-                handleBtn(btnPosMovie);
-                handleBtn(btnPosShowtime);
+                handleBtn(btnPosSeatClear);
                 handleBtn(btnPosAddFnb);
+                handleBtn(btnPosApplyMember);
+                handleBtn(btnPosApplyVoucher);
                 handleBtn(btnPosCheckout);
+                handleBtn(btnPosPrintProforma);
                 handleBtn(btnPosCancel);
 
-                // Keyboard F5 shortcut for instant checkout
-                if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::F5) {
-                    if (btnPosCheckout) btnPosCheckout->triggerClick();
+                if (inputPosMemberPhone) {
+                    if (event.type == sf::Event::MouseButtonPressed) inputPosMemberPhone->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    else if (event.type == sf::Event::TextEntered) inputPosMemberPhone->handleTextEntered(event.text.unicode);
+                }
+                if (inputPosVoucher) {
+                    if (event.type == sf::Event::MouseButtonPressed) {
+                        inputPosVoucher->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                        posPromoDropdownOpen = true;
+                    } else if (event.type == sf::Event::TextEntered) {
+                        inputPosVoucher->handleTextEntered(event.text.unicode);
+                        posPromoDropdownOpen = true;
+                        posPromoScrollOffset = 0;
+                    }
+                }
+                if (inputPosCashGiven) {
+                    if (event.type == sf::Event::MouseButtonPressed) inputPosCashGiven->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    else if (event.type == sf::Event::TextEntered) {
+                        inputPosCashGiven->handleTextEntered(event.text.unicode);
+                        posCustomCashEdited = true;
+                        recalculatePosTotals();
+                    }
                 }
 
-                // Interactive Seat Map Clicks
-                if (posShowSeatMap && event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                // Mouse wheel scroll over NGÀY, PHIM rows or Promo Dropdown
+                if (event.type == sf::Event::MouseWheelScrolled) {
+                    float leftColX = sidebarWidth + 14.f;
+                    float leftColW = 1000.f;
+                    float rightStartX = leftColX + leftColW + 14.f;
+
+                    if (posPromoDropdownOpen) {
+                        float popX = rightStartX + 14.f;
+                        float popY = 566.f;
+                        float popW = 408.f;
+                        float popH = 224.f;
+                        if (mousePos.x >= popX && mousePos.x <= popX + popW && mousePos.y >= popY && mousePos.y <= popY + popH) {
+                            if (event.mouseWheelScroll.delta < 0) posPromoScrollOffset++;
+                            else if (event.mouseWheelScroll.delta > 0 && posPromoScrollOffset > 0) posPromoScrollOffset--;
+                        }
+                    }
+
+                    if (mousePos.x >= leftColX && mousePos.x <= leftColX + leftColW) {
+                        if (mousePos.y >= 80.f && mousePos.y <= 125.f) {
+                            int maxDates = std::max(0, static_cast<int>(posAvailableDates.size()) - 5);
+                            if (event.mouseWheelScroll.delta < 0 && posDateScrollOffset < maxDates) posDateScrollOffset++;
+                            else if (event.mouseWheelScroll.delta > 0 && posDateScrollOffset > 0) posDateScrollOffset--;
+                        } else if (mousePos.y >= 126.f && mousePos.y <= 180.f) {
+                            int maxMov = std::max(0, static_cast<int>(posAvailableMovieIds.size()) - 4);
+                            if (event.mouseWheelScroll.delta < 0 && posMovieScrollOffset < maxMov) posMovieScrollOffset++;
+                            else if (event.mouseWheelScroll.delta > 0 && posMovieScrollOffset > 0) posMovieScrollOffset--;
+                        }
+                    }
+                }
+
+                // Keyboard shortcuts (F5 Checkout, F6 Proforma, ESC Cancel)
+                if (event.type == sf::Event::KeyPressed) {
+                    if (event.key.code == sf::Keyboard::F5) {
+                        if (btnPosCheckout) btnPosCheckout->triggerClick();
+                    } else if (event.key.code == sf::Keyboard::F6) {
+                        if (btnPosPrintProforma) btnPosPrintProforma->triggerClick();
+                    } else if (event.key.code == sf::Keyboard::Escape) {
+                        if (btnPosCancel) btnPosCancel->triggerClick();
+                    }
+                }
+
+                // Interactive Clicks on Filter Rows, Seat Matrix, Cart Remove Buttons, and Payment Methods
+                if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                    float leftColX = sidebarWidth + 14.f;
+                    float leftColW = 1000.f;
+                    float rightStartX = leftColX + leftColW + 14.f;
+                    float rightW = 436.f;
+
+                    // Check click on Floating Promo Dropdown if open
+                    if (posPromoDropdownOpen) {
+                        float popX = rightStartX + 14.f;
+                        float popY = 566.f;
+                        float popW = 408.f;
+                        float popH = 224.f;
+
+                        if (mousePos.x >= popX && mousePos.x <= popX + popW && mousePos.y >= popY && mousePos.y <= popY + popH) {
+                            float itemH = 46.f;
+                            int maxItems = 4;
+                            float startItemsY = popY + 28.f;
+
+                            std::string query = inputPosVoucher ? inputPosVoucher->getText() : "";
+                            std::string qUpper = query;
+                            std::transform(qUpper.begin(), qUpper.end(), qUpper.begin(), ::toupper);
+                            qUpper.erase(0, qUpper.find_first_not_of(" \t\r\n"));
+                            if (!qUpper.empty()) qUpper.erase(qUpper.find_last_not_of(" \t\r\n") + 1);
+
+                            std::vector<std::pair<std::string, std::string>> matchingList;
+                            sqlite3* dbConn = nullptr;
+                            if (sqlite3_open("DATA/cinema.db", &dbConn) == SQLITE_OK) {
+                                std::string q = "SELECT maCode, tenKhuyenMai FROM promotions;";
+                                sqlite3_stmt* stmt = nullptr;
+                                if (sqlite3_prepare_v2(dbConn, q.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+                                    while (sqlite3_step(stmt) == SQLITE_ROW) {
+                                        const char* cCode = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+                                        const char* cTen = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+                                        std::string codeStr = cCode ? cCode : "";
+                                        std::string tenStr = cTen ? cTen : "";
+                                        std::string codeUpper = codeStr;
+                                        std::string tenUpper = tenStr;
+                                        std::transform(codeUpper.begin(), codeUpper.end(), codeUpper.begin(), ::toupper);
+                                        std::transform(tenUpper.begin(), tenUpper.end(), tenUpper.begin(), ::toupper);
+                                        if (qUpper.empty() || codeUpper.find(qUpper) != std::string::npos || tenUpper.find(qUpper) != std::string::npos) {
+                                            matchingList.push_back({codeStr, tenStr});
+                                        }
+                                    }
+                                    sqlite3_finalize(stmt);
+                                }
+                                sqlite3_close(dbConn);
+                            }
+
+                            int totalMatching = static_cast<int>(matchingList.size());
+                            for (int i = 0; i < maxItems && (posPromoScrollOffset + i) < totalMatching; ++i) {
+                                float iy = startItemsY + static_cast<float>(i) * itemH;
+                                if (mousePos.y >= iy && mousePos.y <= iy + itemH) {
+                                    std::string selCode = matchingList[posPromoScrollOffset + i].first;
+                                    if (inputPosVoucher) inputPosVoucher->setText(selCode);
+                                    posVoucherCode = selCode;
+                                    posVoucherApplied = true;
+                                    if (btnPosApplyVoucher) {
+                                        btnPosApplyVoucher->setText("Đã áp dụng");
+                                        btnPosApplyVoucher->setCustomColors(sf::Color(5, 150, 105), sf::Color(4, 120, 87), sf::Color(6, 95, 70), sf::Color(148, 163, 184));
+                                    }
+                                    posPromoDropdownOpen = false;
+                                    recalculatePosTotals();
+                                    break;
+                                }
+                            }
+                            break;
+                        } else if (mousePos.x >= rightStartX + 14.f && mousePos.x <= rightStartX + 14.f + 304.f &&
+                                   mousePos.y >= 530.f && mousePos.y <= 530.f + 32.f) {
+                            // Click inside input box, keep open
+                        } else {
+                            posPromoDropdownOpen = false;
+                        }
+                    }
+
+                    // 1. Row 1: NGÀY pills & scroll arrows (y = 86.f .. 120.f)
+                    float dateRowY = 86.f;
+                    int maxVisibleDates = 5;
+                    int totalDates = static_cast<int>(posAvailableDates.size());
+                    float dateStartX = leftColX + 82.f;
+                    float dateBtnW = 136.f;
+                    float dateBtnH = 34.f;
+                    float dateGap = 10.f;
+
+                    if (mousePos.y >= dateRowY && mousePos.y <= dateRowY + dateBtnH) {
+                        if (totalDates > maxVisibleDates) {
+                            float arrX = leftColX + leftColW - 68.f;
+                            if (mousePos.x >= arrX && mousePos.x <= arrX + 24.f) {
+                                if (posDateScrollOffset > 0) posDateScrollOffset--;
+                            } else if (mousePos.x >= arrX + 28.f && mousePos.x <= arrX + 52.f) {
+                                if (posDateScrollOffset < totalDates - maxVisibleDates) posDateScrollOffset++;
+                            }
+                        }
+                        for (int i = 0; i < maxVisibleDates && (posDateScrollOffset + i) < totalDates; ++i) {
+                            float bx = dateStartX + static_cast<float>(i) * (dateBtnW + dateGap);
+                            if (mousePos.x >= bx && mousePos.x <= bx + dateBtnW) {
+                                posSelectedDateStr = posAvailableDates[posDateScrollOffset + i];
+                                // Ensure selected movie has showtimes on this date if possible
+                                bool movieHasStOnDate = false;
+                                for (const auto& st : showtimeList) {
+                                    if (st.getNgayChieu() == posSelectedDateStr && st.getMaPhim() == posSelectedMovieId) {
+                                        movieHasStOnDate = true;
+                                        break;
+                                    }
+                                }
+                                if (!movieHasStOnDate) {
+                                    for (const auto& st : showtimeList) {
+                                        if (st.getNgayChieu() == posSelectedDateStr) {
+                                            posSelectedMovieId = st.getMaPhim();
+                                            break;
+                                        }
+                                    }
+                                }
+                                refreshPosShowtimesDropdown();
+                                refreshSeatsForShowtime(currentShowtimeId);
+                                break;
+                            }
+                        }
+                    }
+
+                    // 2. Row 2: PHIM cards & scroll arrows (y = 130.f .. 176.f)
+                    float movieRowY = 130.f;
+                    int maxVisibleMovies = 4;
+                    int totalMovies = static_cast<int>(posAvailableMovieIds.size());
+                    float movieStartX = leftColX + 82.f;
+                    float movieCardW = 204.f;
+                    float movieCardH = 46.f;
+                    float movieGap = 10.f;
+
+                    if (mousePos.y >= movieRowY && mousePos.y <= movieRowY + movieCardH) {
+                        if (totalMovies > maxVisibleMovies) {
+                            float arrX = leftColX + leftColW - 68.f;
+                            if (mousePos.x >= arrX && mousePos.x <= arrX + 24.f) {
+                                if (posMovieScrollOffset > 0) posMovieScrollOffset--;
+                            } else if (mousePos.x >= arrX + 28.f && mousePos.x <= arrX + 52.f) {
+                                if (posMovieScrollOffset < totalMovies - maxVisibleMovies) posMovieScrollOffset++;
+                            }
+                        }
+                        for (int i = 0; i < maxVisibleMovies && (posMovieScrollOffset + i) < totalMovies; ++i) {
+                            float mx = movieStartX + static_cast<float>(i) * (movieCardW + movieGap);
+                            if (mousePos.x >= mx && mousePos.x <= mx + movieCardW) {
+                                posSelectedMovieId = posAvailableMovieIds[posMovieScrollOffset + i];
+                                refreshPosShowtimesDropdown();
+                                refreshSeatsForShowtime(currentShowtimeId);
+                                break;
+                            }
+                        }
+                    }
+
+                    // 3. Row 3: SUẤT cards (y = 186.f .. 240.f)
+                    float stRowY = 186.f;
+                    float stStartX = leftColX + 82.f;
+                    float stCardW = 172.f;
+                    float stCardH = 54.f;
+                    float stGap = 10.f;
+                    int maxVisibleSt = 5;
+                    int totalSt = static_cast<int>(posFilteredShowtimeIds.size());
+
+                    if (mousePos.y >= stRowY && mousePos.y <= stRowY + stCardH) {
+                        for (int i = 0; i < maxVisibleSt && i < totalSt; ++i) {
+                            float sx = stStartX + static_cast<float>(i) * (stCardW + stGap);
+                            if (mousePos.x >= sx && mousePos.x <= sx + stCardW) {
+                                if (!posFilteredShowtimeIds[i].empty()) {
+                                    currentShowtimeId = posFilteredShowtimeIds[i];
+                                    refreshSeatsForShowtime(currentShowtimeId);
+                                }
+                                break;
+                            }
+                        }
+                    }
+
+                    // 4. Seat Matrix Clicks
                     for (auto& s : currentSeats) {
                         if (s.trangThai != "DaDat") {
                             if (mousePos.x >= s.position.x && mousePos.x <= s.position.x + s.size.x &&
@@ -1443,7 +1835,6 @@ void CinemaUIApp::handleEvents() {
                                 s.isSelected = !s.isSelected;
                                 if (s.isSelected) {
                                     selectedSeatCodes.push_back(s.maGhe);
-                                    posSeatTotal += s.donGia;
                                 } else {
                                     for (auto it = selectedSeatCodes.begin(); it != selectedSeatCodes.end(); ++it) {
                                         if (*it == s.maGhe) {
@@ -1451,10 +1842,68 @@ void CinemaUIApp::handleEvents() {
                                             break;
                                         }
                                     }
-                                    posSeatTotal -= s.donGia;
                                 }
-                                if (posSeatTotal < 0.0) posSeatTotal = 0.0;
-                                posGrandTotal = posSeatTotal + posFnbTotal;
+                                recalculatePosTotals();
+                                break;
+                            }
+                        }
+                    }
+
+                    // 5. Remove single seat ('×') in Card 1 (GHẾ ĐANG CHỌN)
+                    float rc1Y = 74.f;
+                    for (size_t i = 0; i < selectedSeatCodes.size() && i < 2; ++i) {
+                        float itemY = rc1Y + 38.f + static_cast<float>(i) * 44.f;
+                        if (mousePos.x >= rightStartX + rightW - 38.f && mousePos.x <= rightStartX + rightW - 14.f &&
+                            mousePos.y >= itemY && mousePos.y <= itemY + 38.f) {
+                            std::string codeToRemove = selectedSeatCodes[i];
+                            selectedSeatCodes.erase(selectedSeatCodes.begin() + static_cast<long long>(i));
+                            for (auto& s : currentSeats) {
+                                if (s.maGhe == codeToRemove) {
+                                    s.isSelected = false;
+                                    break;
+                                }
+                            }
+                            recalculatePosTotals();
+                            break;
+                        }
+                    }
+
+                    // 6. Remove F&B item ('×') in Card 2 (F&B ĐÃ CHỌN)
+                    float rc2Y = 248.f;
+                    std::vector<std::string> uniqueFnbNames;
+                    for (const auto& f : posSelectedFnb) {
+                        if (std::find(uniqueFnbNames.begin(), uniqueFnbNames.end(), f.first) == uniqueFnbNames.end()) {
+                            uniqueFnbNames.push_back(f.first);
+                        }
+                    }
+                    for (size_t i = 0; i < uniqueFnbNames.size() && i < 2; ++i) {
+                        float fy = rc2Y + 38.f + static_cast<float>(i) * 42.f;
+                        float boxH = (uniqueFnbNames.size() == 1) ? 54.f : 38.f;
+                        if (mousePos.x >= rightStartX + rightW - 38.f && mousePos.x <= rightStartX + rightW - 14.f &&
+                            mousePos.y >= fy && mousePos.y <= fy + boxH) {
+                            std::string targetName = uniqueFnbNames[i];
+                            // Remove one instance of targetName
+                            for (auto it = posSelectedFnb.begin(); it != posSelectedFnb.end(); ++it) {
+                                if (it->first == targetName) {
+                                    posSelectedFnb.erase(it);
+                                    break;
+                                }
+                            }
+                            recalculatePosTotals();
+                            break;
+                        }
+                    }
+
+                    // 7. Payment Method Cards Click (Tiền mặt, Quét QR, Thẻ POS)
+                    float pmY = 582.f + 32.f;
+                    float pmW = 130.f;
+                    float pmH = 50.f;
+                    float pmGap = 9.f;
+                    if (mousePos.y >= pmY && mousePos.y <= pmY + pmH) {
+                        for (int p = 0; p < 3; ++p) {
+                            float px = rightStartX + 14.f + static_cast<float>(p) * (pmW + pmGap);
+                            if (mousePos.x >= px && mousePos.x <= px + pmW) {
+                                posPaymentMethod = p;
                                 break;
                             }
                         }
@@ -1463,7 +1912,156 @@ void CinemaUIApp::handleEvents() {
                 break;
 
             case ActiveTab::CRM:
-                handleBtn(btnAddCustomer);
+                if (showCrmAddModal) {
+                    if (event.type == sf::Event::MouseButtonPressed) {
+                        if (inputCrmName) inputCrmName->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                        if (inputCrmPhone) inputCrmPhone->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                        if (inputCrmEmail) inputCrmEmail->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    } else if (event.type == sf::Event::TextEntered) {
+                        if (inputCrmName) inputCrmName->handleTextEntered(event.text.unicode);
+                        if (inputCrmPhone) inputCrmPhone->handleTextEntered(event.text.unicode);
+                        if (inputCrmEmail) inputCrmEmail->handleTextEntered(event.text.unicode);
+                    }
+                    handleBtn(btnCrmSave);
+                    handleBtn(btnCrmCancel);
+                    break;
+                }
+
+                if (crmTierDropdown) {
+                    if (event.type == sf::Event::MouseButtonPressed) crmTierDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    else if (event.type == sf::Event::MouseButtonReleased) crmTierDropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                    else if (event.type == sf::Event::MouseMoved) crmTierDropdown->handleMouseMove(mousePos);
+                    else if (event.type == sf::Event::MouseWheelScrolled) crmTierDropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                }
+
+                if (crmSearchInput) {
+                    if (event.type == sf::Event::MouseButtonPressed) crmSearchInput->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    else if (event.type == sf::Event::TextEntered) {
+                        crmSearchInput->handleTextEntered(event.text.unicode);
+                        crmCurrentPage = 0;
+                    }
+                }
+                if (crmDateRangeInput) {
+                    if (event.type == sf::Event::MouseButtonPressed) crmDateRangeInput->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                    else if (event.type == sf::Event::TextEntered) crmDateRangeInput->handleTextEntered(event.text.unicode);
+                }
+
+                // Handle clicks on Sub-Tab Switcher Bar & Customer Row Actions
+                if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                    float startX = sidebarWidth + 24.f;
+                    float tabBarY = 174.f;
+                    float tabW = 176.f;
+
+                    // Sub-tab 0: Quản lý Khách hàng
+                    if (mousePos.x >= startX + 10.f && mousePos.x <= startX + 10.f + tabW &&
+                        mousePos.y >= tabBarY + 4.f && mousePos.y <= tabBarY + 42.f) {
+                        if (crmSubTab != 0) {
+                            crmSubTab = 0;
+                            crmCurrentPage = 0;
+                            if (crmTierDropdown) {
+                                crmTierDropdown->setOptions({"Tất cả hạng hội viên", "Hạng Thường (Standard)", "Hạng Thân Thiết / VIP"}, 0);
+                            }
+                        }
+                    }
+                    // Sub-tab 1: Lịch sử tích điểm
+                    else if (mousePos.x >= startX + 194.f && mousePos.x <= startX + 194.f + tabW &&
+                             mousePos.y >= tabBarY + 4.f && mousePos.y <= tabBarY + 42.f) {
+                        if (crmSubTab != 1) {
+                            crmSubTab = 1;
+                            crmCurrentPage = 0;
+                            if (crmTierDropdown) {
+                                crmTierDropdown->setOptions({"Tất cả loại GD", "+ Tích điểm", "- Đổi điểm"}, 0);
+                            }
+                        }
+                    }
+
+                    // Customer Row Actions in Sub-tab 0: [+ Tích 100đ] and [- Đổi 100đ]
+                    if (crmSubTab == 0) {
+                        std::string q = crmSearchInput ? crmSearchInput->getText() : "";
+                        std::transform(q.begin(), q.end(), q.begin(), ::tolower);
+                        int filterIdx = crmTierDropdown ? crmTierDropdown->getSelectedIndex() : 0;
+
+                        std::vector<int> filteredIndices;
+                        for (size_t idx = 0; idx < customerList.size(); ++idx) {
+                            const auto& c = customerList[idx];
+                            std::string h = c.getHangThanhVien();
+                            if (filterIdx == 1 && (h != "Thuong" && h != "Standard" && !h.empty())) continue;
+                            if (filterIdx == 2 && (h != "ThanThiet" && h != "VIP" && h != "Bac")) continue;
+                            if (!q.empty()) {
+                                std::string hay = c.getMaKH() + " " + c.getHoTen() + " " + c.getSoDienThoai() + " " + c.getEmail();
+                                std::transform(hay.begin(), hay.end(), hay.begin(), ::tolower);
+                                if (hay.find(q) == std::string::npos) continue;
+                            }
+                            filteredIndices.push_back(static_cast<int>(idx));
+                        }
+
+                        int rowsPerPage = 8;
+                        int startIdx = crmCurrentPage * rowsPerPage;
+                        int endIdx = std::min(startIdx + rowsPerPage, static_cast<int>(filteredIndices.size()));
+                        float rowStartY = 428.f + 44.f + 42.f;
+                        float rowH = 50.f;
+
+                        for (int i = startIdx; i < endIdx; ++i) {
+                            float ry = rowStartY + static_cast<float>(i - startIdx) * rowH;
+                            int custIdx = filteredIndices[i];
+                            Customer& targetCust = customerList[custIdx];
+
+                            // [+ Tích 100đ] button
+                            if (mousePos.x >= startX + 1230.f && mousePos.x <= startX + 1308.f &&
+                                mousePos.y >= ry + 12.f && mousePos.y <= ry + 38.f) {
+                                targetCust.tichDiem(100, "Tích điểm giao dịch tại quầy POS", "06/05/2026 19:15");
+                                targetCust.themChiTieu(200000);
+
+                                sqlite3* dbConn = nullptr;
+                                if (sqlite3_open("DATA/cinema.db", &dbConn) == SQLITE_OK) {
+                                    std::string upSql = "UPDATE customers SET diemTichLuy='" + std::to_string(targetCust.getDiemTichLuy()) +
+                                                        "', hangThanhVien='" + targetCust.getHangThanhVien() +
+                                                        "', tongChiTieu='" + std::to_string(targetCust.getTongChiTieu()) +
+                                                        "' WHERE maKhachHang='" + targetCust.getMaKH() + "';";
+                                    sqlite3_exec(dbConn, upSql.c_str(), nullptr, nullptr, nullptr);
+
+                                    std::string gdId = "GD" + std::to_string(crmPointHistoryList.size() + 1);
+                                    std::string insSql = "INSERT INTO customer_points_history VALUES ('" + gdId + "', '" + targetCust.getMaKH() +
+                                                         "', 'TichDiem', '100', 'Tích điểm giao dịch tại quầy POS', '06/05/2026 19:15');";
+                                    sqlite3_exec(dbConn, insSql.c_str(), nullptr, nullptr, nullptr);
+                                    sqlite3_close(dbConn);
+                                }
+                                reloadCRMData();
+                                break;
+                            }
+                            // [- Đổi 100đ] button
+                            else if (mousePos.x >= startX + 1316.f && mousePos.x <= startX + 1394.f &&
+                                     mousePos.y >= ry + 12.f && mousePos.y <= ry + 38.f) {
+                                if (targetCust.doiDiem(100, "Đổi 100 điểm giảm giá vé & combo", "06/05/2026 19:15")) {
+                                    sqlite3* dbConn = nullptr;
+                                    if (sqlite3_open("DATA/cinema.db", &dbConn) == SQLITE_OK) {
+                                        std::string upSql = "UPDATE customers SET diemTichLuy='" + std::to_string(targetCust.getDiemTichLuy()) +
+                                                            "', hangThanhVien='" + targetCust.getHangThanhVien() +
+                                                            "' WHERE maKhachHang='" + targetCust.getMaKH() + "';";
+                                        sqlite3_exec(dbConn, upSql.c_str(), nullptr, nullptr, nullptr);
+
+                                        std::string gdId = "GD" + std::to_string(crmPointHistoryList.size() + 1);
+                                        std::string insSql = "INSERT INTO customer_points_history VALUES ('" + gdId + "', '" + targetCust.getMaKH() +
+                                                             "', 'DoiDiem', '100', 'Đổi 100 điểm giảm giá vé & combo', '06/05/2026 19:15');";
+                                        sqlite3_exec(dbConn, insSql.c_str(), nullptr, nullptr, nullptr);
+                                        sqlite3_close(dbConn);
+                                    }
+                                    reloadCRMData();
+                                } else if (confirmPopup) {
+                                    confirmPopup->show("KHÔNG ĐỦ ĐIỂM", "Hội viên " + targetCust.getHoTen() + " không đủ 100 điểm tích lũy để quy đổi!", ButtonStyle::Danger, "Đóng", "");
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                handleBtn(btnCrmSearch);
+                handleBtn(btnCrmExport);
+                handleBtn(btnCrmRefresh);
+                handleBtn(btnCrmAddModal);
+                handleBtn(btnCrmPrevPage);
+                handleBtn(btnCrmNextPage);
                 break;
 
             case ActiveTab::Reports: {
@@ -1715,12 +2313,20 @@ void CinemaUIApp::handleEvents() {
                                     std::set<char> selR;
                                     std::set<int> selC;
                                     for (const auto& sc : seatSelectedCodes) {
-                                        if (sc.size() >= 2 && std::isalpha(static_cast<unsigned char>(sc[0]))) {
-                                            selR.insert(static_cast<char>(std::toupper(static_cast<unsigned char>(sc[0]))));
+                                        size_t aLen = 0;
+                                        std::string pfx;
+                                        while (aLen < sc.size() && std::isalpha(static_cast<unsigned char>(sc[aLen]))) {
+                                            pfx.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(sc[aLen]))));
+                                            ++aLen;
+                                        }
+                                        if (aLen > 0 && aLen < sc.size()) {
+                                            char rowCh = (pfx == "VIP") ? 'V' : ((pfx == "SW") ? 'S' : pfx[0]);
+                                            selR.insert(rowCh);
                                             int c1 = 0, c2 = 0;
-                                            if (std::sscanf(sc.c_str() + 1, "%d-%d", &c1, &c2) == 2 && c1 > 0 && c2 >= c1) {
+                                            std::string rest = sc.substr(aLen);
+                                            if (std::sscanf(rest.c_str(), "%d-%d", &c1, &c2) == 2 && c1 > 0 && c2 >= c1) {
                                                 for (int k = c1; k <= c2; ++k) selC.insert(k);
-                                            } else if (std::sscanf(sc.c_str() + 1, "%d", &c1) == 1 && c1 > 0) {
+                                            } else if (std::sscanf(rest.c_str(), "%d", &c1) == 1 && c1 > 0) {
                                                 selC.insert(c1);
                                             }
                                         }
@@ -1773,28 +2379,38 @@ void CinemaUIApp::handleEvents() {
                                 mousePos.y >= ry && mousePos.y <= ry + rH) {
                                 if (isSeatBookedInRoom(seatSelectedRoomId, targetCode)) {
                                     if (confirmPopup) {
-                                        confirmPopup->show("CẢNH BÁO NGHIỆP VỤ", "Ghế " + targetCode + " đã có vé bán trong hệ thống. Không thể xóa ghế này!", ButtonStyle::Danger, "Đóng", "");
+                                        confirmPopup->show("CẢNH BÁO NGHIỆP VỤ", "Ghế " + targetCode + " đã có vé bán trong suất chiếu sắp tới. Không thể xóa ghế này!", ButtonStyle::Danger, "Đóng", "");
                                     }
                                     break;
                                 }
-                                allSeats.erase(allSeats.begin() + actualSeatIdx);
-                                db.ghiDanhSachGhe(allSeats);
-
-                                int curRoomCnt = 0;
-                                for (const auto& s : allSeats) if (s.getMaPhong() == seatSelectedRoomId) curRoomCnt++;
-                                for (auto& rm : roomList) if (rm.getMaPhong() == seatSelectedRoomId) rm.setSucChua(curRoomCnt);
-                                db.ghiDanhSachPhong(roomList);
-                                refreshSeatsRoomDropdown();
-                                refreshShowtimesDropdowns();
+                                if (confirmPopup) {
+                                    std::string selRoom = seatSelectedRoomId;
+                                    std::string tCode = targetCode;
+                                    confirmPopup->show("XÁC NHẬN XÓA GHẾ", "Bạn có chắc chắn muốn xóa ghế " + tCode + " khỏi phòng " + selRoom + "?", ButtonStyle::Danger, "Xác nhận xóa", "Hủy");
+                                    confirmPopup->setOnConfirm([this, selRoom, tCode]() {
+                                        allSeats.erase(std::remove_if(allSeats.begin(), allSeats.end(), [&](const Seat& s) {
+                                            return s.getMaPhong() == selRoom && s.getMaGhe() == tCode;
+                                        }), allSeats.end());
+                                        db.ghiDanhSachGhe(allSeats);
+                                        refreshSeatsRoomDropdown();
+                                        refreshShowtimesDropdowns();
+                                    });
+                                }
                                 break;
                             }
 
                             // Click Pencil icon or Row -> Load into Right Form & Select on Map
                             if (mousePos.x >= leftColX + 20.f && mousePos.x <= leftColX + leftColW - 20.f &&
                                 mousePos.y >= ry && mousePos.y <= ry + rH) {
-                                if (!targetCode.empty() && std::isalpha(static_cast<unsigned char>(targetCode[0]))) {
-                                    char rc = static_cast<char>(std::toupper(static_cast<unsigned char>(targetCode[0])));
-                                    std::string colPart = targetCode.substr(1);
+                                size_t aLen = 0;
+                                std::string pfx;
+                                while (aLen < targetCode.size() && std::isalpha(static_cast<unsigned char>(targetCode[aLen]))) {
+                                    pfx.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(targetCode[aLen]))));
+                                    ++aLen;
+                                }
+                                if (aLen > 0 && aLen < targetCode.size()) {
+                                    char rc = (pfx == "VIP") ? 'V' : ((pfx == "SW") ? 'S' : pfx[0]);
+                                    std::string colPart = targetCode.substr(aLen);
                                     if (inputSeatBatchRows) inputSeatBatchRows->setText(std::string(1, rc));
                                     if (inputSeatBatchCols) inputSeatBatchCols->setText(colPart);
                                     seatSelectedCodes = {targetCode};
@@ -1821,6 +2437,20 @@ void CinemaUIApp::handleEvents() {
                         }
                     }
                 } else if (seatSubTab == 1) {
+                    bool filterDrpClicked = false;
+                    if (seatTypeFilterDropdown) {
+                        if (event.type == sf::Event::MouseMoved) seatTypeFilterDropdown->handleMouseMove(mousePos);
+                        else if (event.type == sf::Event::MouseWheelScrolled) seatTypeFilterDropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                        else if (event.type == sf::Event::MouseButtonPressed) {
+                            if (seatTypeFilterDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos)) {
+                                filterDrpClicked = true;
+                            }
+                        } else if (event.type == sf::Event::MouseButtonReleased) {
+                            seatTypeFilterDropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                        }
+                    }
+                    if (filterDrpClicked) continue;
+
                     handleBtn(btnSeatExportPricing);
                     handleBtn(btnSeatAddNewType);
                     handleBtn(btnSeatPriceHistory);
@@ -1860,18 +2490,14 @@ void CinemaUIApp::handleEvents() {
                         float rightColX = leftColX + leftColW + 20.f;
                         float rightColW = 500.f;
 
-                        // Build filtered seatType indices (diacritic-insensitive)
+                        // Build filtered seatType indices (diacritic-insensitive & filtered by seatTypeFilterIdx dropdown)
                         std::string q = seatTypeSearchInput ? UI::removeVietnameseDiacritics(seatTypeSearchInput->getText()) : "";
                         std::vector<int> visTypeIndices;
                         for (size_t i = 0; i < seatTypeList.size(); ++i) {
-                            std::string tlLow = UI::removeVietnameseDiacritics(seatTypeList[i].tenLoai);
-                            if (seatTypeFilterIdx == 1) {
-                                if (tlLow.find("standard") == std::string::npos && tlLow.find("vip") == std::string::npos) continue;
-                            } else if (seatTypeFilterIdx == 2) {
-                                if (tlLow.find("couple") == std::string::npos && tlLow.find("sweetbox") == std::string::npos && tlLow.find("vip") == std::string::npos) continue;
-                            } else if (seatTypeFilterIdx == 3) {
-                                if (tlLow.find("imax") == std::string::npos && tlLow.find("4dx") == std::string::npos) continue;
+                            if (seatTypeFilterIdx > 0 && seatTypeFilterIdx <= static_cast<int>(seatTypeList.size())) {
+                                if (seatTypeList[i].tenLoai != seatTypeList[seatTypeFilterIdx - 1].tenLoai) continue;
                             }
+                            std::string tlLow = UI::removeVietnameseDiacritics(seatTypeList[i].tenLoai);
                             if (!q.empty()) {
                                 std::string descLow = UI::removeVietnameseDiacritics(seatTypeList[i].moTa + " " + seatTypeList[i].maLoai);
                                 if (tlLow.find(q) == std::string::npos && descLow.find(q) == std::string::npos) continue;
@@ -1974,7 +2600,10 @@ void CinemaUIApp::handleEvents() {
                 }
                 if (inputStDate) {
                     if (event.type == sf::Event::MouseButtonPressed) inputStDate->handleMouseButtonPressed(event.mouseButton.button, mousePos);
-                    else if (event.type == sf::Event::TextEntered) inputStDate->handleTextEntered(event.text.unicode);
+                    else if (event.type == sf::Event::TextEntered) {
+                        inputStDate->handleTextEntered(event.text.unicode);
+                        refreshFormMovieDropdownForDate();
+                    }
                 }
                 if (inputStTime) {
                     if (event.type == sf::Event::MouseButtonPressed) inputStTime->handleMouseButtonPressed(event.mouseButton.button, mousePos);
@@ -2072,8 +2701,13 @@ void CinemaUIApp::handleEvents() {
                             if (mousePos.x >= aColX + 32.f && mousePos.x <= aColX + 58.f &&
                                 mousePos.y >= icY && mousePos.y <= icY + 26.f) {
                                 std::string code = showtimeList[actualIdx].getMaSuatChieu();
+                                std::vector<Showtime> backup = showtimeList;
                                 showtimeList.erase(showtimeList.begin() + actualIdx);
-                                db.ghiDanhSachSuatChieu(showtimeList);
+                                if (!db.ghiDanhSachSuatChieu(showtimeList)) {
+                                    showtimeList = backup;
+                                    if (confirmPopup) confirmPopup->show("LỖI CƠ SỞ DỮ LIỆU", "Không thể xóa suất chiếu khỏi cơ sở dữ liệu!", ButtonStyle::Danger, "Đóng", "");
+                                    break;
+                                }
                                 refreshShowtimesDropdowns();
                                 if (selectedShowtimeRowIdx >= static_cast<int>(showtimeList.size())) {
                                     selectedShowtimeRowIdx = static_cast<int>(showtimeList.size()) - 1;
@@ -2196,9 +2830,18 @@ void CinemaUIApp::handleEvents() {
                                 mousePos.y >= addBtnY && mousePos.y <= addBtnY + addBtnH) {
                                 selectedShowtimeRowIdx = -1;
                                 stFormMovieIdx = m;
-                                if (stMovieDropdown) stMovieDropdown->setSelectedIndex(stFormMovieIdx);
                                 if (inputStTime) inputStTime->setText("");
-                                if (inputStDate) inputStDate->setText(stTodayStr());
+                                if (inputStDate) inputStDate->setText("");
+                                refreshFormMovieDropdownForDate();
+                                int mappedDropIdx = 0;
+                                for (size_t fi = 0; fi < stFilteredMovieIndices.size(); ++fi) {
+                                    if (stFilteredMovieIndices[fi] == m) {
+                                        mappedDropIdx = static_cast<int>(fi);
+                                        break;
+                                    }
+                                }
+                                if (stMovieDropdown) stMovieDropdown->setSelectedIndex(mappedDropIdx);
+                                stFormMovieIdx = m;
                                 stLastValidMinutes = -1;
                                 break;
                             }
@@ -2265,6 +2908,21 @@ void CinemaUIApp::handleEvents() {
                 handleBtn(btnFnbDelete);
                 handleBtn(btnFnbUpdate);
                 handleBtn(btnFnbClear);
+
+                if (fnbFormLoai == "Combo") {
+                    if (comboItem1Dropdown) {
+                        if (event.type == sf::Event::MouseMoved) comboItem1Dropdown->handleMouseMove(mousePos);
+                        else if (event.type == sf::Event::MouseButtonPressed) comboItem1Dropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                        else if (event.type == sf::Event::MouseButtonReleased) comboItem1Dropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                        else if (event.type == sf::Event::MouseWheelScrolled) comboItem1Dropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                    }
+                    if (comboItem2Dropdown) {
+                        if (event.type == sf::Event::MouseMoved) comboItem2Dropdown->handleMouseMove(mousePos);
+                        else if (event.type == sf::Event::MouseButtonPressed) comboItem2Dropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                        else if (event.type == sf::Event::MouseButtonReleased) comboItem2Dropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                        else if (event.type == sf::Event::MouseWheelScrolled) comboItem2Dropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                    }
+                }
 
                 if (fnbSearchInput) {
                     if (event.type == sf::Event::MouseButtonPressed) fnbSearchInput->handleMouseButtonPressed(event.mouseButton.button, mousePos);
@@ -2407,8 +3065,39 @@ void CinemaUIApp::handleEvents() {
                 break;
 
             case ActiveTab::ShiftReport:
-                handleBtn(btnApproveShift);
-                handleBtn(btnCloseShift);
+                if ((currentUserRole == "Admin" || currentUserRole == "Khách") && !adminShowHistorySubView) {
+                    if (adminNextCashierDropdown) {
+                        if (event.type == sf::Event::MouseMoved) adminNextCashierDropdown->handleMouseMove(mousePos);
+                        else if (event.type == sf::Event::MouseButtonPressed) adminNextCashierDropdown->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                        else if (event.type == sf::Event::MouseButtonReleased) adminNextCashierDropdown->handleMouseButtonReleased(event.mouseButton.button, mousePos);
+                        else if (event.type == sf::Event::MouseWheelScrolled) adminNextCashierDropdown->handleMouseWheelScrolled(event.mouseWheelScroll.delta, mousePos);
+                    }
+                    if (inputAdminManagerPin) {
+                        if (event.type == sf::Event::MouseButtonPressed) inputAdminManagerPin->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                        else if (event.type == sf::Event::TextEntered) inputAdminManagerPin->handleTextEntered(event.text.unicode);
+                    }
+                    handleBtn(btnAdminShiftRefresh);
+                    handleBtn(btnAdminShiftExit);
+                    handleBtn(btnAdminShiftHistory);
+                    handleBtn(btnAdminCashierHandover);
+                    handleBtn(btnAdminManagerApprove);
+                } else {
+                    if (currentUserRole == "Staff") {
+                        if (inputShiftActualCash) {
+                            if (event.type == sf::Event::MouseButtonPressed) inputShiftActualCash->handleMouseButtonPressed(event.mouseButton.button, mousePos);
+                            else if (event.type == sf::Event::TextEntered) inputShiftActualCash->handleTextEntered(event.text.unicode);
+                        }
+                        handleBtn(btnShiftCalculate);
+                        handleBtn(btnShiftCloseShift);
+                    }
+                    handleBtn(btnShiftExportReport);
+                    handleBtn(btnShiftRefresh);
+                    handleBtn(btnShiftPrevPage);
+                    handleBtn(btnShiftNextPage);
+                    if (currentUserRole == "Admin" || currentUserRole == "Khách") {
+                        handleBtn(btnAdminShiftHistory);
+                    }
+                }
                 break;
 
             case ActiveTab::Promotions: {
@@ -2599,8 +3288,12 @@ void CinemaUIApp::handleEvents() {
                         // Click directly on status pill (leftColX + 780 .. leftColX + 890, ry + 16 .. ry + 56)
                         if (mousePos.x >= leftColX + 780.f && mousePos.x <= leftColX + 890.f &&
                             mousePos.y >= ry + 16.f && mousePos.y <= ry + 56.f) {
+                            if (staffUserList[actualIdx].vaiTro == "Admin") {
+                                if (confirmPopup) confirmPopup->show("CẢNH BÁO", "Không thể chọn nghỉ làm với Admin để đảm bảo hệ thống luôn có ít nhất một Admin đang hoạt động. Vui lòng quản lý tại mục Quản lý tài khoản!", ButtonStyle::Danger, "Đóng", "");
+                                break;
+                            }
                             std::string curSt = staffUserList[actualIdx].trangThaiLamViec;
-                            staffUserList[actualIdx].trangThaiLamViec = (curSt == "DangLam") ? "DaNghi" : "DangLam";
+                            staffUserList[actualIdx].trangThaiLamViec = (curSt == "DangLam") ? "DaNghiViec" : "DangLam";
                             saveStaffUsersToDatabase();
                             syncStaffSelectionToForm(actualIdx);
                             break;
@@ -2641,11 +3334,16 @@ void CinemaUIApp::handleEvents() {
                         if (staffCurrentPage < totalPages - 1) staffCurrentPage++;
                     }
 
-                    // Checkbox "Đã nghỉ làm" in Right Form at rightColX = 1200, y = 780
-                    float rightColX = sidebarWidth + 950.f;
-                    if (mousePos.x >= rightColX + 24.f && mousePos.x <= rightColX + 220.f &&
-                        mousePos.y >= 776.f && mousePos.y <= 810.f) {
-                        staffFormResigned = !staffFormResigned;
+                    // Checkbox "Đã nghỉ làm" in Right Form at rightColX = 1200, y = 664
+                    float formRightColX = 1200.f;
+                    if (mousePos.x >= formRightColX + 100.f && mousePos.x <= formRightColX + 260.f &&
+                        mousePos.y >= 655.f && mousePos.y <= 695.f) {
+                        if (selectedStaffRowIdx >= 0 && selectedStaffRowIdx < static_cast<int>(staffUserList.size()) &&
+                            staffUserList[selectedStaffRowIdx].vaiTro == "Admin") {
+                            if (confirmPopup) confirmPopup->show("CẢNH BÁO", "Không thể chọn nghỉ làm với Admin để đảm bảo hệ thống luôn có ít nhất một Admin đang hoạt động. Vui lòng quản lý tại mục Quản lý tài khoản!", ButtonStyle::Danger, "Đóng", "");
+                        } else {
+                            staffFormResigned = !staffFormResigned;
+                        }
                     }
                 }
                 break;
@@ -2901,6 +3599,19 @@ void CinemaUIApp::update(float dt) {
     if (searchBar) searchBar->update(dt);
     if (inputCustomerPhone) inputCustomerPhone->update(dt);
 
+    if (currentTab == ActiveTab::SeatBooking) {
+        if (inputPosMemberPhone) inputPosMemberPhone->update(dt);
+        if (inputPosVoucher) inputPosVoucher->update(dt);
+        if (inputPosCashGiven) inputPosCashGiven->update(dt);
+    }
+    if (currentTab == ActiveTab::CRM) {
+        if (crmSearchInput) crmSearchInput->update(dt);
+        if (crmDateRangeInput) crmDateRangeInput->update(dt);
+        if (inputCrmName) inputCrmName->update(dt);
+        if (inputCrmPhone) inputCrmPhone->update(dt);
+        if (inputCrmEmail) inputCrmEmail->update(dt);
+    }
+
     if (currentTab == ActiveTab::Dashboard && dashboardSlider) {
         dashboardSlider->update(dt);
     }
@@ -2949,6 +3660,10 @@ void CinemaUIApp::update(float dt) {
         if (stSearchInput) stSearchInput->update(dt);
         if (inputStDate) inputStDate->update(dt);
         if (inputStTime) inputStTime->update(dt);
+    }
+    if (currentTab == ActiveTab::Concessions && fnbFormLoai == "Combo") {
+        if (comboItem1Dropdown) comboItem1Dropdown->drawPopup(window);
+        if (comboItem2Dropdown) comboItem2Dropdown->drawPopup(window);
     }
     if (currentTab == ActiveTab::Promotions) {
         if (promoSearchInput) promoSearchInput->update(dt);
@@ -3036,13 +3751,20 @@ void CinemaUIApp::render() {
 
     // Render Fixed Chrome (Top Bar & Sidebar)
     renderSidebar();
-    if (currentTab != ActiveTab::SeatBooking && currentTab != ActiveTab::Movies && currentTab != ActiveTab::Concessions && currentTab != ActiveTab::Showtimes && currentTab != ActiveTab::Rooms && currentTab != ActiveTab::Seats && currentTab != ActiveTab::Promotions && currentTab != ActiveTab::Staff && currentTab != ActiveTab::Accounts && currentTab != ActiveTab::Reports && currentTab != ActiveTab::SystemLogs) {
+    if (currentTab != ActiveTab::SeatBooking && currentTab != ActiveTab::CRM && currentTab != ActiveTab::ShiftReport && currentTab != ActiveTab::Movies && currentTab != ActiveTab::Concessions && currentTab != ActiveTab::Showtimes && currentTab != ActiveTab::Rooms && currentTab != ActiveTab::Seats && currentTab != ActiveTab::Promotions && currentTab != ActiveTab::Staff && currentTab != ActiveTab::Accounts && currentTab != ActiveTab::Reports && currentTab != ActiveTab::SystemLogs) {
         renderTopBar();
     }
 
     // Render Floating Dropdowns on top
-    if (currentTab == ActiveTab::SeatBooking && showtimeDropdown) {
-        showtimeDropdown->drawPopup(window);
+    if (currentTab == ActiveTab::SeatBooking) {
+        if (showtimeDropdown) showtimeDropdown->drawPopup(window);
+        if (posDateDropdown) posDateDropdown->drawPopup(window);
+        if (posMovieDropdown) posMovieDropdown->drawPopup(window);
+        if (posShowtimeDropdown) posShowtimeDropdown->drawPopup(window);
+        if (posFnbDropdown) posFnbDropdown->drawPopup(window);
+    }
+    if (currentTab == ActiveTab::CRM && crmTierDropdown) {
+        crmTierDropdown->drawPopup(window);
     }
     if (currentTab == ActiveTab::Movies) {
         if (movieAgeFilterDropdown) movieAgeFilterDropdown->drawPopup(window);
@@ -3054,6 +3776,10 @@ void CinemaUIApp::render() {
         if (stRoomDropdown) stRoomDropdown->drawPopup(window);
         if (stMovieDropdown) stMovieDropdown->drawPopup(window);
         if (stRoomFormDropdown) stRoomFormDropdown->drawPopup(window);
+    }
+    if (currentTab == ActiveTab::Concessions && fnbFormLoai == "Combo") {
+        if (comboItem1Dropdown) comboItem1Dropdown->drawPopup(window);
+        if (comboItem2Dropdown) comboItem2Dropdown->drawPopup(window);
     }
     if (currentTab == ActiveTab::Promotions) {
         if (promoScopeDropdown) promoScopeDropdown->drawPopup(window);
@@ -3068,9 +3794,13 @@ void CinemaUIApp::render() {
         if (roomStatusDropdown) roomStatusDropdown->drawPopup(window);
         if (roomFilterDropdown) roomFilterDropdown->drawPopup(window);
     }
-    if (currentTab == ActiveTab::Seats && seatSubTab == 0) {
-        if (seatBatchTypeDropdown) seatBatchTypeDropdown->drawPopup(window);
-        if (seatRoomDropdown) seatRoomDropdown->drawPopup(window);
+    if (currentTab == ActiveTab::Seats) {
+        if (seatSubTab == 0) {
+            if (seatBatchTypeDropdown) seatBatchTypeDropdown->drawPopup(window);
+            if (seatRoomDropdown) seatRoomDropdown->drawPopup(window);
+        } else if (seatSubTab == 1) {
+            if (seatTypeFilterDropdown) seatTypeFilterDropdown->drawPopup(window);
+        }
     }
     if (currentTab == ActiveTab::SystemLogs) {
         if (auditDateDropdown) auditDateDropdown->drawPopup(window);
@@ -3080,6 +3810,9 @@ void CinemaUIApp::render() {
         if (reportShiftDropdown) reportShiftDropdown->drawPopup(window);
         if (reportCashierDropdown) reportCashierDropdown->drawPopup(window);
         if (reportPaymentDropdown) reportPaymentDropdown->drawPopup(window);
+    }
+    if (currentTab == ActiveTab::ShiftReport && (currentUserRole == "Admin" || currentUserRole == "Khách") && !adminShowHistorySubView) {
+        if (adminNextCashierDropdown) adminNextCashierDropdown->drawPopup(window);
     }
 
     // Modal dialog for adding custom age limit
@@ -3141,24 +3874,36 @@ void CinemaUIApp::renderSidebar() {
     // Logo & Brand Header
     sf::Text logoText;
     logoText.setFont(Theme::FontCinema);
-    logoText.setCharacterSize(24);
+    logoText.setCharacterSize(22);
     logoText.setStyle(sf::Text::Bold);
     logoText.setFillColor(sf::Color(6, 182, 212)); // Cyan branding
     logoText.setString(toSfString("CINESTAR"));
-    logoText.setPosition(22.f, 16.f);
+    logoText.setPosition(22.f, 14.f);
     window.draw(logoText);
+
+    // Pill "CineOS v4.2 PRO"
+    RoundedRectRenderer::render(window, sf::Vector2f(130.f, 17.f), sf::Vector2f(96.f, 18.f), 9.f, sf::Color(14, 165, 233, 40));
+    sf::Text osBadge;
+    osBadge.setFont(Theme::FontPrimary);
+    osBadge.setCharacterSize(10);
+    osBadge.setStyle(sf::Text::Bold);
+    osBadge.setFillColor(sf::Color(14, 165, 233));
+    osBadge.setString("CineOS v4.2 PRO");
+    osBadge.setPosition(136.f, 19.f);
+    window.draw(osBadge);
 
     sf::Text subLogo;
     subLogo.setFont(Theme::FontPrimary);
     subLogo.setCharacterSize(10);
     subLogo.setFillColor(Theme::TextSecondary);
-    subLogo.setString(toSfString("HỆ THỐNG QUẢN LÝ RẠP"));
-    subLogo.setPosition(22.f, 44.f);
+    subLogo.setString(toSfString("Hệ thống Bán Vé & Rạp Chiếu Phim Cinestar Cinemas Complex"));
+    subLogo.setPosition(22.f, 42.f);
     window.draw(subLogo);
 
     // Menu Items - Admin excludes SeatBooking (POS) and CRM as requested
     std::vector<std::pair<std::string, ActiveTab>> menuItems;
-    if (currentUserRole == "Admin" || currentUserRole == "Khách") {
+    bool isStaff = (currentUserRole != "Admin" && currentUserRole != "Khách");
+    if (!isStaff) {
         menuItems = {
             {"Quản lý Doanh thu",    ActiveTab::Reports},
             {"Quản lý phòng",        ActiveTab::Rooms},
@@ -3176,14 +3921,20 @@ void CinemaUIApp::renderSidebar() {
         menuItems = {
             {"Bán vé (POS)",         ActiveTab::SeatBooking},
             {"Khách hàng (CRM)",     ActiveTab::CRM},
-            {"Quản lý Doanh thu",    ActiveTab::Reports},
-            {"Quản lý Báo cáo ca",   ActiveTab::ShiftReport},
-            {"Quản lý tài khoản",    ActiveTab::Accounts},
-            {"Nhật ký hoạt động",    ActiveTab::SystemLogs}
+            {"Chốt ca & Báo cáo",    ActiveTab::ShiftReport}
         };
+
+        sf::Text secHeader;
+        secHeader.setFont(Theme::FontPrimary);
+        secHeader.setCharacterSize(11);
+        secHeader.setStyle(sf::Text::Bold);
+        secHeader.setFillColor(sf::Color(148, 163, 184));
+        secHeader.setString(toSfString("MENU NGHIỆP VỤ"));
+        secHeader.setPosition(22.f, 68.f);
+        window.draw(secHeader);
     }
 
-    float startY = 72.f;
+    float startY = isStaff ? 92.f : 72.f;
     float itemH = 39.f;
 
     for (size_t i = 0; i < menuItems.size(); ++i) {
@@ -3223,6 +3974,40 @@ void CinemaUIApp::renderSidebar() {
         label.setString(toSfString(menuItems[i].first));
         label.setPosition(46.f, itemY + 9.f);
         window.draw(label);
+
+        // Badge [KIOSK] for POS Mode
+        if (menuItems[i].second == ActiveTab::SeatBooking) {
+            float badgeX = 175.f;
+            float badgeY = itemY + 10.f;
+            RoundedRectRenderer::render(window, sf::Vector2f(badgeX, badgeY), sf::Vector2f(50.f, 20.f), 10.f, sf::Color(14, 165, 233));
+            sf::Text bText;
+            bText.setFont(Theme::FontPrimary);
+            bText.setCharacterSize(10);
+            bText.setStyle(sf::Text::Bold);
+            bText.setFillColor(sf::Color::White);
+            bText.setString("KIOSK");
+            bText.setPosition(badgeX + 9.f, badgeY + 3.f);
+            window.draw(bText);
+        }
+    }
+
+    if (isStaff) {
+        float infoY = 805.f;
+        sf::Text txtShift;
+        txtShift.setFont(Theme::FontPrimary);
+        txtShift.setCharacterSize(11);
+        txtShift.setFillColor(sf::Color(148, 163, 184));
+        txtShift.setString(toSfString("Ca hiện tại: • Ca Chiếu (14h-22h)"));
+        txtShift.setPosition(22.f, infoY);
+        window.draw(txtShift);
+
+        sf::Text txtKiosk;
+        txtKiosk.setFont(Theme::FontPrimary);
+        txtKiosk.setCharacterSize(11);
+        txtKiosk.setFillColor(sf::Color(148, 163, 184));
+        txtKiosk.setString(toSfString("Quầy Kiosk: POS-01 (Sảnh A)"));
+        txtKiosk.setPosition(22.f, infoY + 20.f);
+        window.draw(txtKiosk);
     }
 
     // Bottom User Profile Card (STRICTLY ROLE ONLY - NO "Le Tuyet Nhi")

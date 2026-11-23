@@ -24,6 +24,16 @@ std::string CinemaUIApp::generateNextFnbId() const {
     return std::string(buf);
 }
 
+std::vector<int> CinemaUIApp::getRetailFnbIndices() const {
+    std::vector<int> res;
+    for (size_t i = 0; i < fnbList.size(); ++i) {
+        if (fnbList[i].getLoai() != "Combo") {
+            res.push_back(static_cast<int>(i));
+        }
+    }
+    return res;
+}
+
 void CinemaUIApp::reloadFnbImageTextures() {
     fnbImageTextures.clear();
 
@@ -169,7 +179,7 @@ void CinemaUIApp::setupConcessionsView() {
     inputFnbPrice = std::unique_ptr<UIInputBox>(new UIInputBox(
         sf::Vector2f(gInputX, 656.f),
         sf::Vector2f(210.f, 42.f),
-        "55000",
+        "Nhập giá bán...",
         16
     ));
     inputFnbPrice->setRightInset(50.f);
@@ -1090,35 +1100,37 @@ void CinemaUIApp::renderConcessionsView() {
     window.draw(banLbl);
 
     // 96x96 Large Square Product Image Frame (same clean square style as Left Table, larger size)
-    std::string previewCode = inputFnbId ? inputFnbId->getText() : "PRD005";
-    std::string previewPath = inputFnbImage ? inputFnbImage->getText() : "";
-    drawFnbImageBox(previewCode, previewPath, gInputX, 182.f, 96.f, 96.f, 14.f, true);
+    std::string previewCode = inputFnbId ? inputFnbId->getText() : "";
+    drawFnbImageBox(previewCode, "", gInputX, 182.f, 96.f, 96.f, 14.f, true);
 
-    // Label, Image File (.jpg) Input Box & Hint right beside the 96x96 Square Image Frame
+    // Automatic asset convention notice (replaces manual input box to avoid confusion)
+    RoundedRectRenderer::render(window, sf::Vector2f(gInputX + 114.f, 182.f), sf::Vector2f(gInputW - 114.f, 96.f), 10.f, sf::Color(240, 249, 255), 1.f, sf::Color(224, 242, 254));
+
     sf::Text pathLbl;
     pathLbl.setFont(Theme::FontPrimary);
     pathLbl.setCharacterSize(12);
     pathLbl.setStyle(sf::Text::Bold);
     pathLbl.setFillColor(sf::Color(3, 105, 161));
-    pathLbl.setString(toSfString("Tệp hình ảnh (.jpg):"));
-    pathLbl.setPosition(gInputX + 114.f, 188.f);
+    pathLbl.setString(toSfString("Quy ước hình ảnh tự động:"));
+    pathLbl.setPosition(gInputX + 126.f, 192.f);
     window.draw(pathLbl);
-
-    if (inputFnbImage) inputFnbImage->draw(window);
-    RoundedRectRenderer::render(window, sf::Vector2f(gInputX + 126.f, 224.f), sf::Vector2f(16.f, 14.f), 2.5f, sf::Color::White, 1.3f, sf::Color(2, 132, 199));
-    sf::CircleShape miniSun(1.6f);
-    miniSun.setFillColor(sf::Color(2, 132, 199));
-    miniSun.setPosition(gInputX + 129.f, 227.f);
-    window.draw(miniSun);
 
     sf::Text imgHint;
     imgHint.setFont(Theme::FontPrimary);
     imgHint.setCharacterSize(11);
-    imgHint.setFillColor(sf::Color(100, 116, 139));
-    std::string hintExample = previewCode.empty() ? "RB01.jpg" : (previewCode + ".jpg");
-    imgHint.setString(toSfString("Đặt ảnh vào assets/fnb/ (VD: " + hintExample + ")"));
-    imgHint.setPosition(gInputX + 114.f, 258.f);
+    imgHint.setFillColor(sf::Color(71, 85, 105));
+    std::string hintExample = previewCode.empty() ? "assets/fnb/<mã_món>.jpg" : ("assets/fnb/" + previewCode + ".jpg");
+    imgHint.setString(toSfString(hintExample));
+    imgHint.setPosition(gInputX + 126.f, 218.f);
     window.draw(imgHint);
+
+    sf::Text imgDesc;
+    imgDesc.setFont(Theme::FontPrimary);
+    imgDesc.setCharacterSize(10.5);
+    imgDesc.setFillColor(sf::Color(100, 116, 139));
+    imgDesc.setString(toSfString("Tự động liên kết ảnh theo mã món,\ngiữ bộ nhớ đệm cache texture."));
+    imgDesc.setPosition(gInputX + 126.f, 240.f);
+    window.draw(imgDesc);
 
     // Row 1: MÃ SẢN PHẨM & HÌNH THỨC PHỤC VỤ
     sf::Text lblCode;
@@ -1353,7 +1365,8 @@ void CinemaUIApp::renderConcessionsView() {
         comboPriceTxt.setCharacterSize(12);
         comboPriceTxt.setStyle(sf::Text::Bold);
         comboPriceTxt.setFillColor(sf::Color(3, 105, 161));
-        comboPriceTxt.setString(toSfString("Giá bán ra: " + (curFormPrice > 0.0 ? fmtShortPrice(curFormPrice) : "0 đ")));
+        std::string priceDisp = curPriceDigits.empty() ? "Chưa nhập giá" : fmtShortPrice(curFormPrice);
+        comboPriceTxt.setString(toSfString("Giá bán ra: " + priceDisp));
         sf::FloatRect cpB = comboPriceTxt.getLocalBounds();
         comboPriceTxt.setPosition(gInputX + gInputW - 14.f - cpB.width, boxY + 124.f);
         window.draw(comboPriceTxt);

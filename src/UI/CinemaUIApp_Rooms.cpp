@@ -416,7 +416,18 @@ void CinemaUIApp::setupRoomsView() {
 
         if (confirmPopup) {
             if (statusStr == "TamNgung" && affectedShowtimes > 0) {
-                confirmPopup->show("CẢNH BÁO SUẤT CHIẾU", "Đã lưu cập nhật phòng '" + name + "'. Lưu ý: Phòng chuyển sang TẠM NGƯNG và có " + std::to_string(affectedShowtimes) + " suất chiếu thuộc phòng này!", ButtonStyle::Primary, "Đóng", "Quay lại");
+                confirmPopup->show(
+                    "CẢNH BÁO CHO QUẢN TRỊ VIÊN",
+                    "Phòng '" + name + "' (" + rId + ") đang chuyển sang TẠM NGƯNG BẢO TRÌ nhưng hiện có " +
+                    std::to_string(affectedShowtimes) + " suất chiếu sắp tới thuộc phòng này!\n\n" +
+                    "=> ĐỀ NGHỊ QUẢN TRỊ VIÊN ĐỔI PHÒNG CHO CÁC SUẤT CHIẾU NÀY!",
+                    ButtonStyle::Danger,
+                    "Đến Quản lý suất chiếu",
+                    "Đóng"
+                );
+                confirmPopup->setOnConfirm([this]() {
+                    currentTab = ActiveTab::Showtimes;
+                });
             } else {
                 confirmPopup->show("Thành công", "Đã lưu cập nhật phòng '" + name + "' (" + std::to_string(roomFormCapacity) + " ghế) vào cơ sở dữ liệu SQLite!", ButtonStyle::Primary, "Đóng", "Quay lại");
             }
@@ -911,23 +922,18 @@ void CinemaUIApp::renderRoomsView() {
 
         // Col 4: Trạng thái pill centered at colStatCenterX (linked to SQLite trangThaiPhong & showtimeList)
         bool isMaintenance = (rm.getTrangThaiPhong() == "TamNgung");
-        bool hasShowtime = false;
-        if (!isMaintenance) {
-            for (const auto& st : showtimeList) {
-                if (st.getMaPhong() == rm.getMaPhong()) {
-                    hasShowtime = true;
-                    break;
-                }
-            }
+        int roomShowtimes = 0;
+        for (const auto& st : showtimeList) {
+            if (st.getMaPhong() == rm.getMaPhong()) roomShowtimes++;
         }
 
-        std::string sText = isMaintenance ? "Tạm ngưng" : (hasShowtime ? "Đang chiếu" : "Sẵn sàng");
-        sf::Color sBg = isMaintenance ? sf::Color(254, 243, 199) : sf::Color(236, 253, 245);
-        sf::Color sBdr = isMaintenance ? sf::Color(253, 230, 138) : sf::Color(167, 243, 208);
-        sf::Color sFg = isMaintenance ? sf::Color(180, 83, 9) : sf::Color(5, 150, 105);
-        sf::Color sDotCol = isMaintenance ? sf::Color(245, 158, 11) : sf::Color(16, 185, 129);
+        std::string sText = isMaintenance ? (roomShowtimes > 0 ? "Đề nghị đổi phòng" : "Tạm ngưng") : (roomShowtimes > 0 ? "Đang chiếu" : "Sẵn sàng");
+        sf::Color sBg = isMaintenance ? (roomShowtimes > 0 ? sf::Color(254, 242, 242) : sf::Color(254, 243, 199)) : sf::Color(236, 253, 245);
+        sf::Color sBdr = isMaintenance ? (roomShowtimes > 0 ? sf::Color(252, 165, 165) : sf::Color(253, 230, 138)) : sf::Color(167, 243, 208);
+        sf::Color sFg = isMaintenance ? (roomShowtimes > 0 ? sf::Color(220, 38, 38) : sf::Color(180, 83, 9)) : sf::Color(5, 150, 105);
+        sf::Color sDotCol = isMaintenance ? (roomShowtimes > 0 ? sf::Color(239, 68, 68) : sf::Color(245, 158, 11)) : sf::Color(16, 185, 129);
 
-        float statBoxW = 108.f;
+        float statBoxW = (isMaintenance && roomShowtimes > 0) ? 148.f : 108.f;
         float statBoxH = 34.f;
         float statBoxX = colStatCenterX - statBoxW / 2.f;
         float statBoxY = ry + (rowH - statBoxH) / 2.f;
@@ -1085,11 +1091,18 @@ void CinemaUIApp::renderRoomsView() {
     vCircle.setFillColor(sf::Color(2, 132, 199));
     vCircle.setPosition(formX + formW - 86.f, 225.f);
     window.draw(vCircle);
-    sf::Text vCheck(toSfString("✓"), Theme::FontPrimary, 9);
-    vCheck.setStyle(sf::Text::Bold);
-    vCheck.setFillColor(sf::Color::White);
-    vCheck.setPosition(formX + formW - 83.5f, 224.5f);
-    window.draw(vCheck);
+    {
+        sf::RectangleShape ck1(sf::Vector2f(2.5f, 1.2f));
+        ck1.setRotation(45.f);
+        ck1.setPosition(formX + formW - 83.f, 229.5f);
+        ck1.setFillColor(sf::Color::White);
+        sf::RectangleShape ck2(sf::Vector2f(5.f, 1.2f));
+        ck2.setRotation(-50.f);
+        ck2.setPosition(formX + formW - 81.3f, 231.2f);
+        ck2.setFillColor(sf::Color::White);
+        window.draw(ck1);
+        window.draw(ck2);
+    }
 
     sf::Text f1Valid(toSfString("Đã xác thực"), Theme::FontPrimary, 11);
     f1Valid.setStyle(sf::Text::Bold);

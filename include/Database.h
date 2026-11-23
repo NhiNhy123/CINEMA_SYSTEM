@@ -46,7 +46,7 @@ public:
     void ghiDanhSachPhong(const vector<Room>& danhSachPhong);
 
     void docDanhSachGhe(vector<Seat>& danhSachGhe);
-    void ghiDanhSachGhe(const vector<Seat>& danhSachGhe);
+    bool ghiDanhSachGhe(const vector<Seat>& danhSachGhe);
     bool ghiSoDoGhe(const vector<Seat>& danhSachGhe,
                     const vector<pair<string, double> >& danhSachLoaiGhe);
     void docDanhSachLoaiGhe(vector<pair<string, double> >& danhSachLoaiGhe);
@@ -58,7 +58,7 @@ public:
     void ghiDanhSachPhim(const vector<Movie>& danhSachPhim);
 
     void docDanhSachSuatChieu(vector<Showtime>& danhSachSuatChieu);
-    void ghiDanhSachSuatChieu(const vector<Showtime>& danhSachSuatChieu);
+    bool ghiDanhSachSuatChieu(const vector<Showtime>& danhSachSuatChieu);
     bool giuGheSuatChieu(const string& maSuatChieu, const string& maGhe, const string& maPhienGiu);
     bool kiemTraGiuGheSuatChieu(const string& maSuatChieu, const string& maGhe, const string& maPhienGiu);
     bool giaiPhongGheSuatChieu(const string& maSuatChieu, const string& maGhe, const string& maPhienGiu);

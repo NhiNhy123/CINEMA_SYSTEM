@@ -240,6 +240,8 @@ bool openDatabase() {
     for (size_t i = 0; i < tableCount; ++i) {
         if (!executeSql(tables[i].createSql)) return false;
     }
+    executeSql("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_maNguoiDung ON users (maNguoiDung);");
+    executeSql("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_maKhachHang ON customers (maKhachHang);");
     return true;
 }
 
@@ -745,20 +747,29 @@ void Database::docDanhSachGhe(vector<Seat>& ds) {
     ds.clear();
     vector<vector<string> > rows;
     if (!readTable("seats", rows)) return;
+    set<pair<string, string> > seen;
     for (size_t i = 0; i < rows.size(); ++i) {
         const vector<string>& p = rows[i];
-        if (p.size() >= 4) ds.push_back(Seat(p[0], p[1], p[2], atof(p[3].c_str()), "Trong"));
+        if (p.size() >= 4) {
+            pair<string, string> key = make_pair(p[0], p[1]);
+            if (seen.find(key) == seen.end()) {
+                seen.insert(key);
+                ds.push_back(Seat(p[0], p[1], p[2], atof(p[3].c_str()), "Trong"));
+            }
+        }
     }
 }
 
-void Database::ghiDanhSachGhe(const vector<Seat>& danhSachGhe) {
+bool Database::ghiDanhSachGhe(const vector<Seat>& danhSachGhe) {
     vector<Room> danhSachPhong;
     vector<pair<string, double> > danhSachLoaiGhe;
     docDanhSachPhong(danhSachPhong);
     docDanhSachLoaiGhe(danhSachLoaiGhe);
     if (!ghiDuLieuPhongGhe(danhSachPhong, danhSachGhe, danhSachLoaiGhe)) {
         cout << "Loi: Khong the luu danh sach phong va ghe!\n";
+        return false;
     }
+    return true;
 }
 
 bool Database::ghiSoDoGhe(const vector<Seat>& danhSachGhe,
@@ -874,7 +885,7 @@ void Database::docDanhSachSuatChieu(vector<Showtime>& ds) {
     }
 }
 
-void Database::ghiDanhSachSuatChieu(const vector<Showtime>& danhSachSuatChieu) {
+bool Database::ghiDanhSachSuatChieu(const vector<Showtime>& danhSachSuatChieu) {
     vector<vector<string> > rows;
     for (size_t i = 0; i < danhSachSuatChieu.size(); ++i) {
         const Showtime& item = danhSachSuatChieu[i];
@@ -888,7 +899,7 @@ void Database::ghiDanhSachSuatChieu(const vector<Showtime>& danhSachSuatChieu) {
         row.push_back(toText(item.getGiaVeCoBan()));
         rows.push_back(row);
     }
-    writeTable("showtimes", rows);
+    return writeTable("showtimes", rows);
 }
 
 void Database::docTrangThaiGheSuatChieu(const string& maSC, vector<pair<string, string> >& list) {

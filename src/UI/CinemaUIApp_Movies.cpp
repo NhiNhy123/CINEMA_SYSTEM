@@ -192,18 +192,24 @@ void CinemaUIApp::setupMoviesView() {
         selectedMovieRowIdx = -1;
         showMovieSpotlight = false;
         spotlightMovieIdx = -1;
-        inputMovieId->setText("");
-        inputMovieTitle->setText("");
-        inputMovieDuration->setText("");
-        inputMovieReleaseDate->setText("");
+        if (inputMovieId) {
+            inputMovieId->setText("");
+            inputMovieId->setFocused(true);
+        }
+        if (inputMovieTitle) inputMovieTitle->setText("");
+        if (inputMovieDuration) inputMovieDuration->setText("");
+        if (inputMovieReleaseDate) inputMovieReleaseDate->setText("");
         if (inputMovieEndDate) inputMovieEndDate->setText("");
-        inputMovieAgeRating->setText("");
+        if (inputMovieAgeRating) inputMovieAgeRating->setText("");
         syncMovieFormAgeDropdown("");
         refreshAgeRatingDropdowns();
         syncMovieFormAgeDropdown("");
-        inputMovieGenre->setText("");
+        if (inputMovieGenre) inputMovieGenre->setText("");
         if (inputMoviePoster) inputMoviePoster->setText("");
-        inputMovieDesc->setText("");
+        if (inputMovieDesc) inputMovieDesc->setText("");
+        if (confirmPopup) {
+            confirmPopup->show("Chế độ thêm mới", "Đã dọn sạch biểu mẫu để thêm phim mới. Vui lòng nhập thông tin phim rồi nhấn '+ Thêm mới' để lưu!", ButtonStyle::Primary, "Nhập thông tin", "Đóng");
+        }
     });
 
     // Movie Form Inputs (Right Card: rightColX, cardY = 232.f)
@@ -412,7 +418,32 @@ void CinemaUIApp::setupMoviesView() {
     btnMovieCreate->setFontSize(14);
     btnMovieCreate->setCustomColors(sf::Color(5, 150, 105), sf::Color(4, 120, 87), sf::Color(6, 95, 70), sf::Color(203, 213, 225));
     btnMovieCreate->setOnClick([this]() {
-        std::string id = inputMovieId->getText();
+        // If user was viewing/editing an existing movie, clicking "+ Thêm mới" switches to Add New mode cleanly:
+        if (selectedMovieRowIdx >= 0) {
+            selectedMovieRowIdx = -1;
+            showMovieSpotlight = false;
+            spotlightMovieIdx = -1;
+            if (inputMovieId) {
+                inputMovieId->setText("");
+                inputMovieId->setFocused(true);
+            }
+            if (inputMovieTitle) inputMovieTitle->setText("");
+            if (inputMovieDuration) inputMovieDuration->setText("");
+            if (inputMovieReleaseDate) inputMovieReleaseDate->setText("");
+            if (inputMovieEndDate) inputMovieEndDate->setText("");
+            if (inputMovieAgeRating) inputMovieAgeRating->setText("");
+            syncMovieFormAgeDropdown("");
+            refreshAgeRatingDropdowns();
+            if (inputMovieGenre) inputMovieGenre->setText("");
+            if (inputMoviePoster) inputMoviePoster->setText("");
+            if (inputMovieDesc) inputMovieDesc->setText("");
+            if (confirmPopup) {
+                confirmPopup->show("Chế độ thêm mới", "Đã chuyển sang chế độ thêm phim mới.\nVui lòng nhập thông tin phim rồi nhấn lại '+ Thêm mới' để lưu vào hệ thống!", ButtonStyle::Primary, "Nhập thông tin", "Đóng");
+            }
+            return;
+        }
+
+        std::string id = inputMovieId ? inputMovieId->getText() : "";
         size_t idStart = id.find_first_not_of(" \t\r\n");
         if (idStart == std::string::npos) {
             confirmPopup->show("Lỗi", "Vui lòng nhập mã phim trước khi thêm mới!", ButtonStyle::Danger, "Đóng", "Hủy");
@@ -420,31 +451,9 @@ void CinemaUIApp::setupMoviesView() {
         }
         id = id.substr(idStart, id.find_last_not_of(" \t\r\n") - idStart + 1);
 
-        std::string title = inputMovieTitle->getText();
+        std::string title = inputMovieTitle ? inputMovieTitle->getText() : "";
         if (title.find_first_not_of(" \t\r\n") == std::string::npos) {
             confirmPopup->show("Lỗi", "Vui lòng nhập tên phim trước khi thêm mới!", ButtonStyle::Danger, "Đóng", "Hủy");
-            return;
-        }
-
-        // Check if user clicked [+ Thêm mới] while looking at an already selected movie without changing ID
-        if (selectedMovieRowIdx >= 0 && selectedMovieRowIdx < static_cast<int>(movieList.size()) &&
-            id == movieList[selectedMovieRowIdx].getMaPhim()) {
-            selectedMovieRowIdx = -1;
-            showMovieSpotlight = false;
-            spotlightMovieIdx = -1;
-            inputMovieId->setText("");
-            inputMovieTitle->setText("");
-            inputMovieDuration->setText("");
-            inputMovieReleaseDate->setText("");
-        if (inputMovieEndDate) inputMovieEndDate->setText("");
-            inputMovieAgeRating->setText("");
-            syncMovieFormAgeDropdown("");
-            refreshAgeRatingDropdowns();
-            inputMovieGenre->setText("");
-            inputMoviePoster->setText("");
-            inputMovieDesc->setText("");
-            if (inputMovieId) inputMovieId->setFocused(true);
-            confirmPopup->show("Chế độ thêm mới", "Đã dọn sạch biểu mẫu để thêm phim mới. Vui lòng nhập thông tin phim (Mã phim, Tên phim,...) rồi nhấn lại nút '+ Thêm mới' để lưu vào hệ thống!", ButtonStyle::Primary, "Nhập thông tin", "Đóng");
             return;
         }
 
@@ -457,7 +466,7 @@ void CinemaUIApp::setupMoviesView() {
 
         int dur = 0;
         try {
-            dur = std::stoi(inputMovieDuration->getText());
+            dur = std::stoi(inputMovieDuration ? inputMovieDuration->getText() : "0");
         } catch (...) {
             dur = 0;
         }
@@ -466,7 +475,7 @@ void CinemaUIApp::setupMoviesView() {
             return;
         }
 
-        std::string rel = inputMovieReleaseDate->getText();
+        std::string rel = inputMovieReleaseDate ? inputMovieReleaseDate->getText() : "";
         if (rel.empty()) {
             confirmPopup->show("Lỗi", "Vui lòng nhập ngày khởi chiếu (DD/MM/YYYY)!", ButtonStyle::Danger, "Đóng", "Hủy");
             return;
@@ -484,6 +493,12 @@ void CinemaUIApp::setupMoviesView() {
             }
         }
 
+        std::string gName = inputMovieGenre ? inputMovieGenre->getText() : "";
+        if (gName.find_first_not_of(" \t\r\n") == std::string::npos) {
+            confirmPopup->show("Lỗi", "Vui lòng chọn hoặc nhập thể loại phim trước khi thêm mới!", ButtonStyle::Danger, "Đóng", "Hủy");
+            return;
+        }
+
         std::string ageStr = inputMovieAgeRating->getText();
         int age = 0;
         if (ageStr == "P" || ageStr == "p" || ageStr == "K" || ageStr == "k") age = 0;
@@ -495,8 +510,7 @@ void CinemaUIApp::setupMoviesView() {
             try { age = numOnly.empty() ? 0 : std::stoi(numOnly); } catch (...) { age = 0; }
         }
 
-        std::string gName = inputMovieGenre->getText();
-        std::string desc = inputMovieDesc->getText();
+        std::string desc = inputMovieDesc ? inputMovieDesc->getText() : "";
         std::string posterPath = (inputMoviePoster && !inputMoviePoster->getText().empty())
                                  ? inputMoviePoster->getText()
                                  : ("assets/posters/" + id + ".jpg");
@@ -508,7 +522,7 @@ void CinemaUIApp::setupMoviesView() {
                 return;
             }
             std::string normEnd = DateFormat::normalizeDate(endDate);
-            if (normEnd < normRel) {
+            if (DateFormat::dateKey(normEnd) < DateFormat::dateKey(normRel)) {
                 confirmPopup->show("Lỗi", "Ngày kết thúc không được trước ngày khởi chiếu!", ButtonStyle::Danger, "Đóng", "Hủy");
                 return;
             }
@@ -636,11 +650,15 @@ void CinemaUIApp::setupMoviesView() {
             if (curPoster.empty() || curPoster == "assets/posters/poster_default.jpg") {
                 curPoster = "assets/posters/" + mId + ".jpg";
             }
+            std::string userEnd = inputMovieEndDate ? inputMovieEndDate->getText() : "";
 
             bool isUnchanged = (title == movieList[selectedMovieRowIdx].getTenPhim()) &&
                                (dur == movieList[selectedMovieRowIdx].getThoiLuong()) &&
                                (age == movieList[selectedMovieRowIdx].getNhanDoTuoi()) &&
                                (rel.empty() || rel == oldRel) &&
+                               (userEnd.empty() ||
+                                DateFormat::normalizeDate(userEnd) ==
+                                    DateFormat::normalizeDate(movieList[selectedMovieRowIdx].getNgayKetThuc())) &&
                                (gName == curGenre) &&
                                (newDesc == movieList[selectedMovieRowIdx].getMoTa()) &&
                                (newPoster.empty() || newPoster == curPoster);
@@ -652,7 +670,20 @@ void CinemaUIApp::setupMoviesView() {
             movieList[selectedMovieRowIdx].setTenPhim(title);
             movieList[selectedMovieRowIdx].setThoiLuong(dur);
             movieList[selectedMovieRowIdx].setNhanDoTuoi(age);
-            std::string userEnd = inputMovieEndDate ? inputMovieEndDate->getText() : "";
+            std::string effectiveRel = rel.empty() ? oldRel : rel;
+            if (!userEnd.empty()) {
+                if (!DateFormat::isValidDate(userEnd)) {
+                    confirmPopup->show("Lỗi", "Ngày kết thúc không hợp lệ! Vui lòng nhập định dạng DD/MM/YYYY.", ButtonStyle::Danger, "Đóng", "Hủy");
+                    return;
+                }
+                std::string normEnd = DateFormat::normalizeDate(userEnd);
+                std::string normRel = DateFormat::normalizeDate(effectiveRel);
+                if (DateFormat::dateKey(normEnd) < DateFormat::dateKey(normRel)) {
+                    confirmPopup->show("Lỗi", "Ngày kết thúc không được trước ngày khởi chiếu!", ButtonStyle::Danger, "Đóng", "Hủy");
+                    return;
+                }
+                userEnd = normEnd;
+            }
             if (!rel.empty()) {
                 movieList[selectedMovieRowIdx].setNgayKhoiChieu(rel);
             }
@@ -765,26 +796,20 @@ void CinemaUIApp::setupMoviesView() {
         inputMovieDesc->setText("");
     });
 
-    // Populate initial form with 1st movie
-    if (!movieList.empty()) {
-        selectedMovieRowIdx = 0;
-        inputMovieId->setText(movieList[0].getMaPhim());
-        inputMovieTitle->setText(movieList[0].getTenPhim());
-        inputMovieDuration->setText(std::to_string(movieList[0].getThoiLuong()));
-        inputMovieReleaseDate->setText(movieList[0].getNgayKhoiChieu());
-        if (inputMovieEndDate) inputMovieEndDate->setText(movieList[0].getNgayKetThuc());
-        int a0 = movieList[0].getNhanDoTuoi();
-        std::string code0 = (a0 <= 0) ? "P" : ("T" + std::to_string(a0));
-        inputMovieAgeRating->setText(code0);
-        syncMovieFormAgeDropdown(code0);
-        inputMovieGenre->setText(db.layTheLoaiCuaPhim(movieList[0].getMaPhim()));
-        std::string p0 = movieList[0].getPoster();
-        if (p0.empty() || p0 == "assets/posters/poster_default.jpg") {
-            p0 = "assets/posters/" + movieList[0].getMaPhim() + ".jpg";
-        }
-        if (inputMoviePoster) inputMoviePoster->setText(p0);
-        inputMovieDesc->setText(movieList[0].getMoTa());
-    }
+    // Initialize movie form in clean "+ Thêm mới" state
+    selectedMovieRowIdx = -1;
+    showMovieSpotlight = false;
+    spotlightMovieIdx = -1;
+    if (inputMovieId) inputMovieId->setText("");
+    if (inputMovieTitle) inputMovieTitle->setText("");
+    if (inputMovieDuration) inputMovieDuration->setText("");
+    if (inputMovieReleaseDate) inputMovieReleaseDate->setText("");
+    if (inputMovieEndDate) inputMovieEndDate->setText("");
+    if (inputMovieAgeRating) inputMovieAgeRating->setText("");
+    syncMovieFormAgeDropdown("");
+    if (inputMovieGenre) inputMovieGenre->setText("");
+    if (inputMoviePoster) inputMoviePoster->setText("");
+    if (inputMovieDesc) inputMovieDesc->setText("");
 
     // Genre Form Setup (Matching Reference UI & Linked to SQLite Backend)
     selectedGenreColorIdx = 0;
@@ -2429,7 +2454,7 @@ void CinemaUIApp::renderMoviesView() {
             {"Mã Phim: *", 294.f},
             {"Tên Phim: *", 339.f},
             {"Thời lượng:", 384.f},
-            {"Ngày chiếu:", 429.f},
+            {"Thời gian chiếu:", 429.f},
             {"Nhãn tuổi (Độ):", 474.f},
             {"Thể loại:", 519.f},
             {"Poster Phim:", 566.f},

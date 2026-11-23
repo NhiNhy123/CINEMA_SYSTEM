@@ -40,12 +40,18 @@ public:
 
         btnConfirm.setOnClick([this]() {
             isOpen = false;
-            if (onConfirmCallback) onConfirmCallback();
+            auto cb = std::move(onConfirmCallback);
+            onConfirmCallback = nullptr;
+            onCancelCallback = nullptr;
+            if (cb) cb();
         });
 
         btnCancel.setOnClick([this]() {
             isOpen = false;
-            if (onCancelCallback) onCancelCallback();
+            auto cb = std::move(onCancelCallback);
+            onConfirmCallback = nullptr;
+            onCancelCallback = nullptr;
+            if (cb) cb();
         });
     }
 
@@ -117,6 +123,8 @@ public:
         const std::string& confirmLabel = "Xác nhận",
         const std::string& cancelLabel = "Hủy bỏ"
     ) {
+        onConfirmCallback = nullptr;
+        onCancelCallback = nullptr;
         title = t;
         message = msg;
         applyButtonTheme(confirmStyle);
@@ -126,7 +134,11 @@ public:
         updateLayout();
     }
 
-    void close() { isOpen = false; }
+    void close() {
+        isOpen = false;
+        onConfirmCallback = nullptr;
+        onCancelCallback = nullptr;
+    }
     bool getIsOpen() const { return isOpen; }
 
     void setOnConfirm(std::function<void()> cb) { onConfirmCallback = cb; }

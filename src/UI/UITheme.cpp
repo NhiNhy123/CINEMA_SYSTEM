@@ -76,21 +76,8 @@ bool Theme::loadFonts(const std::string& fontDir) {
         FontTitle = FontPrimary;
     }
 
-    std::vector<std::string> quicksandCandidates = {
-        fontDir + "/quicksand_medium.ttf",
-        fontDir + "/Quicksand-Medium.ttf",
-        fontDir + "/quicksand.ttf"
-    };
-    bool loadedQuick = false;
-    for (size_t i = 0; i < quicksandCandidates.size(); ++i) {
-        if (SFML_LOAD_FONT(FontSecondary, quicksandCandidates[i])) {
-            loadedQuick = true;
-            break;
-        }
-    }
-    if (!loadedQuick) {
-        FontSecondary = FontPrimary;
-    }
+    // Standardize FontSecondary to Segoe UI to guarantee 100% Vietnamese Unicode support across all sub-texts and secondary labels
+    FontSecondary = FontPrimary;
 
     // FontCinema: Bebas Neue for English brand display
     std::vector<std::string> bebasCandidates = {
